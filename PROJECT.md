@@ -15,6 +15,10 @@ It also exists as portfolio evidence of AI engineering, not just backend enginee
 feeds three concrete goals: a CMU masters application, target roles including PostHog, and
 becoming a working AI engineer rather than claiming the title without evidence.
 
+Journaling and article writing in the UMWAYI context hub feed this directly, see
+`docs/hub-sync.md`, so the two systems reinforce each other instead of running in parallel
+with duplicated effort.
+
 ## The underlying problem
 
 Most personal habit tools either do nothing but record, or try to be intelligent from day
@@ -41,6 +45,7 @@ routine-machine/
     intelligence-service.md  <- Python service, suggestion logic, pattern detection
     database.md               <- schema, migrations
     testing.md                 <- test strategy, coverage rules
+    hub-sync.md                 <- reads UMWAYI directly, converts journaling/writing into completions
   backend/                      <- Spring Boot source (not yet created)
   intelligence-service/          <- Python source (not yet created)
   infra/                          <- Docker Compose (not yet created)
