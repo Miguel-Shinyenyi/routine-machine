@@ -1,0 +1,21 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+### IDE ###
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+
+### Claude Code ###
+.claude/
+
+### Mac OS ###
+.DS_Store
+
+### Python (intelligence-service) ###
+intelligence-service/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

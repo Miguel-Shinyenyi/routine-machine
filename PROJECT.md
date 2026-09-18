@@ -46,16 +46,56 @@ routine-machine/
     database.md               <- schema, migrations
     testing.md                 <- test strategy, coverage rules
     hub-sync.md                 <- reads UMWAYI directly, converts journaling/writing into completions
-  backend/                      <- Spring Boot source (not yet created)
-  intelligence-service/          <- Python source (not yet created)
-  infra/                          <- Docker Compose (not yet created)
+  backend/                      <- Spring Boot source
+  intelligence-service/          <- Python source
+  infra/                          <- Docker Compose
 ```
 
 ## Running the application
 
-Not yet runnable. Nothing has been built. This section gets filled in as soon as
-`docker compose up` and a first endpoint exist, following the same pattern as
-settlement-engine's `PROJECT.md`, exact commands, exact ports, exact env vars.
+Prerequisites: Java 21, Python 3.13, Docker Desktop running (needed for local Postgres and
+for the backend's Testcontainers integration tests — check `docker info` if unsure it's up).
+
+**Everything together:**
+
+```
+docker compose -f infra/docker-compose.yml up --build -d
+```
+
+Starts Postgres on `localhost:5432` (db/user/password all `routine_machine`), the backend on
+`localhost:8080`, and the intelligence service on `localhost:8000`, wired together with the
+env vars in `infra/docker-compose.yml`. If port 5432 is already taken locally (a native
+Postgres install, for instance), don't edit the compose file — override the host port for a
+local run only, e.g. `docker compose -f infra/docker-compose.yml -f <override-file> up -d`
+with the override remapping `postgres`'s `ports` to `"5433:5432"`, and point
+`ROUTINE_MACHINE_DB_URL` at that port if running the backend outside Docker too.
+
+**Backend only, for local development:**
+
+```
+cd backend
+./mvnw spring-boot:run
+```
+
+`./mvnw` is the standard Maven Wrapper (self-downloads Maven on first run) — there is no
+system-wide `mvn` on this machine. Needs Postgres reachable at the URL in
+`ROUTINE_MACHINE_DB_URL` (defaults to `jdbc:postgresql://localhost:5432/routine_machine`,
+matching `docker compose -f infra/docker-compose.yml up -d postgres`). Runs on port 8080, runs
+Flyway migrations automatically on startup.
+
+Run its tests with `./mvnw test` (needs Docker running, for Testcontainers).
+
+**Intelligence service only, for local development:**
+
+```
+cd intelligence-service
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+uvicorn main:app --reload --port 8000
+```
+
+Reads the backend's API at `BACKEND_BASE_URL` (defaults to `http://localhost:8080`). Run its
+tests with `pytest`.
 
 ## Build phases
 
@@ -69,7 +109,8 @@ settlement-engine's `PROJECT.md`, exact commands, exact ports, exact env vars.
    tied to a Phase 2 finding. Does not start until Phase 2 has produced real data, weeks of
    it, not a synthetic sample. This is a gate, not a target date.
 
-Current phase: **Documentation only. No code written yet.**
+Current phase: **Phase 1, built and verified.** Backend and intelligence service both built,
+tested, and confirmed working end-to-end via the full Docker Compose stack.
 
 ## Repo structure decision
 
@@ -85,6 +126,7 @@ Keep entries short. Record fixes and gaps found, not just what was completed.
 |------|-------|--------|-------|
 | 2026-09-18 | Setup | Done | Reconciled documentation structure against settlement-engine's actual PROJECT.md and docs/ pattern, replacing an earlier, less disciplined draft |
 | 2026-09-18 | Setup | Done | Stack decided: Spring Boot core plus Python FastAPI intelligence service, reusing settlement-engine's polyglot pattern rather than inventing a new shape |
+| 2026-09-18 | Phase 1 | Done | Backend: 4 entities (Goal, RoutineItem, LearningTopic, DailyLog), Flyway migrations, REST API, 23 tests passing (Testcontainers Postgres). Intelligence service: FastAPI `/suggestion` endpoint reading the backend's API, rule-based goal/topic selection, 8 tests passing. Verified end-to-end via `docker compose up --build`: created a routine item, a learning topic, a daily log, and got back a correct suggestion. Found and fixed a real bug in the process — `GET /api/learning-topics` 500'd on a Hibernate lazy-loading exception that no existing test had caught, since only the POST path asserted on a response body; see `backend.md` and `testing.md` |
 
 ## Rules for working on this project
 

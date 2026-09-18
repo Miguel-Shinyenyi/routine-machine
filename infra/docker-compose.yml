@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: routine_machine
+      POSTGRES_USER: routine_machine
+      POSTGRES_PASSWORD: routine_machine
+    ports:
+      - "5432:5432"
+    volumes:
+      - routine_machine_postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ../backend
+    environment:
+      ROUTINE_MACHINE_DB_URL: jdbc:postgresql://postgres:5432/routine_machine
+      ROUTINE_MACHINE_DB_USER: routine_machine
+      ROUTINE_MACHINE_DB_PASSWORD: routine_machine
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+  intelligence-service:
+    build:
+      context: ../intelligence-service
+    environment:
+      BACKEND_BASE_URL: http://backend:8080
+    ports:
+      - "8000:8000"
+    depends_on:
+      - backend
+
+volumes:
+  routine_machine_postgres_data:
