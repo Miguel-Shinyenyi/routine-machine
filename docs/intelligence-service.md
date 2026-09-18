@@ -25,11 +25,14 @@ This is a pure sort over data fetched from the backend, no model, no training.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-09-18 | Left the "what Phase 2 needs from the backend's API" open question open rather than answering it now | The Docker Compose verification run did exercise the real API end-to-end, but it only produced one synthetic row per table, not real usage data; PROJECT.md's rule against building a later phase's logic while in the current one applies equally to speculatively designing that phase's API needs. Revisit when Phase 2 actually starts |
 | 2026-09-18 | Suggestion logic is a pure function (`choose_suggestion`) separate from the FastAPI route | Lets the rule be unit-tested directly against plain dicts, without mocking HTTP for every case |
 | 2026-09-18 | Phase 1 is rule-based, not ML | No data exists yet to train or validate a model against; building one now would be guessing, not engineering |
 | 2026-09-18 | Separate service from the backend, same as settlement-engine's ml-service | Lets the intelligence logic evolve independently of the data layer, and keeps this honestly a Python/AI codebase |
 
 ## Open questions
 
-- What Phase 2's descriptive statistics actually need from the backend's API, to be
-  finalized once Phase 1 data exists to test against.
+- What Phase 2's descriptive statistics actually need from the backend's API. Still open:
+  Phase 1's Docker Compose verification produced a real request/response cycle but only one
+  synthetic row per table, not the real, weeks-of-usage data this needs to be answered against
+  honestly.
