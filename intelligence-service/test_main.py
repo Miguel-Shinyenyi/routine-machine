@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import httpx
 import respx
 from fastapi.testclient import TestClient
@@ -55,3 +57,33 @@ def test_suggestion_returns_404_when_no_learning_topics_exist_yet():
     response = client.get("/suggestion")
 
     assert response.status_code == 404
+
+
+@respx.mock
+def test_patterns_calls_the_backend_and_returns_computed_statistics():
+    today = date.today()
+    created = today - timedelta(days=1)
+
+    respx.get(f"{BACKEND_BASE_URL}/api/routine-items").mock(
+        return_value=httpx.Response(200, json=[
+            {"id": 1, "name": "journaling", "description": None, "createdAt": f"{created}T08:00:00Z"},
+        ])
+    )
+    respx.get(f"{BACKEND_BASE_URL}/api/daily-logs").mock(
+        return_value=httpx.Response(200, json=[
+            {"id": 1, "logDate": str(created), "routineItemId": 1, "learningTopicId": None, "source": "manual"},
+            {"id": 2, "logDate": str(today), "routineItemId": 1, "learningTopicId": None, "source": "manual"},
+        ])
+    )
+
+    response = client.get("/patterns")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["completionRates"] == [
+        {"routineItemId": 1, "name": "journaling", "loggedDays": 2, "totalDays": 2, "rate": 1.0}
+    ]
+    assert body["streaks"][0]["currentStreak"] == 2
+    assert body["streaks"][0]["longestStreak"] == 2
+    assert body["skipHeavyDays"] == []
+    assert body["topicRoutineCorrelation"]["daysWithTopicLog"] == 0

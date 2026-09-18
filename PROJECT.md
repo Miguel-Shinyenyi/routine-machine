@@ -109,8 +109,10 @@ tests with `pytest`.
    tied to a Phase 2 finding. Does not start until Phase 2 has produced real data, weeks of
    it, not a synthetic sample. This is a gate, not a target date.
 
-Current phase: **Phase 1, built and verified.** Backend and intelligence service both built,
-tested, and confirmed working end-to-end via the full Docker Compose stack.
+Current phase: **Phase 2, built and verified.** Pattern detection (`GET /patterns`) is built,
+tested, and confirmed working end-to-end via the full Docker Compose stack. Phase 3 remains
+gated: it needs real, weeks-of-usage data behind Phase 2's statistics, which doesn't exist yet
+— only the data produced by manual verification so far.
 
 ## Repo structure decision
 
@@ -127,6 +129,8 @@ Keep entries short. Record fixes and gaps found, not just what was completed.
 | 2026-09-18 | Setup | Done | Reconciled documentation structure against settlement-engine's actual PROJECT.md and docs/ pattern, replacing an earlier, less disciplined draft |
 | 2026-09-18 | Setup | Done | Stack decided: Spring Boot core plus Python FastAPI intelligence service, reusing settlement-engine's polyglot pattern rather than inventing a new shape |
 | 2026-09-18 | Phase 1 | Done | Backend: 4 entities (Goal, RoutineItem, LearningTopic, DailyLog), Flyway migrations, REST API, 23 tests passing (Testcontainers Postgres). Intelligence service: FastAPI `/suggestion` endpoint reading the backend's API, rule-based goal/topic selection, 8 tests passing. Verified end-to-end via `docker compose up --build`: created a routine item, a learning topic, a daily log, and got back a correct suggestion. Found and fixed a real bug in the process — `GET /api/learning-topics` 500'd on a Hibernate lazy-loading exception that no existing test had caught, since only the POST path asserted on a response body; see `backend.md` and `testing.md` |
+| 2026-09-18 | Doc cleanup | Done | Fixed a stale test count in testing.md (said 22, actually 23) and explicitly logged the decision to leave intelligence-service.md's Phase 2 open question open rather than answer it prematurely |
+| 2026-09-18 | Phase 2 | Done | Intelligence service: `GET /patterns` (completion rates, streaks, skip-heavy days, topic/routine correlation), computed by the pure `compute_patterns` function, 18 intelligence-service tests passing (up from 8). Backend: `RoutineItemResponse` now exposes `createdAt`, the one piece Phase 2 needed that Phase 1's API didn't already have. Verified end-to-end via Docker Compose with real routine items, logs, and a learning topic. Found and fixed a second real bug this way — streaks counted a log backdated to before its routine item existed, while completion rate already excluded it; both now agree. See `intelligence-service.md` and `testing.md` |
 
 ## Rules for working on this project
 

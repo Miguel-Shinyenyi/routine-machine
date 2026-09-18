@@ -37,7 +37,8 @@ class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.name", is("journaling")))
-                .andExpect(jsonPath("$.description", is("Daily journal entry")));
+                .andExpect(jsonPath("$.description", is("Daily journal entry")))
+                .andExpect(jsonPath("$.createdAt").exists());
     }
 
     @Test
@@ -56,6 +57,7 @@ class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/routine-items"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].name", hasItem("exercise")));
+                .andExpect(jsonPath("$[*].name", hasItem("exercise")))
+                .andExpect(jsonPath("$[0].createdAt").exists());
     }
 }
