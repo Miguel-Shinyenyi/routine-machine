@@ -1,0 +1,44 @@
+/* Reference palette from the dataviz skill (references/palette.md), validated as-is. */
+.viz-root {
+  color-scheme: light;
+  --surface: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --baseline: #c3c2b7;
+  --sequential: #2a78d6;
+  --sequential-light: #6da7ec;
+  --sequential-dark: #1c5cab;
+  --status-warning: #fab219;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --surface: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --sequential: #3987e5;
+    --sequential-light: #6da7ec;
+    --sequential-dark: #1c5cab;
+    --status-warning: #fab219;
+  }
+}
+
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --surface: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --gridline: #2c2c2a;
+  --baseline: #383835;
+  --sequential: #3987e5;
+  --sequential-light: #6da7ec;
+  --sequential-dark: #1c5cab;
+  --status-warning: #fab219;
+}

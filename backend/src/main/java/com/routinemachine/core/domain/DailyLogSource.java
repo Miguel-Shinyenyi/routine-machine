@@ -2,7 +2,8 @@ package com.routinemachine.core.domain;
 
 public enum DailyLogSource {
     MANUAL("manual"),
-    HUB_SYNC("hub-sync");
+    HUB_SYNC("hub-sync"),
+    SCHEDULE("schedule");
 
     private final String value;
 

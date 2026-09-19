@@ -54,7 +54,20 @@ updatable two ways: directly through the frontend, or detected from the journal 
 
 ## Current state
 
-Not built. This is the design, not yet code.
+Built: `schedule_templates`, `tasks`, and `current_reading_log` (backend + frontend), see
+`backend.md`, `database.md`, and `frontend.md`. The weekly layout above isn't loaded as data
+anywhere yet — it's entered once through the Backlog view's schedule-template form, the same
+as any other schedule. Target durations weren't specified in this design (see the open
+question below), so the form takes a number with no built-in default beyond whatever the UI
+happens to suggest; the real durations still need deciding and entering.
+
+A `LEARNING_SLOT` template doesn't fix a `learning_topic_id` — which topic applies is
+resolved fresh each day. The frontend (not the backend) owns that resolution: materializing a
+day's tasks calls the backend for that day's templates and existing tasks, and for any
+`LEARNING_SLOT` template with no task yet, calls the intelligence service's `/suggestion`
+directly before creating the task, passing the resolved topic. This answers `frontend.md`'s
+open question about whether Board should talk to the backend directly or through the
+intelligence service for materialization — see the decisions log below for why.
 
 ## Data model
 
@@ -73,6 +86,7 @@ Detailed fully in `database.md`:
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-09-19 | The frontend, not the backend, resolves a `LEARNING_SLOT` template's topic when materializing a task | Keeps the backend unaware the intelligence service exists at all (it stays data-layer only per `backend.md`); the frontend already has to call the intelligence service for Reports and `/suggestion`, so it's the natural place to orchestrate a second cross-service call, not a new coupling |
 | 2026-09-19 | Settlement-engine study moved from deep-work to the learning block, as a goal-tagged learning_topic | Studying an existing system for understanding is a learning activity, not a building one; conflating them under deep-work blurred a distinction the project already draws elsewhere |
 | 2026-09-19 | Reading tracked as an append-only `current_reading_log`, not a field on an existing table | What's currently being read changes occasionally and is worth a small history, not a single mutable value that overwrites its own past |
 | 2026-09-18 | Added `deep_work` as a new routine item, not in the original daily inventory | The original inventory (sleep, showering, movement, cleaning, cooking, personal time, mum check-in, paid work, finances) had no entry for goal-directed project time, the actual purpose of Routine Machine and settlement-engine study. Without it, the schedule's most important block wouldn't be trackable at all. Now scoped specifically to Routine Machine build, since settlement-engine study moved to learning |

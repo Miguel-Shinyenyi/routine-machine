@@ -59,7 +59,7 @@ routine-machine/
     frontend.md <- the tracking UI: backlog, roadmap, board, reports
   backend/                      <- Spring Boot source
   intelligence-service/          <- Python source
-  frontend/ <- Next.js source (not yet created)
+  frontend/ <- Next.js source
   infra/                          <- Docker Compose
 ```
 
@@ -75,12 +75,13 @@ docker compose -f infra/docker-compose.yml up --build -d
 ```
 
 Starts Postgres on `localhost:5432` (db/user/password all `routine_machine`), the backend on
-`localhost:8080`, and the intelligence service on `localhost:8000`, wired together with the
-env vars in `infra/docker-compose.yml`. If port 5432 is already taken locally (a native
-Postgres install, for instance), don't edit the compose file — override the host port for a
-local run only, e.g. `docker compose -f infra/docker-compose.yml -f <override-file> up -d`
-with the override remapping `postgres`'s `ports` to `"5433:5432"`, and point
-`ROUTINE_MACHINE_DB_URL` at that port if running the backend outside Docker too.
+`localhost:8080`, the intelligence service on `localhost:8000`, and the frontend on
+`localhost:3000`, wired together with the env vars in `infra/docker-compose.yml`. If port
+5432 is already taken locally (a native Postgres install, for instance), don't edit the
+compose file — override the host port for a local run only, e.g. `docker compose -f
+infra/docker-compose.yml -f <override-file> up -d` with the override remapping `postgres`'s
+`ports` to `"5433:5432"`, and point `ROUTINE_MACHINE_DB_URL` at that port if running the
+backend outside Docker too.
 
 **Backend only, for local development:**
 
@@ -110,7 +111,18 @@ uvicorn main:app --reload --port 8000
 Reads the backend's API at `BACKEND_BASE_URL` (defaults to `http://localhost:8080`). Run its
 tests with `pytest`.
 
-**Frontend:** not yet built. Commands added here once it exists.
+**Frontend only, for local development:**
+
+```
+cd frontend
+npm install
+BACKEND_URL=http://localhost:8080 INTELLIGENCE_SERVICE_URL=http://localhost:8000 npm run dev
+```
+
+Runs on port 3000, redirects `/` to `/board`. Needs the backend (and, for Reports and the
+Board's learning-slot materialization, the intelligence service) reachable at those URLs.
+Run its tests with `npm test` (Vitest, covers `lib/schedule.ts`'s pure logic only — see
+`docs/testing.md` for why the rest is verified by running the app instead).
 
 ## Build phases
 
@@ -129,9 +141,13 @@ tests with `pytest`.
    it, not a synthetic sample, judged by mutual agreement that its output is actually usable,
    not by a fixed timeline. This is a gate, not a target date.
 
-Current phase: **entering Phase 3.** Phases 1 and 2 built and verified. Phase 4 remains
-gated on real, weeks-of-usage data behind Phase 2's statistics, which doesn't exist yet,
-only the data produced by manual verification so far.
+Current phase: **Phase 3, built and verified.** The schedule, tasks, current reading, and the
+full Next.js frontend (backlog, roadmap, board, reports) are built and confirmed working
+end-to-end through the full Docker Compose stack, including a browser walkthrough of every
+view and the materialize → start → done flow. Phase 4 remains gated on real, weeks-of-usage
+data behind Phase 2's statistics, which still doesn't exist — only what manual verification
+has produced so far. The weekly layout itself (which days, which durations) still needs to be
+entered through the Backlog view; nothing in this repo does that automatically.
 
 ## Repo structure decision
 
@@ -151,6 +167,7 @@ Keep entries short. Record fixes and gaps found, not just what was completed.
 | 2026-09-18 | Doc cleanup | Done | Fixed a stale test count in testing.md (said 22, actually 23) and explicitly logged the decision to leave intelligence-service.md's Phase 2 open question open rather than answer it prematurely |
 | 2026-09-18 | Phase 2 | Done | Intelligence service: `GET /patterns` (completion rates, streaks, skip-heavy days, topic/routine correlation), computed by the pure `compute_patterns` function, 18 intelligence-service tests passing (up from 8). Backend: `RoutineItemResponse` now exposes `createdAt`, the one piece Phase 2 needed that Phase 1's API didn't already have. Verified end-to-end via Docker Compose with real routine items, logs, and a learning topic. Found and fixed a second real bug this way, streaks counted a log backdated to before its routine item existed, while completion rate already excluded it; both now agree. See `intelligence-service.md` and `testing.md` |
 | 2026-09-18 | Scope | Decided | Inserted a new Phase 3 (fixed schedule plus tracking frontend) ahead of the old Phase 3, renumbered to Phase 4 (active reprioritization). The fixed schedule doesn't need pattern data to be correct, so it doesn't belong behind Phase 4's gate. See `schedule.md` and `frontend.md` |
+| 2026-09-19 | Phase 3 | Done | Backend: `schedule_templates`, `tasks`, `current_reading_log` tables and endpoints, plus `TaskService` (first service class in this codebase) handling the DONE-transition's daily_log create/delete, 56 backend tests (up from 23). Frontend: Next.js app, all four views (backlog, roadmap, board, reports), 5 Vitest tests for the one piece of real logic. Verified end-to-end via a full browser walkthrough against the Docker Compose stack: created routine items/learning topics/templates, materialized a day's tasks (including resolving a learning-slot topic via the intelligence service), moved a task through in-progress to done, confirmed the resulting daily_log, and saw Reports render correctly. Found and fixed a real gap in the process — there was no UI path to create a routine item or learning topic at all, which would have made the schedule-template form unusable on first use; added a Routine items and Learning topics section to Backlog. See `backend.md`, `frontend.md`, `schedule.md`, `testing.md` |
 
 ## Rules for working on this project
 

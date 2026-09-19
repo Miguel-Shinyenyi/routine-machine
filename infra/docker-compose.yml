@@ -32,5 +32,17 @@ services:
     depends_on:
       - backend
 
+  frontend:
+    build:
+      context: ../frontend
+    environment:
+      BACKEND_URL: http://backend:8080
+      INTELLIGENCE_SERVICE_URL: http://intelligence-service:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+      - intelligence-service
+
 volumes:
   routine_machine_postgres_data:
