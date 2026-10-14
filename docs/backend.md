@@ -4,7 +4,9 @@
 
 Spring Boot service owning the data: routine items, daily logs, learning topics, goals, and
 (from Phase 3) the fixed schedule and its tasks. Exposes a REST API. No suggestion or
-pattern-detection logic lives here, that belongs to `intelligence-service.md`.
+pattern-detection logic lives here, that belongs to `intelligence-service.md`. Also holds
+`HubJournalReader` (Stage 1 of hub-sync), which reads UMWAYI's encrypted journal, see below
+and `hub-sync.md`.
 
 ## Current state
 
@@ -48,10 +50,35 @@ Phase 3 built: the schedule and its tasks, plus current reading.
   `source=manual` (hub-sync's own writes, once built, won't go through this human-facing
   endpoint).
 
+**hub-sync Stage 1 built:** `HubJournalReader`
+(`com.routinemachine.core.hubsync.HubJournalReader`), not wired to any endpoint or scheduler.
+`readCurrentBook()`:
+
+- Reads `UMWAYI_JOURNAL_KEY_B64` from the environment. Missing or blank, logs one line and
+  returns empty; the app starts fine either way, nothing in startup depends on this variable.
+- Makes an owner-only-permission temp directory, decodes the base64 into a key file inside it
+  (mode `rw-------`), shallow-clones UMWAYI (`git clone --depth 1`, argument list, never a
+  shell string) into the same temp directory, and runs `git-crypt unlock <keyfile>` on the
+  clone.
+- If clone or unlock fails, or a file still starts with the git-crypt header
+  (`0x00 'GITCRYPT'`) afterward, treats the journal as locked: returns empty, logs one line
+  with no file or entry content.
+- On success, reads each file under `journal/entries/`, looks for a `Current book:` line
+  (case-insensitive), and returns the newest entry's title, if any.
+- Always deletes the key file (zeroed first) and the whole temp directory in a `finally`
+  block, success or failure. No unlocked clone or key file is kept between calls.
+
+Runtime image needs `git` and `git-crypt` (`apk add --no-cache git git-crypt` in
+`backend/Dockerfile`); neither format is reimplemented in Java. `infra/docker-compose.yml`
+passes `UMWAYI_JOURNAL_KEY_B64` through with no default value; `infra/.env.example` documents
+the variable with an empty placeholder, `infra/.env` itself is gitignored.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-14 | `HubJournalReader` shells out to the real `git` and `git-crypt` binaries via `ProcessBuilder` with an argument list, not a shell string, and not a reimplementation of the git-crypt format | Avoids ever constructing a shell command from the key path or repo URL (no injection surface), and git-crypt's on-disk format is undocumented-as-a-library-contract; its own CLI is the only supported way to unlock it |
+| 2026-10-14 | `HubJournalReader` takes a `Supplier<String>` for the key and a constructor-injected repo URL, both package-visible overrides of the public no-arg constructor | Lets tests substitute a throwaway key and a throwaway local repo without touching the real `UMWAYI_JOURNAL_KEY_B64` variable or the real UMWAYI remote, while Spring still wires the plain `HubJournalReader()` bean in production |
 | 2026-09-19 | `TaskService`, the first real service class in this codebase, owns the DONE-transition's daily_log create/delete | Phase 1/2 controllers called repositories directly since their logic was pure CRUD/validation; a status change that coordinates `TaskRepository` and `DailyLogRepository` together (and must delete the log again if the task moves back out of DONE) is real business logic, not a data-layer passthrough, so it earned a service rather than being stuffed into the controller |
 | 2026-09-19 | `ScheduleTemplateRepository` and `TaskRepository` use `JOIN FETCH` queries from the start | Same `LazyInitializationException` risk as `LearningTopicRepository` in Phase 1 (open-in-view is disabled); applied proactively this time instead of waiting to hit it again in manual testing |
 | 2026-09-19 | `RoutineItemResponse` now includes `createdAt` | Needed by the intelligence service's Phase 2 pattern detection (completion rates and skip-heavy days are windowed per item from its creation date); the data already existed on the entity, this only exposes it. See `intelligence-service.md` |
@@ -61,4 +88,6 @@ Phase 3 built: the schedule and its tasks, plus current reading.
 
 ## Open questions
 
-- None currently open for Phase 3.
+- Whether `HubJournalReader` should hold the full journal-decrypting key at all, versus a
+  least-privilege alternative that needs no key. Tracked in `hub-sync.md`'s open questions,
+  to revisit before Stage 3.

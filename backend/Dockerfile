@@ -6,6 +6,7 @@ COPY src ./src
 RUN mvn -q -B package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine
+RUN apk add --no-cache git git-crypt
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 COPY --from=build --chown=app:app /build/target/routine-machine-*.jar app.jar
