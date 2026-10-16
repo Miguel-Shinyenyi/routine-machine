@@ -158,13 +158,15 @@ Phases 5 to 8 are inserted alongside Phase 4, not after it: none of them need Ph
 usage data, so Phase 4's gate is unchanged by their existence. Each phase is built, verified,
 and reported on its own before the next starts.
 
-Current phase: **Phase 5, built and verified; Phases 6-8 scoped, not started.** The frontend
-is redesigned to the shepherd's language (Today, Path, Flock, Tally) per `docs/design.md`, with
-the small backend and intelligence-service additions Phase 5 needed. Phase 4 remains gated on
-real, weeks-of-usage data behind Phase 2's statistics, which still doesn't exist — only what
-manual verification has produced so far. The weekly layout itself (which days, which durations)
-still needs to be entered through Flock's schedule-template form; nothing in this repo does
-that automatically, and real durations are still an open question (see `schedule.md`).
+Current phase: **Phase 5 done; Phase 6 in progress (hub-sync Phase 1 done, watering-hole
+sources not started); Phases 7-8 scoped, not started.** The frontend is redesigned to the
+shepherd's language (Today, Path, Flock, Tally) per `docs/design.md`. hub-sync now lists
+UMWAYI's journal entries and essays on a schedule and marks `journaling`/`writing` routine
+items done. Phase 4 remains gated on real, weeks-of-usage data behind Phase 2's statistics,
+which still doesn't exist — only what manual verification has produced so far. The weekly
+layout itself (which days, which durations) still needs to be entered through Flock's
+schedule-template form; nothing in this repo does that automatically, and real durations are
+still an open question (see `schedule.md`).
 
 ## Repo structure decision
 
@@ -188,6 +190,7 @@ Keep entries short. Record fixes and gaps found, not just what was completed.
 | 2026-10-16 | Scope | Decided | Inserted Phases 5-8 (shepherd frontend redesign, watering holes, reader's notes, the hillside) alongside Phase 4, per `docs/design.md`. None need Phase 2's real usage data, so Phase 4's gate is unchanged. Phase 8 is explicitly gated on agreeing an accounts/auth architecture first, not a target date |
 | 2026-09-19 | Phase 3 | Done | Backend: `schedule_templates`, `tasks`, `current_reading_log` tables and endpoints, plus `TaskService` (first service class in this codebase) handling the DONE-transition's daily_log create/delete, 56 backend tests (up from 23). Frontend: Next.js app, all four views (backlog, roadmap, board, reports), 5 Vitest tests for the one piece of real logic. Verified end-to-end via a full browser walkthrough against the Docker Compose stack: created routine items/learning topics/templates, materialized a day's tasks (including resolving a learning-slot topic via the intelligence service), moved a task through in-progress to done, confirmed the resulting daily_log, and saw Reports render correctly. Found and fixed a real gap in the process — there was no UI path to create a routine item or learning topic at all, which would have made the schedule-template form unusable on first use; added a Routine items and Learning topics section to Backlog. See `backend.md`, `frontend.md`, `schedule.md`, `testing.md` |
 | 2026-10-17 | Phase 5 | Done | Frontend redesigned to `docs/design.md`'s shepherd language and tokens: renamed routes (Today/Path/Flock/Tally, old paths redirect), a new `Shell` (glass sidebar/tab bar), Today as a single grouped task list, Tally's tally stick/stat tiles/`GoalHoursChart`/per-routine meters. Backend: `routine_items` gained `category`, `countRule`, `source`, `hillsideField`, `private`, `goalId` (migration V4), `daily_logs` gained `measuredMinutes`, 61 backend tests (up from 56). Intelligence service: new `GET /tally` (`compute_tally`), 26 tests (up from 18). Verified: `./mvnw test`, `pytest`, `npm run lint`/`test`/`build` all pass; full Docker Compose stack built and walked through in a browser at 1440px (light not independently re-verified live, system theme was dark during this session's walkthrough — token definitions were reviewed, not rendered) — seeded real data, ran materialize → start → done on Today, confirmed Path/Flock/Tally render correctly. The 390px phone layout could not be confirmed live: `resize_window` reported success but the screenshot kept the desktop viewport, a tool limitation in this session, not a code check; Tailwind's `md:` breakpoints are in place but unverified by eye. See `frontend.md`, `backend.md`, `database.md`, `intelligence-service.md`, `testing.md` |
+| 2026-10-17 | Phase 6 (hub-sync Phase 1) | Done | `HubSyncService` polls UMWAYI on a schedule (default 15min, `hub-sync.enabled=false` in every test), lists `journal/entries/` (dated by filename) and the real `site/philosophy/`/`site/tech/` essay directories (dated by first commit; `docs/hub-sync.md` originally assumed a non-existent `articles/` path, flagged and resolved with the user before building), and marks `journaling`/`writing` routine items done via `daily_logs`. Dedupes by git blob sha in a new `hub_sync_processed_files` table (migration V5), so a renamed file isn't double-counted — the open question this doc used to defer. 9 new backend tests (76 total, up from 67), fakes `GitHubContentClient` for the listing/dedupe cases and reuses `GitCryptTestFixture` for the current-book-sync cases. Verified against the real UMWAYI repo through a live Docker container: correctly listed all 26 real files and recorded them as processed without crashing or double-logging. The rest of Phase 6 (measurements table, WakaTime/ActivityWatch/GitHub/RescueTime sources, health-data ingest endpoint, the Strava decision, the watering holes page) is not started. See `hub-sync.md`, `backend.md`, `database.md`, `testing.md` |
 
 ## Rules for working on this project
 

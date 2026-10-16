@@ -55,10 +55,18 @@ Phase 5 built via `V4__phase5_categorisation_and_hours.sql`:
 - `daily_logs` gains `measured_minutes` (nullable int), rolled up by the intelligence
   service's `/tally` into cumulative hours per goal.
 
+Phase 6 built via `V5__hub_sync_processed_files.sql`:
+
+- `hub_sync_processed_files(id, repo_path, content_sha unique, kind ('JOURNAL' | 'ARTICLE'),
+  file_date, created_at)`, one row per UMWAYI file hub-sync has already turned into a
+  `daily_log`, keyed by git blob sha so a renamed file (same content, new path) isn't
+  double-counted. See `hub-sync.md`.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `hub_sync_processed_files` is keyed by `content_sha`, not `repo_path` | A file's git blob sha stays the same across a rename; a path-keyed table would treat the renamed file as new and log it again. See `hub-sync.md`'s decisions log |
 | 2026-10-16 | `routine_items.category`, `hillside_field` have no default, `source` defaults `MANUAL`, `private` defaults `true` | A category or hillside field can't be guessed for existing rows, so they stay nullable until someone assigns one through Flock; `source` and `private` have an honest single-user default (manually tended, not yet shared) that every existing row already matches |
 | 2026-10-16 | `routine_items.goal_id` is nullable, unlike `learning_topics.goal_id` | Not every routine item rolls up to a goal (plenty are just upkeep: sleep, cleaning); forcing one would mean inventing a goal for rows that don't have one |
 | 2026-09-19 | `tasks` also carries its own `label`, `routine_item_id`, and `learning_topic_id`, not just `schedule_template_id` | A `LEARNING_SLOT` template doesn't fix which topic applies — that's resolved per day (see `schedule.md`'s frontend-orchestration decision) — so it has to live on the task, not the template. Once `learning_topic_id` was needed there anyway, giving ad-hoc tasks (no template) the same optional target columns plus their own `label` was the direct extension, not a special case |
@@ -74,4 +82,4 @@ Phase 5 built via `V4__phase5_categorisation_and_hours.sql`:
 
 ## Open questions
 
-- None currently open for Phase 5.
+- None currently open for Phase 6.

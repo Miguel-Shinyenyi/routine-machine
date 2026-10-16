@@ -21,8 +21,14 @@ on `PATH`, rather than failing the build. Log assertions use a Logback `ListAppe
 directly to `HubJournalReader`'s own logger, not console-output capture, so they only see what
 that class logs. Phase 5 added repository and API tests for `RoutineItem`'s new columns
 (default `source`/`private` when not given, a fully categorised item linked to a goal via
-`findWithGoalById`, rejecting an unknown `goalId`) and for `DailyLog.measuredMinutes`. 67
-backend tests, all passing.
+`findWithGoalById`, rejecting an unknown `goalId`) and for `DailyLog.measuredMinutes`.
+`HubSyncServiceTest` instantiates `HubSyncService` directly inside a `@DataJpaTest`, same
+pattern as `TaskServiceTest`, against a fake `GitHubContentClient` (fixed files and commit
+dates, no network) for the listing/dedupe/missing-routine-item cases, and reuses
+`GitCryptTestFixture` (same skip-if-no-`git-crypt` guard) for the current-book-sync cases.
+Every `@SpringBootTest`/`@DataJpaTest` class sets `hub-sync.enabled=false`
+(`AbstractIntegrationTest`), so `HubSyncService`'s `@Scheduled` job never fires — and never
+makes a real outbound call — anywhere in the suite. 76 backend tests, all passing.
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
@@ -43,6 +49,8 @@ which has no automated test framework at all (see decisions log). `npm run lint`
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `hub-sync.enabled=false` is set once, on `AbstractIntegrationTest`, inherited by every subclass | `HubSyncService`'s `@Scheduled` job would otherwise fire inside any full `@SpringBootTest` context and make a real outbound GitHub/UMWAYI call during the suite; one shared property beats adding `@TestPropertySource` to each of the eight affected test classes individually |
+| 2026-10-17 | `HubSyncServiceTest` fakes `GitHubContentClient` instead of calling the real GitHub API | The real API is rate-limited (60 requests/hour unauthenticated) and the test suite needs to run repeatedly and offline; the fake's fixed files and commit dates make the dedupe/double-count/missing-routine-item cases exact and deterministic, which a live call couldn't guarantee anyway |
 | 2026-10-16 | `compute_tally` gets its own pure-function tests, separate from `compute_patterns`'s | Different windowing rules (clipped to an item's lifetime vs the completion-rate window) and a different aggregation shape (cumulative per goal per week) deserve their own focused test cases rather than growing one already-long test module |
 | 2026-10-14 | `HubJournalReaderTest` builds its own throwaway git-crypt repos and keys per test, never touching the real UMWAYI repo or key | The task is explicitly about handling a real secret correctly; testing against the real key would mean a real secret has to exist somewhere reachable by the test suite, which is the exact risk this design avoids. A throwaway git-crypt repo exercises the identical clone/unlock/extract path |
 | 2026-10-14 | Tests requiring `git-crypt` skip via `Assumptions.assumeTrue` rather than failing | A machine without `git-crypt` on `PATH` can still build and run the rest of the suite; failing the whole build over one missing optional binary would block unrelated work |
@@ -56,4 +64,6 @@ which has no automated test framework at all (see decisions log). `npm run lint`
 
 ## Open questions
 
-- None currently open for Phase 5.
+- `GitHubContentClientImpl` (the real HTTP implementation) has no automated test of its own
+  against the live GitHub API; its correctness was checked manually with `curl` against the
+  real UMWAYI repo instead, to avoid a test that's flaky, slow, and rate-limited on every run.

@@ -8,15 +8,35 @@ by doing them and once by telling Routine Machine about it.
 
 ## Current state
 
-Stage 1 built: `HubJournalReader` (`backend/src/main/java/com/routinemachine/core/hubsync/`).
-Unlocks a short-lived shallow clone of UMWAYI's journal with git-crypt and extracts the
-`Current book:` line. Not called by any scheduler yet. See the key-handling note below and
-`backend.md`.
+Phase 1 built: `HubSyncService` (`backend/src/main/java/com/routinemachine/core/hubsync/`),
+polling on a schedule (`@Scheduled`, default every 15 minutes, `hub-sync.poll-interval-ms`;
+disabled entirely with `hub-sync.enabled=false`, set `false` in every test context so the
+suite never makes a real outbound call — see `testing.md`).
 
-The rest of Phase 1 scope is not started: on each check, list files under `journal/entries/`
-and `articles/` in the UMWAYI repo, compare against what's already been recorded, and mark the
-`journaling` or `writing` routine item as done for the corresponding date on any new or
-changed file.
+Each run:
+
+- Lists `journal/entries/` over the public GitHub API (`GitHubContentClient`, no credential:
+  UMWAYI is public). A file named `YYYY-MM-DD.md` dates a `journaling` daily_log for that date.
+  A file whose name doesn't match that pattern is skipped and logged, not guessed at.
+- Lists `site/philosophy/` and `site/tech/` the same way, UMWAYI's real essay directories (see
+  the decisions log for why, not the `articles/` path this doc originally assumed). Since
+  these filenames carry no date, each file's date comes from its earliest commit
+  (`GitHubContentClient.firstCommitDate`, a `GET .../commits?path=` call), dating a `writing`
+  daily_log.
+- Dedupes by each file's git blob sha (`hub_sync_processed_files`, migration V5), not its
+  path, so a file moved or renamed in UMWAYI — same content, new path — is recognised as
+  already counted instead of logged a second time. This is the real check the open question
+  below used to defer.
+- If no routine item is named `journaling` or `writing` (case-insensitive), the file is still
+  recorded as seen but nothing is logged, so adding the routine item later doesn't retroactively
+  flood daily_logs with every file hub-sync has ever looked at.
+- Also calls `HubJournalReader.readCurrentBook()` (Stage 1, below) and writes a new
+  `current_reading_log` row only when the title actually changed from the latest row, keeping
+  the log append-only without writing a duplicate row on every poll.
+
+Stage 1 (title extraction) built earlier: `HubJournalReader`. Unlocks a short-lived shallow
+clone of UMWAYI's journal with git-crypt and extracts the `Current book:` line. See the
+key-handling note below and `backend.md`.
 
 **One narrow addition:** while checking a journal entry for its existence, also look for a
 single specific line matching `Current book: <title>`, case-insensitive, anywhere in the
@@ -38,6 +58,10 @@ below for rotation and the key's blast radius.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | Articles come from UMWAYI's real `site/philosophy/` and `site/tech/` directories, not a top-level `articles/` path | This doc originally assumed `articles/`, written before UMWAYI's actual structure was checked. The real repo has no such directory; `site/philosophy/` and `site/tech/` are the closest real equivalent (essay-style personal writing), confirmed by listing the repo directly. Flagged and confirmed rather than guessed silently, per the project's ambiguity rule |
+| 2026-10-17 | Poll on a schedule (`@Scheduled`, default 15 minutes), not a manual trigger | Phase 6 frames hub-sync as "automatic counting"; a personal single-user tool has no reason to make the person remember to ask for a sync. `hub-sync.enabled=false` (set in every test) stops it from firing outside a real deployment |
+| 2026-10-17 | Dedupe by each file's git blob sha, not its path | Answers the open question below: a file renamed in UMWAYI keeps its content sha, so `hub_sync_processed_files` (unique on `content_sha`) still recognises it as already counted. A path-based check would have logged it again under the new name |
+| 2026-10-17 | A file with no matching routine item is still recorded as processed, nothing logged | Without this, adding a `journaling` or `writing` routine item later would cause every file hub-sync has ever seen to get logged all at once on the next poll, backdating weeks of completions that were never actually tracked that way |
 | 2026-10-14 | `HubJournalReader` returns empty and logs one line, no content, when the key is missing, when clone or unlock fails, or when a file still has the git-crypt header after unlock | The app must still start without the key (most environments won't set it), and a failed or partial unlock must never be mistaken for a real "no match" |
 | 2026-10-14 | Each `readCurrentBook()` call makes its own temp dir and shallow clone, unlocks, reads, and deletes both before returning | No unlocked clone or key file is kept between calls. Shortens the window the decrypted content and the key both exist on disk, and avoids a stale clone drifting from UMWAYI's actual latest entries |
 | 2026-10-14 | Key delivered via `UMWAYI_JOURNAL_KEY_B64`, the base64 of an exported git-crypt key file, read fresh from the environment on every call | git-crypt needs the raw key file; base64 in an env var is the standard way to pass binary secrets through environment variables and container orchestration without writing them to disk ahead of time. Reading fresh (not caching) means rotating the variable takes effect on the next call, no restart-timing assumptions baked in |
@@ -49,9 +73,6 @@ below for rotation and the key's blast radius.
 
 ## Open questions
 
-- Poll on a schedule, or trigger manually. Decide when Phase 1 implementation starts.
-- Whether a moved or renamed file in UMWAYI could get double-counted. Needs a real check
-  once this is implemented, not assumed away here.
 - Whether the `Current book:` convention should be documented somewhere in UMWAYI itself
   (e.g. the journal template), so it's discoverable rather than only known here.
 - git-crypt uses one key for the whole encrypted set, `journal/entries/` and

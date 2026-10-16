@@ -5,8 +5,8 @@
 Spring Boot service owning the data: routine items, daily logs, learning topics, goals, and
 (from Phase 3) the fixed schedule and its tasks. Exposes a REST API. No suggestion or
 pattern-detection logic lives here, that belongs to `intelligence-service.md`. Also holds
-`HubJournalReader` (Stage 1 of hub-sync), which reads UMWAYI's encrypted journal, see below
-and `hub-sync.md`.
+hub-sync (`HubJournalReader`, `HubSyncService`, `GitHubContentClient`), which reads UMWAYI's
+journal and essays and turns them into routine completions, see below and `hub-sync.md`.
 
 ## Current state
 
@@ -81,10 +81,33 @@ Runtime image needs `git` and `git-crypt` (`apk add --no-cache git git-crypt` in
 passes `UMWAYI_JOURNAL_KEY_B64` through with no default value; `infra/.env.example` documents
 the variable with an empty placeholder, `infra/.env` itself is gitignored.
 
+**hub-sync Phase 1 built:** `HubSyncService`
+(`com.routinemachine.core.hubsync.HubSyncService`), `@Scheduled` (default every 15 minutes,
+`hub-sync.poll-interval-ms`; `hub-sync.enabled=false` turns the whole job off, set in every
+test — see `testing.md`). `syncOnce()` is the testable unit the schedule calls:
+
+- `GitHubContentClient` (interface, real impl `GitHubContentClientImpl` over
+  `java.net.http.HttpClient` and the public GitHub REST API, no credential) lists
+  `journal/entries/`, `site/philosophy/`, and `site/tech/`.
+- A journal file's date comes from its `YYYY-MM-DD.md` name; an essay's date comes from its
+  earliest commit (`firstCommitDate`, paginated up to 100 commits — undocumented beyond that
+  for a path with more history, unlikely for a single essay).
+- `hub_sync_processed_files` (keyed by each file's git blob sha, not its path) stops a file
+  from being logged twice, including across a rename. A file with no matching `journaling` or
+  `writing` routine item (by name, case-insensitive) is still recorded as seen, logging
+  nothing, so adding the routine item later doesn't retroactively log every file hub-sync has
+  ever looked at.
+- Also calls `HubJournalReader.readCurrentBook()` and writes a new `current_reading_log` row
+  only when the title changed from the latest row.
+
+`RoutineMachineApplication` now has `@EnableScheduling`.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `GitHubContentClient` is an interface with a real `java.net.http.HttpClient` implementation, `HubSyncService` depends on the interface | Lets `HubSyncServiceTest` substitute a fake client with fixed files/commit dates instead of hitting the real, rate-limited GitHub API in every test run, same seam pattern as `HubJournalReader`'s injectable repo URL and key supplier |
+| 2026-10-17 | `HubSyncService` has two constructors, a Spring-selected one taking `hub-sync.enabled` via `@Value`, and a package-visible one defaulting it to `true` | Tests call `syncOnce()` directly and don't care about the scheduler flag at all; production wiring needs the property to turn polling off in every test context (see `testing.md`) |
 | 2026-10-16 | `RoutineItemCategory`, `RoutineItemSource`, `HillsideField` use `@Enumerated(EnumType.STRING)` directly, no converter | Their values are already valid Java enum constant names (`BODY`, `WAKATIME`, `DEEP_WORK`, ...); `DailyLogSource`'s converter exists only because its stored values are lowercase and hyphenated, which doesn't apply here |
 | 2026-10-14 | `HubJournalReader` shells out to the real `git` and `git-crypt` binaries via `ProcessBuilder` with an argument list, not a shell string, and not a reimplementation of the git-crypt format | Avoids ever constructing a shell command from the key path or repo URL (no injection surface), and git-crypt's on-disk format is undocumented-as-a-library-contract; its own CLI is the only supported way to unlock it |
 | 2026-10-14 | `HubJournalReader` takes a `Supplier<String>` for the key and a constructor-injected repo URL, both package-visible overrides of the public no-arg constructor | Lets tests substitute a throwaway key and a throwaway local repo without touching the real `UMWAYI_JOURNAL_KEY_B64` variable or the real UMWAYI remote, while Spring still wires the plain `HubJournalReader()` bean in production |
