@@ -66,6 +66,19 @@ class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void logsARoutineItemCompletionWithMeasuredMinutes() throws Exception {
+        RoutineItem item = routineItemRepository.save(new RoutineItem("deep work", null));
+
+        mockMvc.perform(post("/api/daily-logs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"logDate": "2026-09-18", "routineItemId": %d, "measuredMinutes": 45}
+                                """.formatted(item.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.measuredMinutes", is(45)));
+    }
+
+    @Test
     void rejectsALogWithBothTargetsSet() throws Exception {
         RoutineItem item = routineItemRepository.save(new RoutineItem("exercise", null));
         var goal = goalRepository.findByName("target-roles").orElseThrow();

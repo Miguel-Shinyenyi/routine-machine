@@ -21,17 +21,22 @@ export async function createScheduleTemplate(formData: FormData): Promise<void> 
     }),
   });
 
-  revalidatePath("/backlog");
-  revalidatePath("/roadmap");
+  revalidatePath("/flock");
+  revalidatePath("/path");
 }
 
 export async function createRoutineItem(formData: FormData): Promise<void> {
   await backendFetch("/api/routine-items", {
     method: "POST",
-    body: JSON.stringify({ name: formData.get("name") }),
+    body: JSON.stringify({
+      name: formData.get("name"),
+      description: formData.get("description") || null,
+      category: formData.get("category") || null,
+      goalId: optionalNumber(formData.get("goalId")),
+    }),
   });
 
-  revalidatePath("/backlog");
+  revalidatePath("/flock");
 }
 
 export async function createAdHocTask(formData: FormData): Promise<void> {
@@ -44,8 +49,8 @@ export async function createAdHocTask(formData: FormData): Promise<void> {
     }),
   });
 
-  revalidatePath("/board");
-  revalidatePath("/backlog");
+  revalidatePath("/today");
+  revalidatePath("/flock");
 }
 
 export async function createLearningTopic(formData: FormData): Promise<void> {
@@ -57,7 +62,7 @@ export async function createLearningTopic(formData: FormData): Promise<void> {
     }),
   });
 
-  revalidatePath("/backlog");
+  revalidatePath("/flock");
 }
 
 export async function updateTaskStatus(taskId: number, status: string): Promise<void> {
@@ -66,8 +71,8 @@ export async function updateTaskStatus(taskId: number, status: string): Promise<
     body: JSON.stringify({ status }),
   });
 
-  revalidatePath("/board");
-  revalidatePath("/reports");
+  revalidatePath("/today");
+  revalidatePath("/tally");
 }
 
 export async function createCurrentReading(formData: FormData): Promise<void> {
@@ -76,5 +81,5 @@ export async function createCurrentReading(formData: FormData): Promise<void> {
     body: JSON.stringify({ title: formData.get("title") }),
   });
 
-  revalidatePath("/backlog");
+  revalidatePath("/flock");
 }

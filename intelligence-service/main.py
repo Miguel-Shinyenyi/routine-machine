@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from patterns import compute_patterns
 from suggestion import NoTopicsAvailableError, choose_suggestion
+from tally import compute_tally
 
 BACKEND_BASE_URL = os.environ.get("BACKEND_BASE_URL", "http://localhost:8080")
 
@@ -64,6 +65,31 @@ class PatternsResponse(BaseModel):
     streaks: list[StreakView]
     skipHeavyDays: list[SkipHeavyDayView]
     topicRoutineCorrelation: TopicRoutineCorrelationView
+
+
+class DayShownUpView(BaseModel):
+    date: str
+    shownUp: bool
+
+
+class GoalWeekHoursView(BaseModel):
+    goalId: int
+    weekStart: str
+    cumulativeHours: float
+
+
+class RoutineShownUpView(BaseModel):
+    routineItemId: int
+    name: str
+    shownUpDays: int
+    windowDays: int
+
+
+class TallyResponse(BaseModel):
+    daysShownUp: list[DayShownUpView]
+    daysShownUpCount: int
+    goalWeekHours: list[GoalWeekHoursView]
+    routineShownUp: list[RoutineShownUpView]
 
 
 @app.get("/health")
@@ -127,4 +153,30 @@ def patterns():
             avgRoutineCompletionsOnTopicLogDays=result.topic_routine_correlation.avg_routine_completions_on_topic_log_days,
             avgRoutineCompletionsOnOtherDays=result.topic_routine_correlation.avg_routine_completions_on_other_days,
         ),
+    )
+
+
+@app.get("/tally", response_model=TallyResponse)
+def tally(windowDays: int = 28):
+    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
+        routine_items = client.get("/api/routine-items").raise_for_status().json()
+        learning_topics = client.get("/api/learning-topics").raise_for_status().json()
+        logs = client.get("/api/daily-logs").raise_for_status().json()
+
+    result = compute_tally(routine_items, learning_topics, logs, today=date.today(), window_days=windowDays)
+
+    return TallyResponse(
+        daysShownUp=[DayShownUpView(date=d.date, shownUp=d.shown_up) for d in result.days_shown_up],
+        daysShownUpCount=result.days_shown_up_count,
+        goalWeekHours=[
+            GoalWeekHoursView(goalId=w.goal_id, weekStart=w.week_start, cumulativeHours=w.cumulative_hours)
+            for w in result.goal_week_hours
+        ],
+        routineShownUp=[
+            RoutineShownUpView(
+                routineItemId=r.routine_item_id, name=r.name, shownUpDays=r.shown_up_days,
+                windowDays=r.window_days,
+            )
+            for r in result.routine_shown_up
+        ],
     )

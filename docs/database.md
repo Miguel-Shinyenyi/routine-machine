@@ -43,10 +43,24 @@ tables:
   the latest row by `created_at` is the current book. No `finished_at` or status field, a new
   row simply supersedes the last.
 
+Phase 5 built via `V4__phase5_categorisation_and_hours.sql`:
+
+- `routine_items` gains `category` (nullable, `BODY`/`MIND`/`WORK`/`HOME`, check-constrained,
+  no default: existing items stay uncategorised until assigned through Flock), `count_rule`
+  (nullable text, informational, no constraint), `source` (not null, defaults `MANUAL`,
+  check-constrained to `MANUAL`/`HUB`/`WAKATIME`/`ACTIVITYWATCH`/`HEALTH`/`READER_NOTES`/
+  `GITHUB`/`STRAVA`), `hillside_field` (nullable, check-constrained to
+  `READING`/`MOVEMENT`/`DEEP_WORK`/`LEARNING`/`SLEEP`/`WRITING`), `private` (not null,
+  defaults `true`), and `goal_id` (nullable, references `goals`, indexed).
+- `daily_logs` gains `measured_minutes` (nullable int), rolled up by the intelligence
+  service's `/tally` into cumulative hours per goal.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-16 | `routine_items.category`, `hillside_field` have no default, `source` defaults `MANUAL`, `private` defaults `true` | A category or hillside field can't be guessed for existing rows, so they stay nullable until someone assigns one through Flock; `source` and `private` have an honest single-user default (manually tended, not yet shared) that every existing row already matches |
+| 2026-10-16 | `routine_items.goal_id` is nullable, unlike `learning_topics.goal_id` | Not every routine item rolls up to a goal (plenty are just upkeep: sleep, cleaning); forcing one would mean inventing a goal for rows that don't have one |
 | 2026-09-19 | `tasks` also carries its own `label`, `routine_item_id`, and `learning_topic_id`, not just `schedule_template_id` | A `LEARNING_SLOT` template doesn't fix which topic applies — that's resolved per day (see `schedule.md`'s frontend-orchestration decision) — so it has to live on the task, not the template. Once `learning_topic_id` was needed there anyway, giving ad-hoc tasks (no template) the same optional target columns plus their own `label` was the direct extension, not a special case |
 | 2026-09-18 | `daily_logs.source` gains a third value, `schedule` | A task completed through the Phase 3 board is a distinct origin from a manually logged entry or a hub-sync-detected one, and provenance should stay visible per the original source-field decision below |
 | 2026-09-18 | Two new tables, `schedule_templates` and `tasks`, rather than extending `daily_logs` | `daily_logs` is an append-only record of completed facts; a task has mutable state (`TODO` to `DONE`) before it becomes one, which doesn't fit an append-only table |
@@ -60,4 +74,4 @@ tables:
 
 ## Open questions
 
-- None currently open for Phase 3.
+- None currently open for Phase 5.

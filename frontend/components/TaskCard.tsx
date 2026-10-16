@@ -1,7 +1,7 @@
 "use client";
 
 import { updateTaskStatus } from "@/lib/actions";
-import type { Task } from "@/lib/types";
+import type { RoutineItem, Task } from "@/lib/types";
 
 const NEXT_STATUS: Record<Task["status"], Task["status"] | null> = {
   TODO: "IN_PROGRESS",
@@ -9,37 +9,53 @@ const NEXT_STATUS: Record<Task["status"], Task["status"] | null> = {
   DONE: null,
 };
 
-const NEXT_LABEL: Record<Task["status"], string> = {
-  TODO: "Start",
-  IN_PROGRESS: "Mark done",
-  DONE: "",
-};
-
-export function TaskCard({ task }: { task: Task }) {
+export function TaskCard({ task, routineItem }: { task: Task; routineItem?: RoutineItem }) {
   const next = NEXT_STATUS[task.status];
+  const isDone = task.status === "DONE";
+  const isAutoCounted = routineItem !== undefined && routineItem.source !== "MANUAL";
 
   return (
-    <div className="rounded border border-black/10 p-3 dark:border-white/15">
-      <p className="text-sm">{task.label}</p>
-      <div className="mt-2 flex items-center gap-2">
-        {task.status !== "TODO" && (
-          <form action={updateTaskStatus.bind(null, task.id, "TODO")}>
-            <button type="submit" className="text-xs text-black/50 hover:underline dark:text-white/50">
-              Reset
-            </button>
-          </form>
-        )}
-        {next && (
-          <form action={updateTaskStatus.bind(null, task.id, next)}>
-            <button
-              type="submit"
-              className="rounded bg-black/90 px-2 py-1 text-xs text-white hover:bg-black dark:bg-white/90 dark:text-black"
-            >
-              {NEXT_LABEL[task.status]}
-            </button>
-          </form>
-        )}
+    <div className="flex items-center gap-3 border-b hairline px-1 py-3 last:border-b-0">
+      <form action={next ? updateTaskStatus.bind(null, task.id, next) : undefined}>
+        <button
+          type="submit"
+          disabled={!next}
+          aria-label={isDone ? "Tended" : "Mark tended"}
+          className="check-btn flex h-7 w-7 items-center justify-center border hairline text-sm"
+          style={{
+            background: isDone ? "var(--tended-fill)" : "transparent",
+            color: isDone ? "var(--tended-ink)" : "var(--muted)",
+          }}
+        >
+          {isDone ? "✓" : ""}
+        </button>
+      </form>
+
+      <div className="flex-1">
+        <p className="text-[15px]" style={{ color: isDone ? "var(--muted)" : "var(--ink)" }}>
+          {task.label}
+        </p>
+        <div className="mt-1 flex items-center gap-2">
+          {isAutoCounted && <span className="chip chip-tint">{routineItem?.source}</span>}
+          {routineItem?.isPrivate && <span className="chip chip-private">Private</span>}
+          {isDone && <span className="chip chip-tended">Tended</span>}
+        </div>
       </div>
+
+      {task.status === "IN_PROGRESS" && (
+        <form action={updateTaskStatus.bind(null, task.id, "TODO")}>
+          <button type="submit" className="text-[13px] text-muted hover:underline">
+            Reset
+          </button>
+        </form>
+      )}
+      {next && (
+        <form action={updateTaskStatus.bind(null, task.id, next)}>
+          <button type="submit" className="btn-fill px-3 py-1 text-[13px]">
+            {task.status === "TODO" ? "Start" : "Mark tended"}
+          </button>
+        </form>
+      )}
     </div>
   );
 }

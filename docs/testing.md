@@ -14,25 +14,31 @@ test (`DailyLogTest`) covers the entity's exactly-one-target invariant without n
 database at all. `TaskServiceTest` instantiates `TaskService` directly (`new
 TaskService(taskRepository, dailyLogRepository)`) inside a `@DataJpaTest`, rather than pulling
 in a full `@SpringBootTest`, since the service only needs the two real repositories, not the
-whole application context. 56 backend tests, all passing.
+whole application context. Phase 5 added repository and API tests for `RoutineItem`'s new
+columns (default `source`/`private` when not given, a fully categorised item linked to a goal
+via `findWithGoalById`, rejecting an unknown `goalId`) and for `DailyLog.measuredMinutes`. 61
+backend tests, all passing.
 
-Intelligence service: pytest. The suggestion rule (`choose_suggestion`) and the pattern-
-detection rule (`compute_patterns`) are each tested directly as pure functions against plain
-dicts/dates, no HTTP involved — `compute_patterns` takes an explicit `today` argument for
-exactly this reason, so streak/completion-rate edge cases don't need the system clock mocked.
-The FastAPI routes are tested with `TestClient` and `respx` mocking the backend's HTTP
-responses. 18 tests, all passing.
+Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
+detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
+directly as pure functions against plain dicts/dates, no HTTP involved — all three take an
+explicit `today` argument for exactly this reason, so date-window edge cases don't need the
+system clock mocked. The FastAPI routes are tested with `TestClient` and `respx` mocking the
+backend's HTTP responses. 26 tests, all passing.
 
 Frontend: Vitest, but only for `lib/schedule.ts`'s pure logic (which templates still need a
-task, and computing a date's weekday independent of server timezone) — 5 tests. Page
-components are verified by running the app and clicking through all four views and the full
+task, and computing a date's weekday independent of server timezone) — 5 tests, unchanged by
+Phase 5's redesign since no new pure logic was added to the frontend. Page components are
+verified by running the app and clicking through all four views and the full
 materialize → start → done flow in a browser instead, matching settlement-engine's frontend,
-which has no automated test framework at all (see decisions log).
+which has no automated test framework at all (see decisions log). `npm run lint` and
+`npm run build` (strict TypeScript) also run as part of finishing a phase.
 
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-16 | `compute_tally` gets its own pure-function tests, separate from `compute_patterns`'s | Different windowing rules (clipped to an item's lifetime vs the completion-rate window) and a different aggregation shape (cumulative per goal per week) deserve their own focused test cases rather than growing one already-long test module |
 | 2026-09-19 | Frontend gets Vitest for pure logic only, no component/page test framework | Matches settlement-engine's frontend precedent (no test framework there either); the pages are thin data-fetch-and-render, verified by actually running them in a browser (see PROJECT.md's rule on this), while the one function with real branching logic (`templatesNeedingMaterialization`, `dayOfWeekName`) is exactly the kind of thing worth a fast, deterministic unit test |
 | 2026-09-18 | Manual Docker Compose verification remains part of finishing a phase, not just Phase 1 | It found a second real bug in Phase 2 (streak/completion-rate windowing inconsistency on backdated logs, see `intelligence-service.md`) that no unit test had a reason to check for, since nothing in the Phase 1 test suite exercised a log dated before its item's creation |
 | 2026-09-18 | Corrected this doc's backend test count from 22 to 23 | Stale: the count was written before the `listsTopicsWithTheirGoalNamePopulated` regression test (added for the lazy-loading fix below) was accounted for here, and PROJECT.md's status log had already been updated to 23 while this file wasn't. Confirmed 23 by re-running `./mvnw test` rather than trusting either doc |
@@ -43,4 +49,4 @@ which has no automated test framework at all (see decisions log).
 
 ## Open questions
 
-- None currently open for Phase 3.
+- None currently open for Phase 5.

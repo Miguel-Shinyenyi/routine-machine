@@ -38,6 +38,9 @@ public class DailyLog {
     @Column(nullable = false)
     private DailyLogSource source;
 
+    @Column(name = "measured_minutes")
+    private Integer measuredMinutes;
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private OffsetDateTime createdAt;
@@ -45,11 +48,14 @@ public class DailyLog {
     protected DailyLog() {
     }
 
-    private DailyLog(LocalDate logDate, RoutineItem routineItem, LearningTopic learningTopic, DailyLogSource source) {
+    private DailyLog(
+            LocalDate logDate, RoutineItem routineItem, LearningTopic learningTopic, DailyLogSource source,
+            Integer measuredMinutes) {
         this.logDate = Objects.requireNonNull(logDate, "logDate must not be null");
         this.routineItem = routineItem;
         this.learningTopic = learningTopic;
         this.source = Objects.requireNonNull(source, "source must not be null");
+        this.measuredMinutes = measuredMinutes;
     }
 
     public static DailyLog forRoutineItem(LocalDate logDate, RoutineItem routineItem) {
@@ -57,8 +63,13 @@ public class DailyLog {
     }
 
     public static DailyLog forRoutineItem(LocalDate logDate, RoutineItem routineItem, DailyLogSource source) {
+        return forRoutineItem(logDate, routineItem, source, null);
+    }
+
+    public static DailyLog forRoutineItem(
+            LocalDate logDate, RoutineItem routineItem, DailyLogSource source, Integer measuredMinutes) {
         Objects.requireNonNull(routineItem, "routineItem must not be null");
-        return new DailyLog(logDate, routineItem, null, source);
+        return new DailyLog(logDate, routineItem, null, source, measuredMinutes);
     }
 
     public static DailyLog forLearningTopic(LocalDate logDate, LearningTopic learningTopic) {
@@ -66,8 +77,13 @@ public class DailyLog {
     }
 
     public static DailyLog forLearningTopic(LocalDate logDate, LearningTopic learningTopic, DailyLogSource source) {
+        return forLearningTopic(logDate, learningTopic, source, null);
+    }
+
+    public static DailyLog forLearningTopic(
+            LocalDate logDate, LearningTopic learningTopic, DailyLogSource source, Integer measuredMinutes) {
         Objects.requireNonNull(learningTopic, "learningTopic must not be null");
-        return new DailyLog(logDate, null, learningTopic, source);
+        return new DailyLog(logDate, null, learningTopic, source, measuredMinutes);
     }
 
     public Long getId() {
@@ -88,6 +104,10 @@ public class DailyLog {
 
     public DailyLogSource getSource() {
         return source;
+    }
+
+    public Integer getMeasuredMinutes() {
+        return measuredMinutes;
     }
 
     public OffsetDateTime getCreatedAt() {

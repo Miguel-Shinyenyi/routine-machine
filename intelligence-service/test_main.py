@@ -87,3 +87,32 @@ def test_patterns_calls_the_backend_and_returns_computed_statistics():
     assert body["streaks"][0]["longestStreak"] == 2
     assert body["skipHeavyDays"] == []
     assert body["topicRoutineCorrelation"]["daysWithTopicLog"] == 0
+
+
+@respx.mock
+def test_tally_calls_the_backend_and_returns_computed_statistics():
+    today = date.today()
+
+    respx.get(f"{BACKEND_BASE_URL}/api/routine-items").mock(
+        return_value=httpx.Response(200, json=[
+            {"id": 1, "name": "deep work", "createdAt": f"{today}T08:00:00Z", "goalId": 5},
+        ])
+    )
+    respx.get(f"{BACKEND_BASE_URL}/api/learning-topics").mock(return_value=httpx.Response(200, json=[]))
+    respx.get(f"{BACKEND_BASE_URL}/api/daily-logs").mock(
+        return_value=httpx.Response(200, json=[
+            {
+                "id": 1, "logDate": str(today), "routineItemId": 1, "learningTopicId": None,
+                "source": "manual", "measuredMinutes": 60,
+            },
+        ])
+    )
+
+    response = client.get("/tally")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["daysShownUpCount"] == 0  # only one routine tended, below the threshold of 3
+    assert body["goalWeekHours"][0]["goalId"] == 5
+    assert body["goalWeekHours"][0]["cumulativeHours"] == 1.0
+    assert body["routineShownUp"][0]["shownUpDays"] == 1

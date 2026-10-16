@@ -1,6 +1,8 @@
 package com.routinemachine.core.api;
 
+import com.routinemachine.core.domain.Goal;
 import com.routinemachine.core.domain.RoutineItem;
+import com.routinemachine.core.repository.GoalRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -18,20 +20,35 @@ import java.util.List;
 public class RoutineItemController {
 
     private final RoutineItemRepository routineItemRepository;
+    private final GoalRepository goalRepository;
 
-    public RoutineItemController(RoutineItemRepository routineItemRepository) {
+    public RoutineItemController(RoutineItemRepository routineItemRepository, GoalRepository goalRepository) {
         this.routineItemRepository = routineItemRepository;
+        this.goalRepository = goalRepository;
     }
 
     @GetMapping
     public List<RoutineItemResponse> list() {
-        return routineItemRepository.findAll().stream().map(RoutineItemResponse::from).toList();
+        return routineItemRepository.findAllWithGoal().stream().map(RoutineItemResponse::from).toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoutineItemResponse create(@Valid @RequestBody RoutineItemRequest request) {
-        RoutineItem saved = routineItemRepository.save(new RoutineItem(request.name(), request.description()));
-        return RoutineItemResponse.from(saved);
+        Goal goal = request.goalId() == null ? null : goalRepository.findById(request.goalId())
+                .orElseThrow(() -> new IllegalArgumentException("No goal with id " + request.goalId()));
+
+        RoutineItem saved = routineItemRepository.save(new RoutineItem(
+                request.name(),
+                request.description(),
+                request.category(),
+                request.countRule(),
+                request.source(),
+                request.hillsideField(),
+                request.privateOrDefault(),
+                goal));
+
+        return RoutineItemResponse.from(
+                routineItemRepository.findWithGoalById(saved.getId()).orElseThrow());
     }
 }

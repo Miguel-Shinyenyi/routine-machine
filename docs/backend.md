@@ -15,13 +15,21 @@ endpoints, matching the four Phase 1 entities in `database.md`:
   not user-editable in Phase 1.
 - `GET /api/routine-items`, `POST /api/routine-items`, define and list routine items. List
   responses include each item's `createdAt`, needed by the intelligence service's Phase 2
-  pattern detection to bound a completion-rate/skip-heavy-day window per item.
+  pattern detection to bound a completion-rate/skip-heavy-day window per item. Phase 5 added
+  `category`, `countRule`, `source` (defaults `MANUAL`), `hillsideField`, `isPrivate`
+  (defaults `true`), and an optional `goalId`/`goalName` pair (400 on an unknown `goalId`,
+  matching every other foreign-key validation in this API). `findAllWithGoal`/
+  `findWithGoalById` use a `LEFT JOIN FETCH` (not the plain `JOIN FETCH` `LearningTopic` uses)
+  since a routine item's goal is optional, where a learning topic's isn't.
 - `GET /api/learning-topics?goalId=`, `POST /api/learning-topics`, define and list learning
   topics, each tied to a goal. `goalId` filter is optional.
 - `GET /api/daily-logs?date=`, `POST /api/daily-logs`, record and list completions. A log
   targets exactly one of `routineItemId` or `learningTopicId`; `source` defaults to `manual`
   and accepts `hub-sync`, planned to also accept `schedule` in Phase 3. `date` filter is
-  optional.
+  optional. Phase 5 added an optional `measuredMinutes`, read by the intelligence service's
+  `/tally` for goal-hours roll-up; `DailyLog.forRoutineItem`/`forLearningTopic` gained a
+  4-argument overload carrying it, the existing 2- and 3-argument overloads default it to
+  `null`.
 
 Validation errors and unresolvable foreign keys (bad `goalId`, `routineItemId`,
 `learningTopicId`) return 400. No suggestion or pattern-detection logic lives here, the
@@ -52,6 +60,7 @@ Phase 3 built: the schedule and its tasks, plus current reading.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-16 | `RoutineItemCategory`, `RoutineItemSource`, `HillsideField` use `@Enumerated(EnumType.STRING)` directly, no converter | Their values are already valid Java enum constant names (`BODY`, `WAKATIME`, `DEEP_WORK`, ...); `DailyLogSource`'s converter exists only because its stored values are lowercase and hyphenated, which doesn't apply here |
 | 2026-09-19 | `TaskService`, the first real service class in this codebase, owns the DONE-transition's daily_log create/delete | Phase 1/2 controllers called repositories directly since their logic was pure CRUD/validation; a status change that coordinates `TaskRepository` and `DailyLogRepository` together (and must delete the log again if the task moves back out of DONE) is real business logic, not a data-layer passthrough, so it earned a service rather than being stuffed into the controller |
 | 2026-09-19 | `ScheduleTemplateRepository` and `TaskRepository` use `JOIN FETCH` queries from the start | Same `LazyInitializationException` risk as `LearningTopicRepository` in Phase 1 (open-in-view is disabled); applied proactively this time instead of waiting to hit it again in manual testing |
 | 2026-09-19 | `RoutineItemResponse` now includes `createdAt` | Needed by the intelligence service's Phase 2 pattern detection (completion rates and skip-heavy days are windowed per item from its creation date); the data already existed on the entity, this only exposes it. See `intelligence-service.md` |

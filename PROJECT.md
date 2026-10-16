@@ -140,14 +140,31 @@ Run its tests with `npm test` (Vitest, covers `lib/schedule.ts`'s pure logic onl
    tied to a Phase 2 finding. Does not start until Phase 2 has produced real data, weeks of
    it, not a synthetic sample, judged by mutual agreement that its output is actually usable,
    not by a fixed timeline. This is a gate, not a target date.
+5. Shepherd frontend over the existing API: redesign the frontend (Today, Path, Flock,
+   Tally) to the design system in `docs/design.md`, plus the small backend additions
+   (routine item categorisation, `measured_minutes`, goal roll-up, intelligence-service
+   `/tally`) that those views need.
+6. Watering holes: automatic counting from WakaTime, ActivityWatch, GitHub, optionally
+   RescueTime, a measurements table, a sync job, a health-data ingest endpoint, and
+   hub-sync's Phase 1 scope (listing journal/article activity, not just the Current-book
+   line Stage 1 already reads).
+7. Reader's notes: books, chapters, assessed reading notes via an intelligence-service LLM
+   call, counted toward the reading goal under a named ratio threshold.
+8. The hillside: an anonymous, opt-in, k-anonymous leaderboard by days-shown-up. Needs an
+   accounts/auth decision before any code, explicitly gated on mutual agreement on that
+   architecture, not a target date.
 
-Current phase: **Phase 3, built and verified.** The schedule, tasks, current reading, and the
-full Next.js frontend (backlog, roadmap, board, reports) are built and confirmed working
-end-to-end through the full Docker Compose stack, including a browser walkthrough of every
-view and the materialize → start → done flow. Phase 4 remains gated on real, weeks-of-usage
-data behind Phase 2's statistics, which still doesn't exist — only what manual verification
-has produced so far. The weekly layout itself (which days, which durations) still needs to be
-entered through the Backlog view; nothing in this repo does that automatically.
+Phases 5 to 8 are inserted alongside Phase 4, not after it: none of them need Phase 2's real
+usage data, so Phase 4's gate is unchanged by their existence. Each phase is built, verified,
+and reported on its own before the next starts.
+
+Current phase: **Phase 5, built and verified; Phases 6-8 scoped, not started.** The frontend
+is redesigned to the shepherd's language (Today, Path, Flock, Tally) per `docs/design.md`, with
+the small backend and intelligence-service additions Phase 5 needed. Phase 4 remains gated on
+real, weeks-of-usage data behind Phase 2's statistics, which still doesn't exist — only what
+manual verification has produced so far. The weekly layout itself (which days, which durations)
+still needs to be entered through Flock's schedule-template form; nothing in this repo does
+that automatically, and real durations are still an open question (see `schedule.md`).
 
 ## Repo structure decision
 
@@ -167,7 +184,9 @@ Keep entries short. Record fixes and gaps found, not just what was completed.
 | 2026-09-18 | Doc cleanup | Done | Fixed a stale test count in testing.md (said 22, actually 23) and explicitly logged the decision to leave intelligence-service.md's Phase 2 open question open rather than answer it prematurely |
 | 2026-09-18 | Phase 2 | Done | Intelligence service: `GET /patterns` (completion rates, streaks, skip-heavy days, topic/routine correlation), computed by the pure `compute_patterns` function, 18 intelligence-service tests passing (up from 8). Backend: `RoutineItemResponse` now exposes `createdAt`, the one piece Phase 2 needed that Phase 1's API didn't already have. Verified end-to-end via Docker Compose with real routine items, logs, and a learning topic. Found and fixed a second real bug this way, streaks counted a log backdated to before its routine item existed, while completion rate already excluded it; both now agree. See `intelligence-service.md` and `testing.md` |
 | 2026-09-18 | Scope | Decided | Inserted a new Phase 3 (fixed schedule plus tracking frontend) ahead of the old Phase 3, renumbered to Phase 4 (active reprioritization). The fixed schedule doesn't need pattern data to be correct, so it doesn't belong behind Phase 4's gate. See `schedule.md` and `frontend.md` |
+| 2026-10-16 | Scope | Decided | Inserted Phases 5-8 (shepherd frontend redesign, watering holes, reader's notes, the hillside) alongside Phase 4, per `docs/design.md`. None need Phase 2's real usage data, so Phase 4's gate is unchanged. Phase 8 is explicitly gated on agreeing an accounts/auth architecture first, not a target date |
 | 2026-09-19 | Phase 3 | Done | Backend: `schedule_templates`, `tasks`, `current_reading_log` tables and endpoints, plus `TaskService` (first service class in this codebase) handling the DONE-transition's daily_log create/delete, 56 backend tests (up from 23). Frontend: Next.js app, all four views (backlog, roadmap, board, reports), 5 Vitest tests for the one piece of real logic. Verified end-to-end via a full browser walkthrough against the Docker Compose stack: created routine items/learning topics/templates, materialized a day's tasks (including resolving a learning-slot topic via the intelligence service), moved a task through in-progress to done, confirmed the resulting daily_log, and saw Reports render correctly. Found and fixed a real gap in the process — there was no UI path to create a routine item or learning topic at all, which would have made the schedule-template form unusable on first use; added a Routine items and Learning topics section to Backlog. See `backend.md`, `frontend.md`, `schedule.md`, `testing.md` |
+| 2026-10-17 | Phase 5 | Done | Frontend redesigned to `docs/design.md`'s shepherd language and tokens: renamed routes (Today/Path/Flock/Tally, old paths redirect), a new `Shell` (glass sidebar/tab bar), Today as a single grouped task list, Tally's tally stick/stat tiles/`GoalHoursChart`/per-routine meters. Backend: `routine_items` gained `category`, `countRule`, `source`, `hillsideField`, `private`, `goalId` (migration V4), `daily_logs` gained `measuredMinutes`, 61 backend tests (up from 56). Intelligence service: new `GET /tally` (`compute_tally`), 26 tests (up from 18). Verified: `./mvnw test`, `pytest`, `npm run lint`/`test`/`build` all pass; full Docker Compose stack built and walked through in a browser at 1440px (light not independently re-verified live, system theme was dark during this session's walkthrough — token definitions were reviewed, not rendered) — seeded real data, ran materialize → start → done on Today, confirmed Path/Flock/Tally render correctly. The 390px phone layout could not be confirmed live: `resize_window` reported success but the screenshot kept the desktop viewport, a tool limitation in this session, not a code check; Tailwind's `md:` breakpoints are in place but unverified by eye. See `frontend.md`, `backend.md`, `database.md`, `intelligence-service.md`, `testing.md` |
 
 ## Rules for working on this project
 
