@@ -14,9 +14,14 @@ test (`DailyLogTest`) covers the entity's exactly-one-target invariant without n
 database at all. `TaskServiceTest` instantiates `TaskService` directly (`new
 TaskService(taskRepository, dailyLogRepository)`) inside a `@DataJpaTest`, rather than pulling
 in a full `@SpringBootTest`, since the service only needs the two real repositories, not the
-whole application context. Phase 5 added repository and API tests for `RoutineItem`'s new
-columns (default `source`/`private` when not given, a fully categorised item linked to a goal
-via `findWithGoalById`, rejecting an unknown `goalId`) and for `DailyLog.measuredMinutes`. 61
+whole application context. `HubJournalReaderTest` is a plain JUnit test, no Spring context at
+all, against throwaway git-crypt repos and keys built per test under `@TempDir`
+(`GitCryptTestFixture`); it skips cleanly with `Assumptions.assumeTrue` when `git-crypt` isn't
+on `PATH`, rather than failing the build. Log assertions use a Logback `ListAppender` attached
+directly to `HubJournalReader`'s own logger, not console-output capture, so they only see what
+that class logs. Phase 5 added repository and API tests for `RoutineItem`'s new columns
+(default `source`/`private` when not given, a fully categorised item linked to a goal via
+`findWithGoalById`, rejecting an unknown `goalId`) and for `DailyLog.measuredMinutes`. 67
 backend tests, all passing.
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
@@ -39,6 +44,8 @@ which has no automated test framework at all (see decisions log). `npm run lint`
 | Date | Decision | Reason |
 |------|----------|--------|
 | 2026-10-16 | `compute_tally` gets its own pure-function tests, separate from `compute_patterns`'s | Different windowing rules (clipped to an item's lifetime vs the completion-rate window) and a different aggregation shape (cumulative per goal per week) deserve their own focused test cases rather than growing one already-long test module |
+| 2026-10-14 | `HubJournalReaderTest` builds its own throwaway git-crypt repos and keys per test, never touching the real UMWAYI repo or key | The task is explicitly about handling a real secret correctly; testing against the real key would mean a real secret has to exist somewhere reachable by the test suite, which is the exact risk this design avoids. A throwaway git-crypt repo exercises the identical clone/unlock/extract path |
+| 2026-10-14 | Tests requiring `git-crypt` skip via `Assumptions.assumeTrue` rather than failing | A machine without `git-crypt` on `PATH` can still build and run the rest of the suite; failing the whole build over one missing optional binary would block unrelated work |
 | 2026-09-19 | Frontend gets Vitest for pure logic only, no component/page test framework | Matches settlement-engine's frontend precedent (no test framework there either); the pages are thin data-fetch-and-render, verified by actually running them in a browser (see PROJECT.md's rule on this), while the one function with real branching logic (`templatesNeedingMaterialization`, `dayOfWeekName`) is exactly the kind of thing worth a fast, deterministic unit test |
 | 2026-09-18 | Manual Docker Compose verification remains part of finishing a phase, not just Phase 1 | It found a second real bug in Phase 2 (streak/completion-rate windowing inconsistency on backdated logs, see `intelligence-service.md`) that no unit test had a reason to check for, since nothing in the Phase 1 test suite exercised a log dated before its item's creation |
 | 2026-09-18 | Corrected this doc's backend test count from 22 to 23 | Stale: the count was written before the `listsTopicsWithTheirGoalNamePopulated` regression test (added for the lazy-loading fix below) was accounted for here, and PROJECT.md's status log had already been updated to 23 while this file wasn't. Confirmed 23 by re-running `./mvnw test` rather than trusting either doc |
