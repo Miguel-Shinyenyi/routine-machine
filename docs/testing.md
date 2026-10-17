@@ -76,7 +76,18 @@ detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are ea
 directly as pure functions against plain dicts/dates, no HTTP involved — all three take an
 explicit `today` argument for exactly this reason, so date-window edge cases don't need the
 system clock mocked. The FastAPI routes are tested with `TestClient` and `respx` mocking the
-backend's HTTP responses. 26 tests, all passing.
+backend's HTTP responses. Phase 7's `assess_note.parse_assessment_response` gets the same
+pure-function treatment as the other three rules (`test_assess_note.py`, 14 cases: a
+well-formed response, no connected ideas or quoted phrases, stray prose around the JSON, each
+required field missing in turn, an invalid `ownWordsPercentage` in four different bad shapes,
+no JSON object at all, malformed JSON), and `POST /reading-notes/assess` is tested with
+`TestClient` and `respx` mocking Anthropic's API the same way the backend's API is mocked
+elsewhere: a successful call, no API key configured (503), and Anthropic itself returning an
+error (502). One of these was also verified against the real Anthropic API during manual
+testing (see the decisions log): a real key reached the real endpoint with the correct
+request shape and got a real account-billing error back, which the 502 handling (added after
+finding the unhandled-exception bug this surfaced) now reports cleanly instead of as an
+opaque 500. 44 tests, all passing.
 
 Frontend: Vitest, but only for `lib/schedule.ts`'s pure logic (which templates still need a
 task, and computing a date's weekday independent of server timezone) — 5 tests, unchanged by
@@ -90,6 +101,9 @@ frontend, which has no automated test framework at all (see decisions log). `npm
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `assess_reading_note`'s automated tests fake Anthropic's API via `respx`, but it was also manually verified against the real API | Same offline/repeatable reasoning as every other faked external call in this project, but this one happened to have a real `ANTHROPIC_API_KEY` available in the session environment, so the real integration was checked too, not left purely theoretical. It surfaced a real bug (an unhandled `httpx.HTTPStatusError` producing an opaque 500), fixed and covered by a new test before moving on |
+| 2026-10-17 | `BookApiIntegrationTest` covers creating two books, confirming the current one is the latest and the list is newest-first, as one test method rather than several | Splitting it across methods would hit the same shared-Postgres-per-class ordering risk the measurement ingest tests already found; `rejectsABlankTitle` is a separate method since it writes nothing and isn't order-sensitive |
+| 2026-10-17 | `BookApiNoBooksYetTest` is its own test class, not a method in `BookApiIntegrationTest` | Its own class gets its own fresh Postgres container, so the 404-when-nothing-logged-yet case isn't order-dependent on what `BookApiIntegrationTest`'s other tests already wrote |
 | 2026-10-17 | `hub-sync.enabled=false` is set once, on `AbstractIntegrationTest`, inherited by every subclass | `HubSyncService`'s `@Scheduled` job would otherwise fire inside any full `@SpringBootTest` context and make a real outbound GitHub/UMWAYI call during the suite; one shared property beats adding `@TestPropertySource` to each of the eight affected test classes individually |
 | 2026-10-17 | `HubSyncServiceTest` fakes `GitHubContentClient` instead of calling the real GitHub API | The real API is rate-limited (60 requests/hour unauthenticated) and the test suite needs to run repeatedly and offline; the fake's fixed files and commit dates make the dedupe/double-count/missing-routine-item cases exact and deterministic, which a live call couldn't guarantee anyway |
 | 2026-10-17 | `WakaTimeSyncServiceTest` fakes `WakaTimeClient` instead of calling the real WakaTime API | Same reasoning as `HubSyncServiceTest`'s fake `GitHubContentClient`: the real API needs a live key and real account data, neither of which belongs in a repeatable, offline test run; the fake's fixed daily totals make the upsert/double-log/zero-day cases exact |

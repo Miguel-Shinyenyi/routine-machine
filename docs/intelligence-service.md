@@ -59,10 +59,34 @@ function, same `today` argument pattern as `compute_patterns`):
   window itself clipped to the item's lifetime if it's younger than the window (an item
   created 2 days ago can't have shown up in the last 28).
 
+Phase 7 started: `POST /reading-notes/assess`, the first call to an external LLM in this
+codebase (agreed with the user beforehand: Anthropic's Claude API, see the decisions log).
+Takes `{noteText, bookTitle, currentChapter, totalChapters}`, calls `POST /v1/messages`
+directly with `httpx` (no `anthropic` SDK dependency, matching the service's existing
+plain-`httpx` style for every other external call), and returns the model's assessment:
+`chapterPlaced`, `ownWordsPercentage`, `ideasConnected`, `quotedPhrases`, `questionBack`, per
+`docs/design.md`'s Reading page. The system prompt instructs the model to answer with nothing
+but a single JSON object; `assess_note.parse_assessment_response` (pure function, `assess_note.py`)
+extracts and validates it, tolerating stray prose around the JSON but raising
+`AssessmentParseError` on a missing field, a malformed `ownWordsPercentage` (must be an
+integer 0-100), or no JSON object at all. Reads `ANTHROPIC_API_KEY` fresh from the environment
+on each call; missing, returns 503 rather than guessing or failing silently. An upstream error
+from Anthropic itself (bad request, rate limit, billing) is caught and returned as a 502 with
+the real error message, not an opaque 500 — found and fixed by actually calling the real API
+during this phase's verification (see `testing.md`).
+
+Not built yet: the backend storage for notes themselves (this endpoint only assesses text
+handed to it, it doesn't persist anything), the named ratio threshold that decides whether a
+note counts toward the reading goal, and any wiring from this endpoint into `/tally`'s
+goal-hours rollup.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `POST /reading-notes/assess` calls Anthropic's API directly with `httpx`, not the `anthropic` Python SDK | Matches every other external call this service already makes (backend reads, and now Anthropic) — one HTTP client pattern, one dependency surface, no new SDK to track for a single endpoint |
+| 2026-10-17 | The system prompt instructs the model to return only a JSON object, parsed by a dedicated pure function with its own test file | Keeps the hard-to-get-right part (parsing a real but imperfect LLM response: stray prose, a missing field, a percentage out of range) testable with plain strings, no network, same separation `choose_suggestion`/`compute_patterns`/`compute_tally` already use for their own hard-to-get-right logic |
+| 2026-10-17 | An Anthropic API error (4xx/5xx) is caught and re-raised as a 502 with the real message, not left to bubble into FastAPI's default 500 | Found by actually calling the real API with a real (but over-budget) key during manual verification: the unhandled `httpx.HTTPStatusError` produced an opaque 500 with no useful detail. A real upstream failure should be visibly different from a bug in this service's own code |
 | 2026-10-16 | `/tally` is a separate module (`tally.py`) and endpoint from `/patterns`, not an extra field on it | Different question (hours and shown-up-ness vs completion rates/streaks/correlation), different consumer page (Tally's stat tiles and chart vs the rest of Tally's `/patterns`-sourced sections); keeping them separate pure functions keeps each one's tests focused, same reasoning `compute_patterns` and `choose_suggestion` already follow |
 | 2026-10-16 | `TALLY_STICK_THRESHOLD = 3` is a named constant in `tally.py`, not inlined | `docs/design.md` states the rule in prose ("a day counts when at least 3 routines were tended") as a stated choice, not a derived one; the constant makes that explicit in the one place it's checked, same pattern as `SKIP_HEAVY_THRESHOLD` in `patterns.py` |
 | 2026-09-18 | Streak and completion-rate calculations both exclude logs dated before the routine item's `createdAt` | Found via manual Docker Compose verification: a routine item created "today" that also had a log backdated to "yesterday" (nothing at the API level stops this) showed `currentStreak: 2` while `completionRates` showed `totalDays: 1`, an inconsistency. Completion rate already excluded the backdated log; streak didn't, so it was made to match. Regression test: `test_a_log_backdated_before_the_item_existed_does_not_count_toward_its_streak` |
@@ -76,4 +100,11 @@ function, same `today` argument pattern as `compute_patterns`):
 
 ## Open questions
 
+- The named ratio threshold that decides whether a reader's note counts toward the reading
+  goal (per PROJECT.md's Phase 7 description) isn't decided yet; needs its own pass once
+  note storage and the goal-hours rollup are being built, not guessed at alongside the
+  assessment call itself.
+- Whether `ownWordsPercentage` below some threshold should still get a full assessment (ideas
+  connected, a question back) or short-circuit to something cheaper, isn't decided — not an
+  issue yet since nothing calls this endpoint in a loop or at volume.
 - None currently open for Phase 5.
