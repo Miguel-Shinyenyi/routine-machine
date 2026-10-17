@@ -108,6 +108,12 @@ Phase 7 also built via `V12__reading_notes.sql`:
   string arrays in a TEXT column rather than their own tables — see `backend.md`'s decisions
   log.
 
+Phase 7 also built via `V13__reader_notes_daily_log_source.sql`: `daily_logs.source` gains an
+eighth value, `reader-notes`, for a log `ReadingNoteService` writes when a note's
+`own_words_percentage` clears the named threshold (70, see `backend.md`). This log never
+carries `measured_minutes` — a written reflection has no duration to report, same reasoning
+`GitHubSyncService`'s commit-count logs already apply.
+
 ## Decisions log
 
 | Date | Decision | Reason |

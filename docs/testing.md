@@ -74,8 +74,14 @@ current-book cases were updated to assert on `BookRepository` instead of
 cases pattern as `BookApiIntegrationTest`: one test posts an assessed note and an unassessed
 one against two different books, then checks both the per-book and all-books list endpoints;
 separate methods cover a blank `noteText`, an unknown `bookId`, and an out-of-range
-`ownWordsPercentage`, none of which depend on what the first method already wrote. 125
-backend tests, all passing.
+`ownWordsPercentage`, none of which depend on what the first method already wrote.
+`ReadingNoteServiceTest` instantiates `ReadingNoteService` directly inside a `@DataJpaTest`,
+same pattern as `TaskServiceTest`/`HubSyncServiceTest`: a note at or above the threshold
+creates a `daily_log` for the `READER_NOTES` routine item; a note below the threshold, or
+with no assessment at all, does not; posting two qualifying notes the same day creates only
+one `daily_log` (the idempotency case, tested before the "no matching routine item" case,
+matching the project's own "test the double-count case first" instruction); no `READER_NOTES`
+routine item means no log but the note still saves. 130 backend tests, all passing.
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested

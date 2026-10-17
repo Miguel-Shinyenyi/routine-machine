@@ -257,8 +257,33 @@ service's `POST /reading-notes/assess` first and include the result here, but do
 via `StringListConverter`, not their own tables: nothing queries into them, they're only ever
 read back whole for one note.
 
-Not built yet: the named ratio threshold that decides whether a note counts toward the
-reading goal, the goal-hours rollup itself, and the Reading frontend page.
+**The named ratio threshold and goal-hours rollup built:** `ReadingNoteService`
+(`com.routinemachine.core.service.ReadingNoteService`), coordinating `ReadingNoteRepository`
+and `DailyLogRepository` the same way `TaskService` already coordinates `TaskRepository` and
+`DailyLogRepository` — saving a note is real business logic once it can also mark the day's
+reading routine done, not a data-layer passthrough, so it earned a service rather than living
+in the controller. `ReadingNoteController` now calls it instead of the repository directly.
+
+- `OWN_WORDS_THRESHOLD = 70`, the named ratio threshold PROJECT.md's Phase 7 description asks
+  for: a note whose `ownWordsPercentage` is at least 70 counts as real reflection, not
+  mostly-copied text.
+- When a note clears the threshold, every routine item with `source = READER_NOTES` gets a
+  `daily_log` for today (`source = reader-notes`, `daily_logs.source` now an eighth value,
+  migration V13) — same "find by source, log once per day" pattern WakaTime/ActivityWatch/
+  GitHub/RescueTime already use, down to the same idempotency check
+  (`existsByRoutineItemIdAndLogDate`). A note below the threshold, or with no assessment at
+  all (`ownWordsPercentage` null), still saves; it just doesn't mark anything done.
+- **This is the whole goal-hours rollup**, deliberately: nothing new was added to the
+  intelligence service. A reading note's `daily_log` carries no `measuredMinutes` — a written
+  reflection has no duration to report, and inventing one (a flat "15 minutes per note",
+  say) would be a fabricated number, not a measured one, the same reasoning `GitHubSyncService`
+  already applies to commit-count logs. `/tally`'s existing `goal_week_hours` only accumulates
+  `measuredMinutes`, so reading notes don't add hours to that chart; they do count toward
+  `daysShownUp` and `routineShownUp`, which only need the log to exist. If the "Reading"
+  routine item is linked to a goal (set through Flock, already possible), a qualifying note
+  marks that goal's day shown up, the correct shape for a qualitative activity.
+
+Only the Reading frontend page itself remains unbuilt for Phase 7.
 
 ## Decisions log
 
@@ -270,6 +295,9 @@ reading goal, the goal-hours rollup itself, and the Reading frontend page.
 | 2026-10-17 | `Book.source` reuses the existing `ReadingSource` enum rather than a new one | Same two origins (`manual`, `hub-sync`) `current_reading_log` already modeled; a second enum with identical values would be duplication with no distinction to justify it |
 | 2026-10-17 | `ReadingNote`'s assessment fields are all nullable; the note can be created without them | Writing the note down is the user's real action; requiring a successful LLM assessment first would block that action on an external API call that can fail, time out, or simply not be configured (`ANTHROPIC_API_KEY` unset) |
 | 2026-10-17 | `ideasConnected`/`quotedPhrases` are stored as JSON in a TEXT column (`StringListConverter`), not their own join tables | Nothing in this phase queries into individual ideas or phrases, only reads a note's full list back; a join table would be real schema and query complexity for a feature nothing uses |
+| 2026-10-17 | `OWN_WORDS_THRESHOLD = 70` is a plain named constant in `ReadingNoteService`, not configurable | PROJECT.md asks for a "named ratio threshold," not a tunable one; a fixed, documented number is honest about being a stated choice, same reasoning `patterns.py`'s `SKIP_HEAVY_THRESHOLD` and `tally.py`'s `TALLY_STICK_THRESHOLD` already use for their own thresholds |
+| 2026-10-17 | A qualifying reading note's `daily_log` carries no `measuredMinutes` | A written reflection has no duration to report; inventing one would be a fabricated number, not a measured one, the same reasoning `GitHubSyncService`'s commit-count logs already apply. The goal-hours rollup needed no new code: `/tally`'s existing logic already only accumulates logs that do carry `measuredMinutes`, and already counts any log toward `daysShownUp`/`routineShownUp` regardless |
+| 2026-10-17 | A note's `daily_log` is dated by today (`LocalDate.now()`), not the book's start date or anything else | The note is written today; this matches every other sync's dating rule (log the day the signal was observed), and a reader's note has no other natural date to use |
 | 2026-10-17 | No `chapters` table; `Book` has plain `currentChapter`/`totalChapters` integer columns instead | `docs/design.md`'s Reading page needs "chapter progress" (a number out of a number), not a maintained catalog of chapter entities; the LLM's "chapter placed" field (Phase 7, not built yet) is a free-text guess about where a note falls, not a foreign key into a chapters table the user would have to keep in sync by hand |
 | 2026-10-17 | `ActivityWatchClientImpl` assumes the backend and `aw-server` run on the same machine, reachable via `ACTIVITYWATCH_BASE_URL` | ActivityWatch has no cloud component, unlike WakaTime and GitHub; a pull from the backend only works if it can reach `aw-server`'s local API. Flagged to the user as a real architectural choice rather than decided silently; agreed to pull directly for now, revisit if the backend is ever deployed away from the machine running ActivityWatch (the push-via-health-endpoint alternative was declined for this slice) |
 | 2026-10-17 | `GitHubCommitClientImpl` reads GitHub's public events API, not the search-commits API or a per-repo commit listing | No credential needed (matches hub-sync's existing no-token reads), at the cost of being a true backup signal rather than a complete history: only recent public push events are visible this way. That tradeoff matches how PROJECT.md itself frames GitHub in Phase 6, "optionally RescueTime" aside, as a backup, not a primary source |
@@ -322,8 +350,7 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 - Strava's own sync (client, token storage, refresh, the actual OAuth redirect flow) is not
   designed yet, deliberately, pending Phase 8's accounts/auth architecture decision. Revisit
   once that's agreed, not before.
-- The named ratio threshold that counts a note toward the reading goal, the goal-hours
-  rollup itself, and the Reading frontend page are not designed or built yet.
+- The Reading frontend page is not built yet — the last piece of Phase 7.
 - Whether `POST /api/reading-notes` should itself call the intelligence service's
   `POST /reading-notes/assess` server-side, instead of expecting the frontend to call it
   first and pass the result along, isn't decided. The current shape matches the project's

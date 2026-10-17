@@ -1,9 +1,8 @@
 package com.routinemachine.core.api;
 
-import com.routinemachine.core.domain.Book;
 import com.routinemachine.core.domain.ReadingNote;
-import com.routinemachine.core.repository.BookRepository;
 import com.routinemachine.core.repository.ReadingNoteRepository;
+import com.routinemachine.core.service.ReadingNoteService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,11 +21,11 @@ import java.util.Optional;
 public class ReadingNoteController {
 
     private final ReadingNoteRepository readingNoteRepository;
-    private final BookRepository bookRepository;
+    private final ReadingNoteService readingNoteService;
 
-    public ReadingNoteController(ReadingNoteRepository readingNoteRepository, BookRepository bookRepository) {
+    public ReadingNoteController(ReadingNoteRepository readingNoteRepository, ReadingNoteService readingNoteService) {
         this.readingNoteRepository = readingNoteRepository;
-        this.bookRepository = bookRepository;
+        this.readingNoteService = readingNoteService;
     }
 
     @GetMapping
@@ -40,11 +39,9 @@ public class ReadingNoteController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ReadingNoteResponse create(@Valid @RequestBody ReadingNoteRequest request) {
-        Book book = bookRepository.findById(request.bookId())
-                .orElseThrow(() -> new IllegalArgumentException("No book with id " + request.bookId()));
-        ReadingNote saved = readingNoteRepository.save(new ReadingNote(
-                book, request.noteText(), request.chapterPlaced(), request.ownWordsPercentage(),
-                request.ideasConnected(), request.quotedPhrases(), request.questionBack()));
+        ReadingNote saved = readingNoteService.createNote(
+                request.bookId(), request.noteText(), request.chapterPlaced(), request.ownWordsPercentage(),
+                request.ideasConnected(), request.quotedPhrases(), request.questionBack());
         return ReadingNoteResponse.from(saved);
     }
 }
