@@ -97,6 +97,17 @@ Phase 7 built via `V11__books.sql`:
   phase — see `backend.md`'s and `hub-sync.md`'s decisions logs. No `chapters` table: a book's
   progress is two plain integers, not a maintained catalog of chapter rows (see `backend.md`).
 
+Phase 7 also built via `V12__reading_notes.sql`:
+
+- `reading_notes(id, book_id references books, note_text, chapter_placed, own_words_percentage,
+  ideas_connected, quoted_phrases, question_back, created_at)`, indexed on `book_id`. A check
+  constraint keeps `own_words_percentage` within 0-100 when present. `chapter_placed`,
+  `own_words_percentage`, `ideas_connected`, `quoted_phrases`, and `question_back` are all
+  nullable: the intelligence service's assessment (see `intelligence-service.md`) is optional,
+  not a precondition for saving a note. `ideas_connected`/`quoted_phrases` hold JSON-encoded
+  string arrays in a TEXT column rather than their own tables — see `backend.md`'s decisions
+  log.
+
 ## Decisions log
 
 | Date | Decision | Reason |

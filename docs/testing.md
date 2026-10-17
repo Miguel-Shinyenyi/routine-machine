@@ -69,7 +69,13 @@ ingest tests already found; `rejectsABlankTitle` is a separate method since it w
 `BookApiNoBooksYetTest` is its own class (its own fresh Postgres container) just for the 404
 case, so it isn't order-dependent on the other class's writes. `HubSyncServiceTest`'s two
 current-book cases were updated to assert on `BookRepository` instead of
-`CurrentReadingLogRepository`, same behavior, new target. 121 backend tests, all passing.
+`CurrentReadingLogRepository`, same behavior, new target.
+`ReadingNoteApiIntegrationTest` follows the same one-method-for-the-shared-state-sensitive-
+cases pattern as `BookApiIntegrationTest`: one test posts an assessed note and an unassessed
+one against two different books, then checks both the per-book and all-books list endpoints;
+separate methods cover a blank `noteText`, an unknown `bookId`, and an out-of-range
+`ownWordsPercentage`, none of which depend on what the first method already wrote. 125
+backend tests, all passing.
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested

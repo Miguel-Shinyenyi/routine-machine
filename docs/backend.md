@@ -242,8 +242,23 @@ line (agreed with the user before building, see the decisions log): `HubSyncServ
 syncCurrentBook()` now writes a `Book` row instead of a `CurrentReadingLog` row.
 `current_reading_log`, `CurrentReadingController`, and the frontend's existing manual form
 against it are all untouched and still work; they just won't reflect hub-sync's automatic
-updates anymore. Chapters, reader's notes themselves, the LLM assessment call, and the
-goal-hours rollup are not built yet, deliberately scoped out of this groundwork slice.
+updates anymore.
+
+**Reading notes built:** `ReadingNote`, `reading_notes` table: a book reference, the raw
+`noteText` the user wrote, and the intelligence service's optional assessment fields
+(`chapterPlaced`, `ownWordsPercentage`, `ideasConnected`, `quotedPhrases`, `questionBack`).
+`GET /api/reading-notes?bookId=` lists notes (optionally scoped to one book), newest first.
+`POST /api/reading-notes` creates one, 400 on an unknown `bookId`, matching every other
+foreign-key validation in this API. The assessment fields are all nullable: posting a note
+with none of them succeeds, since writing the note is the user's actual action and assessment
+is an addition to it, not a precondition — the frontend is expected to call the intelligence
+service's `POST /reading-notes/assess` first and include the result here, but doesn't have to.
+`ideasConnected`/`quotedPhrases` (string arrays) are stored as JSON in a single TEXT column
+via `StringListConverter`, not their own tables: nothing queries into them, they're only ever
+read back whole for one note.
+
+Not built yet: the named ratio threshold that decides whether a note counts toward the
+reading goal, the goal-hours rollup itself, and the Reading frontend page.
 
 ## Decisions log
 
@@ -253,6 +268,8 @@ goal-hours rollup are not built yet, deliberately scoped out of this groundwork 
 | 2026-10-17 | `Book` supersedes `current_reading_log` as the source of truth for "what am I reading"; hub-sync now writes `Book` rows, not `current_reading_log` rows | Asked the user rather than deciding silently, since it changes an existing integration point. `Book` is a richer entity (chapter progress, author) that the plain title-only log can't represent; keeping both as parallel, equally-authoritative writers would create two answers to "what book is this" with no rule for which wins |
 | 2026-10-17 | `current_reading_log`, `CurrentReadingController`, and Flock's manual reading form are left as-is, not removed or migrated this slice | They still work for manual entries; only hub-sync's automatic writes moved. Updating the frontend to read `Book` instead is real work belonging to the Reading page itself, not this groundwork slice, and deleting a still-used endpoint without replacing its caller would break Flock and Tally for no reason |
 | 2026-10-17 | `Book.source` reuses the existing `ReadingSource` enum rather than a new one | Same two origins (`manual`, `hub-sync`) `current_reading_log` already modeled; a second enum with identical values would be duplication with no distinction to justify it |
+| 2026-10-17 | `ReadingNote`'s assessment fields are all nullable; the note can be created without them | Writing the note down is the user's real action; requiring a successful LLM assessment first would block that action on an external API call that can fail, time out, or simply not be configured (`ANTHROPIC_API_KEY` unset) |
+| 2026-10-17 | `ideasConnected`/`quotedPhrases` are stored as JSON in a TEXT column (`StringListConverter`), not their own join tables | Nothing in this phase queries into individual ideas or phrases, only reads a note's full list back; a join table would be real schema and query complexity for a feature nothing uses |
 | 2026-10-17 | No `chapters` table; `Book` has plain `currentChapter`/`totalChapters` integer columns instead | `docs/design.md`'s Reading page needs "chapter progress" (a number out of a number), not a maintained catalog of chapter entities; the LLM's "chapter placed" field (Phase 7, not built yet) is a free-text guess about where a note falls, not a foreign key into a chapters table the user would have to keep in sync by hand |
 | 2026-10-17 | `ActivityWatchClientImpl` assumes the backend and `aw-server` run on the same machine, reachable via `ACTIVITYWATCH_BASE_URL` | ActivityWatch has no cloud component, unlike WakaTime and GitHub; a pull from the backend only works if it can reach `aw-server`'s local API. Flagged to the user as a real architectural choice rather than decided silently; agreed to pull directly for now, revisit if the backend is ever deployed away from the machine running ActivityWatch (the push-via-health-endpoint alternative was declined for this slice) |
 | 2026-10-17 | `GitHubCommitClientImpl` reads GitHub's public events API, not the search-commits API or a per-repo commit listing | No credential needed (matches hub-sync's existing no-token reads), at the cost of being a true backup signal rather than a complete history: only recent public push events are visible this way. That tradeoff matches how PROJECT.md itself frames GitHub in Phase 6, "optionally RescueTime" aside, as a backup, not a primary source |
@@ -305,12 +322,13 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 - Strava's own sync (client, token storage, refresh, the actual OAuth redirect flow) is not
   designed yet, deliberately, pending Phase 8's accounts/auth architecture decision. Revisit
   once that's agreed, not before.
-- Phase 7's chapters, reader's notes themselves, the Claude API assessment call (own-words
-  percentage, ideas connected, quoted phrases, the one question back, chapter placed), the
-  named ratio threshold that counts a note toward the reading goal, and the Reading frontend
-  page are all not designed or built yet. `Book` is groundwork only.
-- The ratio threshold's exact value and what it's named are not decided yet; this needs its
-  own design pass once the assessment call itself is being built, not guessed at now.
+- The named ratio threshold that counts a note toward the reading goal, the goal-hours
+  rollup itself, and the Reading frontend page are not designed or built yet.
+- Whether `POST /api/reading-notes` should itself call the intelligence service's
+  `POST /reading-notes/assess` server-side, instead of expecting the frontend to call it
+  first and pass the result along, isn't decided. The current shape matches the project's
+  existing frontend-orchestration precedent (`schedule.md`'s materialize flow), but hasn't
+  been tested against how the Reading page actually ends up calling it.
 - Whether `Book`'s `currentChapter`/`totalChapters` should be settable through
   `POST /api/books` only, or need their own `PATCH` for updating progress on an existing book
   without re-creating it, isn't decided; no caller needs it yet.
