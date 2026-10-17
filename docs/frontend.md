@@ -7,7 +7,7 @@ project-tracking-board metaphor (backlog, roadmap, board, reports) to the shephe
 language in `docs/design.md`. The mapping to real data is unchanged, only the names, visual
 language, and page content changed.
 
-## The four views
+## The views
 
 - **Flock** (`/flock`, was Backlog): the `schedule_templates`, the recurring definitions
   themselves (what happens on which day), plus any ad-hoc one-off tasks not tied to a
@@ -26,6 +26,11 @@ language, and page content changed.
   service's `/tally`, per-routine meters (Steady/Settling in/Wandering), steep days
   (`/patterns`'s `skipHeavyDays`), and the topic/routine correlation. Streak numbers are still
   returned by `/patterns` but are not rendered, per `docs/design.md`'s "no streaks" rule.
+
+- **Watering holes** (`/watering-holes`, new in Phase 6): status of each automatic-counting
+  source (on/off, last activity, what it reads), plus a table of which routine items count
+  automatically and by what rule. Not one of `docs/design.md`'s four original shepherd views;
+  added once Phase 6 built something worth a status page for.
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
@@ -46,7 +51,7 @@ falls back to a solid `--surface` under `prefers-reduced-transparency: reduce`, 
 `prefers-reduced-motion: reduce` disables all transitions globally.
 
 **Shell** (`components/Shell.tsx`, replacing `NavBar`): a glass sidebar (220px) on desktop, a
-floating glass tab bar fixed to the bottom on phone. Both list the four built views only;
+floating glass tab bar fixed to the bottom on phone. Both list the five built views only;
 Reading and Hillside (Phases 7-8) aren't linked yet since they don't exist.
 
 - **Flock** (`app/flock`) also manages routine items and learning topics, and current
@@ -66,11 +71,17 @@ Reading and Hillside (Phases 7-8) aren't linked yet since they don't exist.
   hand-rolled SVG line chart (three goal-line colors from `docs/design.md`, reserved for this
   one chart) with a table underneath, following the dataviz skill's "form before color" and
   "table view under every chart" conventions, same as the components it replaced.
+- **Watering holes** (`app/watering-holes`) reads two endpoints: `GET /api/watering-holes`
+  (backend's) for the per-source status cards (on/off, last activity, description), and the
+  existing `GET /api/routine-items` for the "how each activity is counted" table — filtered to
+  `source !== "MANUAL"` and rendered from each item's own `source`/`countRule` fields, not a
+  table written into the page. A routine item newly pointed at an automatic source shows up
+  here the next time the page loads, with no page-specific code change needed.
 
 The one piece of real frontend logic (`lib/schedule.ts`: which templates still need a task for
 a given day, and computing a date's weekday independent of server timezone) is unit-tested
 with Vitest — 5 tests. Everything else is page rendering and forms, verified by actually
-running the app (`npm run dev` against the other two services) and clicking through all four
+running the app (`npm run dev` against the other two services) and clicking through the
 views and the full materialize → start → done flow in a browser, not by an automated test
 suite; settlement-engine's own frontend has no test framework either, so this isn't a
 departure from precedent.
@@ -80,7 +91,9 @@ departure from precedent.
 | Date | Decision | Reason |
 |------|----------|--------|
 | 2026-10-16 | Renamed the four views to Today/Path/Flock/Tally per `docs/design.md`, old paths redirect via `next.config.ts` | The shepherd language is the whole point of the Phase 5 redesign; a 307 redirect (not permanent, since the rename could still be revisited) keeps any existing link or bookmark working rather than 404ing |
-| 2026-10-16 | The sidebar/tab bar link only to the four built views, not to Reading or Hillside | `docs/design.md` names all six nav labels, but Reading (Phase 7) and Hillside (Phase 8) don't exist yet; a link to a page that 404s is worse than waiting to add it once built |
+| 2026-10-17 | Watering holes' "how each activity is counted" table is built from `GET /api/routine-items`, not a second purpose-built endpoint | The task explicitly asked for this to be generated from routine items, not hard-coded; the existing endpoint already exposes `source` and `countRule`, so adding another endpoint would duplicate the same data in a second shape for no reason |
+| 2026-10-17 | Watering holes is a fifth nav link, not folded into an existing view | It's a status page about the sync machinery itself, a different kind of thing from the four daily-use shepherd views `docs/design.md` defines; forcing it into Tally or Flock would blur what each page is for |
+| 2026-10-16 | The sidebar/tab bar link only to the built views, not to Reading or Hillside | `docs/design.md` names all six nav labels, but Reading (Phase 7) and Hillside (Phase 8) don't exist yet; a link to a page that 404s is worse than waiting to add it once built |
 | 2026-10-16 | `GoalHoursChart` is hand-rolled SVG, not a charting library | The project has no charting dependency yet and a three-line cumulative chart doesn't need one; matches the existing charts' precedent of plain SVG/CSS built from the dataviz skill's guidance rather than a new dependency |
 | 2026-10-16 | Removed `CompletionRateChart`, `StreakChart`, `SkipHeavyDaysList` | Superseded by Tally's per-routine meters and steep-days list, which read the same `/patterns` data in the page design's own shape; dead code once nothing referenced them, deleted rather than left in place |
 | 2026-09-19 | Board materializes by calling the intelligence service's `/suggestion` directly from a plain server-side function, not a Server Action | It's only ever invoked from the page's own render, never bound to a client form/button, so it doesn't cross the client/server boundary a Server Action exists for; `"use server"` is reserved for `lib/actions.ts`'s mutations that client components actually call |
@@ -92,5 +105,10 @@ departure from precedent.
 
 - Reading (Phase 7) and Hillside (Phase 8) have no pages yet; Tally's "reading progress" and
   "learning notes" stat tiles currently say "Not tracked yet" rather than a real number.
+- Watering holes' 390px phone layout was not confirmed live this session: `resize_window`
+  reported success but the screenshot it produced stayed at the desktop viewport, the same
+  tool limitation noted for Phase 5's walkthrough. The page reuses the same `flex-col`/
+  `sm:flex-row` pattern already used elsewhere, but that is a code-review observation, not a
+  rendered check.
 - `docs/schedule.md`'s open question about real target durations is still open; Path shows a
   banner rather than inventing one.

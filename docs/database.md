@@ -55,10 +55,46 @@ Phase 5 built via `V4__phase5_categorisation_and_hours.sql`:
 - `daily_logs` gains `measured_minutes` (nullable int), rolled up by the intelligence
   service's `/tally` into cumulative hours per goal.
 
+Phase 6 built via `V5__hub_sync_processed_files.sql`:
+
+- `hub_sync_processed_files(id, repo_path, content_sha unique, kind ('JOURNAL' | 'ARTICLE'),
+  file_date, created_at)`, one row per UMWAYI file hub-sync has already turned into a
+  `daily_log`, keyed by git blob sha so a renamed file (same content, new path) isn't
+  double-counted. See `hub-sync.md`.
+
+Phase 6 also built via `V6__measurements.sql`:
+
+- `measurements(id, source ('WAKATIME' | 'ACTIVITYWATCH' | 'GITHUB' | 'RESCUETIME' | 'HEALTH'),
+  metric, measurement_date, value numeric, created_at, updated_at)`, unique on
+  `(source, metric, measurement_date)`. One row per source-and-metric per day; `value` is
+  overwritten in place on a repeat sync for the same day rather than a new row being inserted.
+  Holds the raw numbers each sync job pulls from a watering hole (coding minutes so far,
+  active minutes, commit counts, health readings) before any of it is turned into a
+  `daily_log`. See `backend.md`.
+
+Phase 6 also built via `V7__wakatime_daily_log_source.sql`: `daily_logs.source` gains a fourth
+value, `wakatime`, for a log written by `WakaTimeSyncService` (see `backend.md`).
+
+Phase 6 also built via `V8__activitywatch_daily_log_source.sql`: `daily_logs.source` gains a
+fifth value, `activitywatch`, for a log written by `ActivityWatchSyncService` (see
+`backend.md`).
+
+Phase 6 also built via `V9__github_daily_log_source.sql`: `daily_logs.source` gains a sixth
+value, `github`, for a log written by `GitHubSyncService` (see `backend.md`). This log never
+carries `measured_minutes`, since a commit count isn't a duration.
+
+Phase 6 also built via `V10__rescuetime.sql`: `routine_items.source` gains `RESCUETIME` (it
+was missing from `MeasurementSource`'s equivalent until now, flagged as a gap when
+`MeasurementSource` was introduced) and `daily_logs.source` gains a seventh value,
+`rescuetime`, for a log written by `RescueTimeSyncService`. Unlike the other three syncs,
+RescueTime is optional and off by default — see `backend.md`'s decisions log.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `measurements` is unique on `(source, metric, measurement_date)`, not on an external id from the source | Different sources don't all provide a stable external id for a day's total (WakaTime's daily summary isn't a discrete record the way a GitHub commit sha is); keying on the day itself and upserting works the same way for every source, and matches that a day's total can legitimately change between two syncs of the same day |
+| 2026-10-17 | `hub_sync_processed_files` is keyed by `content_sha`, not `repo_path` | A file's git blob sha stays the same across a rename; a path-keyed table would treat the renamed file as new and log it again. See `hub-sync.md`'s decisions log |
 | 2026-10-16 | `routine_items.category`, `hillside_field` have no default, `source` defaults `MANUAL`, `private` defaults `true` | A category or hillside field can't be guessed for existing rows, so they stay nullable until someone assigns one through Flock; `source` and `private` have an honest single-user default (manually tended, not yet shared) that every existing row already matches |
 | 2026-10-16 | `routine_items.goal_id` is nullable, unlike `learning_topics.goal_id` | Not every routine item rolls up to a goal (plenty are just upkeep: sleep, cleaning); forcing one would mean inventing a goal for rows that don't have one |
 | 2026-09-19 | `tasks` also carries its own `label`, `routine_item_id`, and `learning_topic_id`, not just `schedule_template_id` | A `LEARNING_SLOT` template doesn't fix which topic applies — that's resolved per day (see `schedule.md`'s frontend-orchestration decision) — so it has to live on the task, not the template. Once `learning_topic_id` was needed there anyway, giving ad-hoc tasks (no template) the same optional target columns plus their own `label` was the direct extension, not a special case |
@@ -74,4 +110,4 @@ Phase 5 built via `V4__phase5_categorisation_and_hours.sql`:
 
 ## Open questions
 
-- None currently open for Phase 5.
+- None currently open for Phase 6.

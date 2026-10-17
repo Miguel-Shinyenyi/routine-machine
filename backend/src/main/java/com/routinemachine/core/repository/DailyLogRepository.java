@@ -9,4 +9,6 @@ import java.util.List;
 public interface DailyLogRepository extends JpaRepository<DailyLog, Long> {
 
     List<DailyLog> findByLogDate(LocalDate logDate);
+
+    boolean existsByRoutineItemIdAndLogDate(Long routineItemId, LocalDate logDate);
 }

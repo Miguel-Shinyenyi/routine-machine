@@ -1,6 +1,7 @@
 package com.routinemachine.core.repository;
 
 import com.routinemachine.core.domain.RoutineItem;
+import com.routinemachine.core.domain.RoutineItemSource;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -16,4 +17,8 @@ public interface RoutineItemRepository extends JpaRepository<RoutineItem, Long> 
 
     @Query("SELECT r FROM RoutineItem r LEFT JOIN FETCH r.goal WHERE r.id = :id")
     Optional<RoutineItem> findWithGoalById(Long id);
+
+    Optional<RoutineItem> findFirstByNameIgnoreCase(String name);
+
+    List<RoutineItem> findBySource(RoutineItemSource source);
 }

@@ -3,7 +3,11 @@ package com.routinemachine.core.domain;
 public enum DailyLogSource {
     MANUAL("manual"),
     HUB_SYNC("hub-sync"),
-    SCHEDULE("schedule");
+    SCHEDULE("schedule"),
+    WAKATIME_SYNC("wakatime"),
+    ACTIVITYWATCH_SYNC("activitywatch"),
+    GITHUB_SYNC("github"),
+    RESCUETIME_SYNC("rescuetime");
 
     private final String value;
 

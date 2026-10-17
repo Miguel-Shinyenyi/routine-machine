@@ -17,6 +17,14 @@ services:
       ROUTINE_MACHINE_DB_URL: jdbc:postgresql://postgres:5432/routine_machine
       ROUTINE_MACHINE_DB_USER: routine_machine
       ROUTINE_MACHINE_DB_PASSWORD: routine_machine
+      UMWAYI_JOURNAL_KEY_B64: ${UMWAYI_JOURNAL_KEY_B64}
+      WAKATIME_API_KEY: ${WAKATIME_API_KEY}
+      # host.docker.internal, not localhost: the backend runs in its own container, aw-server
+      # runs on the host. See docs/backend.md's decisions log.
+      ACTIVITYWATCH_BASE_URL: ${ACTIVITYWATCH_BASE_URL:-http://host.docker.internal:5600}
+      RESCUETIME_API_KEY: ${RESCUETIME_API_KEY}
+      RESCUETIME_SYNC_ENABLED: ${RESCUETIME_SYNC_ENABLED:-false}
+      HEALTH_INGEST_TOKEN: ${HEALTH_INGEST_TOKEN}
     ports:
       - "8080:8080"
     depends_on:

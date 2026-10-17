@@ -29,7 +29,7 @@ Claude Code reads this file at the start of every task. Practices that apply to 
 
 ## Known risk
 
-`docs/hub-sync.md` plans to read UMWAYI's `journal/entries/` through the public GitHub API. Those files are now encrypted with git-crypt, so a plain read returns ciphertext. Check this before building hub-sync. Do not store a decryption key in this repo.
+hub-sync reads encrypted journal content only through the unlock flow documented in `docs/hub-sync.md`. The key comes from the `UMWAYI_JOURNAL_KEY_B64` environment variable. Never store the key in this repo.
 
 ## Run and check
 
