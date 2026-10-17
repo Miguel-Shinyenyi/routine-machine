@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
-/* Design tokens from docs/design.md. Light values are the defaults; dark values apply
-   under prefers-color-scheme. No manual theme toggle exists, the system setting decides. */
+/* Design tokens from docs/design.md. Light values are the defaults; dark values apply under
+   prefers-color-scheme, unless overridden by the manual toggle (components/ThemeToggle.tsx),
+   which sets data-theme="light"/"dark" on <html> and is read back on load from localStorage. */
 :root {
   --canvas: #f5f5f7;
   --surface: #ffffff;
@@ -24,7 +25,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --canvas: #000000;
     --surface: #1c1c1e;
     --surface-2: #2c2c2e;
@@ -44,6 +45,28 @@
     --goal-line-2: #4d9bf0;
     --goal-line-3: #30d158;
   }
+}
+
+/* Manual override, independent of system preference (components/ThemeToggle.tsx). */
+:root[data-theme="dark"] {
+  --canvas: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --ink: #f5f5f7;
+  --muted: #a1a1a6;
+  --hairline: #38383a;
+  --fill: rgba(118, 118, 128, 0.24);
+  --tint: #f0ae4e;
+  --tint-text: #f0ae4e;
+  --tint-fill: #2a2215;
+  --tended-ink: #30d158;
+  --tended-fill: #16301c;
+  --private-ink: #8ec5e8;
+  --private-fill: #12232e;
+  --glass-bg: rgba(28, 28, 30, 0.72);
+  --goal-line-1: #d99232;
+  --goal-line-2: #4d9bf0;
+  --goal-line-3: #30d158;
 }
 
 @theme inline {

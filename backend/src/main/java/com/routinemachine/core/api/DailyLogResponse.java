@@ -6,7 +6,7 @@ import java.time.LocalDate;
 
 public record DailyLogResponse(
         Long id, LocalDate logDate, Long routineItemId, Long learningTopicId, String source,
-        Integer measuredMinutes) {
+        Integer measuredMinutes, Long userId) {
 
     public static DailyLogResponse from(DailyLog log) {
         return new DailyLogResponse(
@@ -15,6 +15,7 @@ public record DailyLogResponse(
                 log.getRoutineItem() == null ? null : log.getRoutineItem().getId(),
                 log.getLearningTopic() == null ? null : log.getLearningTopic().getId(),
                 log.getSource().getValue(),
-                log.getMeasuredMinutes());
+                log.getMeasuredMinutes(),
+                log.getUser() == null ? null : log.getUser().getId());
     }
 }

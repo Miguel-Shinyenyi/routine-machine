@@ -11,4 +11,8 @@ public interface DailyLogRepository extends JpaRepository<DailyLog, Long> {
     List<DailyLog> findByLogDate(LocalDate logDate);
 
     boolean existsByRoutineItemIdAndLogDate(Long routineItemId, LocalDate logDate);
+
+    List<DailyLog> findByUserId(Long userId);
+
+    List<DailyLog> findByUserIdAndLogDate(Long userId, LocalDate logDate);
 }

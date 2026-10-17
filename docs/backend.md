@@ -326,18 +326,33 @@ share) has no production default and the app won't start without it in a real de
 `docker-compose.yml` supplies an insecure development-only default so `docker compose up`
 still works out of the box, since nothing in the app actually requires login yet.
 
-**What's deliberately not touched:** every existing table (`routine_items`, `daily_logs`,
-`goals`, `books`, `reading_notes`, `measurements`, everything) stays exactly as it was —
-single-user, no `user_id` column, no endpoint requires authentication except the one
-proof-of-concept above. Scoping the rest of the app to a logged-in user, building the
-hillside's own k-anonymous aggregation, the actual Next.js login UI and GitHub OAuth app
-registration, and migrating existing dev data to a seed user are all separate, much larger
-pieces of work, not started.
+**What's deliberately not touched:** `goals`, `books`, `reading_notes`, `measurements`, and
+every other table stay exactly as they were — single-user, no `user_id` column. No endpoint
+requires authentication except the one proof-of-concept above. Building the hillside's own
+k-anonymous aggregation, the actual Next.js login UI and GitHub OAuth app registration, and
+migrating existing dev data to a seed user are all separate, much larger pieces of work, not
+started.
+
+**Optional `user_id` added to `routine_items` and `daily_logs`** (migration V15), the two
+tables that actually drive "days shown up" — the one signal needed to demo multiple users
+having genuinely different data, without first inventing a goals-creation API or touching
+every table in the schema. This is additive scoping, not enforced auth: `userId` is an
+optional query param on `GET /api/routine-items`/`GET /api/daily-logs` and an optional field
+on their `POST` bodies. Omitted, both behave exactly as before this change (every legacy,
+unowned row, `NULL` `user_id`) — the existing frontend and every Phase 6 sync service
+(`WakaTimeSyncService`, `HubSyncService`, etc.) are untouched and keep working against that
+same unscoped data, since none of them pass `userId`. Passed, the response is scoped to that
+one user's own rows instead. `RoutineItem.assignUser`/`DailyLog.assignUser` are plain setters
+used only by these two controllers (and seeding), not part of either entity's constructor, so
+every existing call site across the sync services is unaffected.
 
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | Only `routine_items` and `daily_logs` get an optional `user_id`, not every table | These two drive "days shown up," the one signal needed to demo real multi-user data; scoping every table (`goals` especially, which has no creation API at all today) is separate, much larger work that doesn't change what this slice needs to prove |
+| 2026-10-17 | User scoping is an optional `userId` query param/field, not required authentication | Full auth enforcement needs the Next.js session side (not built) and would break the existing single-user frontend and every Phase 6 sync service immediately, since none of them have a user to pass yet. Optional scoping is additive: omit it, nothing changes; pass it, the new per-user data is isolated and testable |
+| 2026-10-17 | `assignUser` is a plain setter called after construction, not a new constructor parameter | `RoutineItem` and `DailyLog` are each constructed from many places (eight sync services' worth, plus their own controllers); adding a required constructor parameter would mean touching every one of those call sites for a value most of them have no user to supply yet |
 | 2026-10-17 | The hillside compares users within one shared deployment, not separate single-user instances reporting in | Asked the user rather than guessing, since this is a far bigger change (every table eventually needs a `user_id`) than the alternative (a lightweight opt-in reporting endpoint). Confirmed before writing any code, per PROJECT.md's explicit gate on this phase |
 | 2026-10-17 | Both password and GitHub OAuth login are supported, not just one | Asked the user directly; they wanted both rather than picking one |
 | 2026-10-17 | Next.js owns the login session; this backend only verifies a signed token Next.js attaches to its own server-side calls | Asked the user rather than guessing, since it determines whether this backend ever renders a login page or handles an OAuth redirect (it won't) and keeps today's "frontend does all the fetching server-side" architecture intact, just adding identity to those calls |

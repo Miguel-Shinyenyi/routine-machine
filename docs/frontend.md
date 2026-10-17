@@ -50,11 +50,23 @@ frontend needed.
 
 **Design system** (`app/globals.css`): the tokens from `docs/design.md` as CSS custom
 properties (`--canvas`, `--surface`, `--tint`, etc.), redefined under
-`prefers-color-scheme: dark`. No manual theme toggle exists, the system setting decides,
-matching the chart palette's existing precedent (`components/charts/viz-tokens.css`). The
-system font stack replaces `next/font/google`'s Geist. A `.glass` utility (blur + saturate)
-falls back to a solid `--surface` under `prefers-reduced-transparency: reduce`, and
-`prefers-reduced-motion: reduce` disables all transitions globally.
+`prefers-color-scheme: dark`. The system font stack replaces `next/font/google`'s Geist. A
+`.glass` utility (blur + saturate) falls back to a solid `--surface` under
+`prefers-reduced-transparency: reduce`, and `prefers-reduced-motion: reduce` disables all
+transitions globally.
+
+**Theme toggle** (`components/ThemeToggle.tsx`, in the desktop sidebar only): cycles
+Auto → Light → Dark → Auto, overriding the system setting by setting `data-theme="light"`/
+`"dark"` on `<html>` and persisting the choice to `localStorage`. `app/globals.css` gained a
+matching `:root[data-theme="dark"]` block and the existing `@media (prefers-color-scheme:
+dark)` block is guarded with `:not([data-theme="light"])`, so an explicit "Light" choice
+overrides a dark system setting too, not just the reverse. A small inline script in
+`layout.tsx`'s `<head>` applies the saved theme before first paint (reading `localStorage`
+directly, not through React), avoiding a flash of the wrong theme on load. The toggle itself
+reads via `useSyncExternalStore` with a tiny in-module pub-sub (`localStorage`'s own
+`storage` event only fires in *other* tabs, never the one that wrote it), not `useState` in
+a `useEffect` — the project's lint config flags synchronous `setState` inside effects, and
+this reads cleanly from the external store instead of working around that rule.
 
 **Shell** (`components/Shell.tsx`, replacing `NavBar`): a glass sidebar (220px) on desktop, a
 floating glass tab bar fixed to the bottom on phone. Both list the five built views only;
@@ -108,6 +120,8 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | The theme toggle lives in the desktop sidebar only, not the phone tab bar | The phone tab bar is already near capacity (six links); the toggle isn't core navigation, and desktop is where it's most discoverable as a settings-style control |
+| 2026-10-17 | `ThemeToggle` reads via `useSyncExternalStore` with a tiny pub-sub, not `useState` set inside a `useEffect` | The project's lint config (`react-hooks/set-state-in-effect`) flags synchronous `setState` in effects; `useSyncExternalStore` is the pattern React's own docs recommend for syncing with an external system like `localStorage`, and it also gives a hydration-safe server snapshot for free |
 | 2026-10-17 | `submitReadingNote` is one Server Action doing two sequential calls (assess, then save), not two actions the page coordinates | The assessment's result needs to reach the save call before anything is persisted, and the user only takes one action (clicking "Save note"); splitting it into two actions would need client-side state to pass the assessment between them for no benefit |
 | 2026-10-17 | A failed or unconfigured assessment never blocks saving the note | Matches the backend's own decision that assessment fields are optional; the note is the user's real action, and the intelligence service being down, rate-limited, or simply not configured (no `ANTHROPIC_API_KEY`) is exactly the kind of failure that shouldn't cost the user their note |
 | 2026-10-17 | "What the Shepherd read." is just the newest note in the already-fetched list, not separate client state held after submit | The page already re-renders with the freshly saved note as the list's first item once `revalidatePath` runs; keeping a second copy in client state would duplicate the same data for a view that server rendering already produces correctly |

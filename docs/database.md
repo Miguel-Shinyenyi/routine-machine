@@ -116,9 +116,15 @@ carries `measured_minutes` — a written reflection has no duration to report, s
 
 Phase 8 built via `V14__users.sql`: `users(id, email unique, password_hash, github_id unique,
 display_name, created_at)`, a check constraint requires at least one of `password_hash`/
-`github_id`. Groundwork only: **no other table references `users` yet** — every existing
-table stays single-user, exactly as before this phase. See `backend.md`'s decisions log for
-the three accounts/auth decisions this table is built on.
+`github_id`. See `backend.md`'s decisions log for the three accounts/auth decisions this
+table is built on.
+
+Phase 8 also built via `V15__user_scoped_data.sql`: `routine_items` and `daily_logs` each
+gain a nullable `user_id` (indexed), referencing `users`. `NULL` means legacy/unowned — every
+row written before this phase, and everything every Phase 6 sync service writes, stays
+exactly that way. Every other table (`goals`, `books`, `reading_notes`, `measurements`, and
+the rest) still has no `user_id` at all. See `backend.md`'s decisions log for why only these
+two tables, and why nullable/optional rather than enforced.
 
 ## Decisions log
 

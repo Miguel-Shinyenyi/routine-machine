@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "./ThemeToggle";
 
 const LINKS = [
   { href: "/today", label: "Today" },
@@ -23,6 +24,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
             {link.label}
           </Link>
         ))}
+        <div className="mt-auto pt-4">
+          <ThemeToggle />
+        </div>
       </aside>
 
       <main className="mx-auto w-full max-w-[1100px] flex-1 px-5 pb-28 pt-6 md:pb-10">

@@ -93,7 +93,12 @@ signed JWT (via `nimbus-jose-jwt`, already on the classpath through the resource
 starter) with the same shared secret every test context uses, rather than mocking Spring
 Security's authentication context — proof the actual signature verification wiring works,
 not just the authorization rule around it; also covers a missing token and one signed with
-the wrong secret. 147 backend tests, all passing.
+the wrong secret.
+`UserScopedDataApiIntegrationTest` covers the optional `userId` scoping added to routine
+items and daily logs: two registered users each get their own routine item and daily log,
+and listing with `?userId=` returns only that user's own rows, not the other's; a third case
+confirms an unknown `userId` on create fails. This is additive scoping, not a full auth test
+suite — see `backend.md`'s decisions log for why. 150 backend tests, all passing.
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested

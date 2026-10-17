@@ -52,6 +52,13 @@ public class RoutineItem {
     @JoinColumn(name = "goal_id")
     private Goal goal;
 
+    // Nullable, Phase 8 groundwork: NULL means legacy/unowned, the same single-user shape
+    // every existing row and every background sync service already assumes. See
+    // docs/backend.md's decisions log.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private OffsetDateTime createdAt;
@@ -110,6 +117,14 @@ public class RoutineItem {
 
     public Goal getGoal() {
         return goal;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void assignUser(User user) {
+        this.user = user;
     }
 
     public OffsetDateTime getCreatedAt() {

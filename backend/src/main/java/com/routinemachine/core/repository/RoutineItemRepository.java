@@ -18,6 +18,9 @@ public interface RoutineItemRepository extends JpaRepository<RoutineItem, Long> 
     @Query("SELECT r FROM RoutineItem r LEFT JOIN FETCH r.goal WHERE r.id = :id")
     Optional<RoutineItem> findWithGoalById(Long id);
 
+    @Query("SELECT r FROM RoutineItem r LEFT JOIN FETCH r.goal WHERE r.user.id = :userId")
+    List<RoutineItem> findAllWithGoalByUserId(Long userId);
+
     Optional<RoutineItem> findFirstByNameIgnoreCase(String name);
 
     List<RoutineItem> findBySource(RoutineItemSource source);

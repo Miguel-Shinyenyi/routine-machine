@@ -41,6 +41,12 @@ public class DailyLog {
     @Column(name = "measured_minutes")
     private Integer measuredMinutes;
 
+    // Nullable, Phase 8 groundwork: NULL means legacy/unowned, same reasoning as
+    // RoutineItem.user. See docs/backend.md's decisions log.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private OffsetDateTime createdAt;
@@ -108,6 +114,14 @@ public class DailyLog {
 
     public Integer getMeasuredMinutes() {
         return measuredMinutes;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void assignUser(User user) {
+        this.user = user;
     }
 
     public OffsetDateTime getCreatedAt() {
