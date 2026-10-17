@@ -103,11 +103,17 @@ opaque 500. 44 tests, all passing.
 
 Frontend: Vitest, but only for `lib/schedule.ts`'s pure logic (which templates still need a
 task, and computing a date's weekday independent of server timezone) — 5 tests, unchanged by
-Phase 5's redesign or Phase 6's watering holes page since neither added new pure logic to the
-frontend. Page components are verified by running the app and clicking through the views and
-the full materialize → start → done flow in a browser instead, matching settlement-engine's
-frontend, which has no automated test framework at all (see decisions log). `npm run lint` and
-`npm run build` (strict TypeScript) also run as part of finishing a phase.
+Phase 5's redesign, Phase 6's watering holes page, or Phase 7's Reading page, since none added
+new pure logic to the frontend (`submitReadingNote` is a sequence of two external calls, not
+a pure function worth isolating and unit-testing on its own). Page components are verified by
+running the app and clicking through the views and the full materialize → start → done flow
+in a browser instead, matching settlement-engine's frontend, which has no automated test
+framework at all (see decisions log). `npm run lint` and `npm run build` (strict TypeScript)
+also run as part of finishing a phase. Reading's full flow (create a book, submit a note, see
+it rendered back) was verified live via Docker Compose, including a real call through to the
+Anthropic API (which failed on account billing, caught and shown as "wasn't assessed," not a
+page crash) — the same real-API verification the intelligence service's own tests already
+recorded, now confirmed end to end through the browser too.
 
 ## Decisions log
 

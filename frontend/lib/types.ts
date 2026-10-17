@@ -150,3 +150,34 @@ export interface WateringHoleStatus {
   lastActivityAt: string | null;
   description: string;
 }
+
+export interface Book {
+  id: number;
+  title: string;
+  author: string | null;
+  currentChapter: number | null;
+  totalChapters: number | null;
+  source: string;
+  createdAt: string;
+}
+
+export interface ReadingNote {
+  id: number;
+  bookId: number;
+  bookTitle: string;
+  noteText: string;
+  chapterPlaced: string | null;
+  ownWordsPercentage: number | null;
+  ideasConnected: string[] | null;
+  quotedPhrases: string[] | null;
+  questionBack: string | null;
+  createdAt: string;
+}
+
+export interface ReadingNoteAssessment {
+  chapterPlaced: string;
+  ownWordsPercentage: number;
+  ideasConnected: string[];
+  quotedPhrases: string[];
+  questionBack: string;
+}
