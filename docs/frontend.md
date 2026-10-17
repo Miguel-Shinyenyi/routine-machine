@@ -31,6 +31,12 @@ language, and page content changed.
   source (on/off, last activity, what it reads), plus a table of which routine items count
   automatically and by what rule. Not one of `docs/design.md`'s four original shepherd views;
   added once Phase 6 built something worth a status page for.
+- **Reading** (`/reading`, new in Phase 7): the current book (title, author, chapter
+  progress), a form to start a book when none is set yet, the note field, "What the Shepherd
+  read." showing the most recent note's assessment (chapter placed, own-words percentage,
+  ideas connected, quoted phrases marked, one question back — or a plain "wasn't assessed"
+  message if the intelligence service's call failed or wasn't configured), and an earlier-
+  notes list below it, per `docs/design.md`'s own layout for this page.
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
@@ -77,6 +83,18 @@ Reading and Hillside (Phases 7-8) aren't linked yet since they don't exist.
   `source !== "MANUAL"` and rendered from each item's own `source`/`countRule` fields, not a
   table written into the page. A routine item newly pointed at an automatic source shows up
   here the next time the page loads, with no page-specific code change needed.
+- **Reading** (`app/reading`) fetches `GET /api/books/current` (404 handled as "no book yet,
+  show `NewBookForm`," the same `ApiError`-status-check pattern `fetchCurrentReading` already
+  used in Tally/Flock) and, once a book exists, `GET /api/reading-notes?bookId=`. Submitting a
+  note (`ReadingNoteForm`, a Server Action: `submitReadingNote` in `lib/actions.ts`) calls the
+  intelligence service's `POST /reading-notes/assess` first, then `POST /api/reading-notes`
+  with whatever the assessment returned (or nulls, if it failed or wasn't configured — the
+  action catches that and never blocks the save, matching the backend's own "assessment is
+  optional" design). The newest note in the list doubles as "What the Shepherd read.": no
+  separate client state is kept for the just-submitted note, the page simply re-renders with
+  it as the first item after `revalidatePath`. `NewBookForm` and `ReadingNoteForm` pass book
+  context (title, current/total chapters) to the assessment call via hidden form fields set
+  from server-rendered data, not typed by the user.
 
 The one piece of real frontend logic (`lib/schedule.ts`: which templates still need a task for
 a given day, and computing a date's weekday independent of server timezone) is unit-tested
@@ -90,10 +108,13 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `submitReadingNote` is one Server Action doing two sequential calls (assess, then save), not two actions the page coordinates | The assessment's result needs to reach the save call before anything is persisted, and the user only takes one action (clicking "Save note"); splitting it into two actions would need client-side state to pass the assessment between them for no benefit |
+| 2026-10-17 | A failed or unconfigured assessment never blocks saving the note | Matches the backend's own decision that assessment fields are optional; the note is the user's real action, and the intelligence service being down, rate-limited, or simply not configured (no `ANTHROPIC_API_KEY`) is exactly the kind of failure that shouldn't cost the user their note |
+| 2026-10-17 | "What the Shepherd read." is just the newest note in the already-fetched list, not separate client state held after submit | The page already re-renders with the freshly saved note as the list's first item once `revalidatePath` runs; keeping a second copy in client state would duplicate the same data for a view that server rendering already produces correctly |
 | 2026-10-16 | Renamed the four views to Today/Path/Flock/Tally per `docs/design.md`, old paths redirect via `next.config.ts` | The shepherd language is the whole point of the Phase 5 redesign; a 307 redirect (not permanent, since the rename could still be revisited) keeps any existing link or bookmark working rather than 404ing |
 | 2026-10-17 | Watering holes' "how each activity is counted" table is built from `GET /api/routine-items`, not a second purpose-built endpoint | The task explicitly asked for this to be generated from routine items, not hard-coded; the existing endpoint already exposes `source` and `countRule`, so adding another endpoint would duplicate the same data in a second shape for no reason |
 | 2026-10-17 | Watering holes is a fifth nav link, not folded into an existing view | It's a status page about the sync machinery itself, a different kind of thing from the four daily-use shepherd views `docs/design.md` defines; forcing it into Tally or Flock would blur what each page is for |
-| 2026-10-16 | The sidebar/tab bar link only to the built views, not to Reading or Hillside | `docs/design.md` names all six nav labels, but Reading (Phase 7) and Hillside (Phase 8) don't exist yet; a link to a page that 404s is worse than waiting to add it once built |
+| 2026-10-16 | The sidebar/tab bar link only to the built views, not to Reading or Hillside | `docs/design.md` names all six nav labels, but Reading (Phase 7) and Hillside (Phase 8) don't exist yet; a link to a page that 404s is worse than waiting to add it once built. Reading was added to this list once the page was actually built |
 | 2026-10-16 | `GoalHoursChart` is hand-rolled SVG, not a charting library | The project has no charting dependency yet and a three-line cumulative chart doesn't need one; matches the existing charts' precedent of plain SVG/CSS built from the dataviz skill's guidance rather than a new dependency |
 | 2026-10-16 | Removed `CompletionRateChart`, `StreakChart`, `SkipHeavyDaysList` | Superseded by Tally's per-routine meters and steep-days list, which read the same `/patterns` data in the page design's own shape; dead code once nothing referenced them, deleted rather than left in place |
 | 2026-09-19 | Board materializes by calling the intelligence service's `/suggestion` directly from a plain server-side function, not a Server Action | It's only ever invoked from the page's own render, never bound to a client form/button, so it doesn't cross the client/server boundary a Server Action exists for; `"use server"` is reserved for `lib/actions.ts`'s mutations that client components actually call |
@@ -103,8 +124,13 @@ departure from precedent.
 
 ## Open questions
 
-- Reading (Phase 7) and Hillside (Phase 8) have no pages yet; Tally's "reading progress" and
-  "learning notes" stat tiles currently say "Not tracked yet" rather than a real number.
+- Hillside (Phase 8) has no page yet; Tally's "learning notes" stat tile still says "Not
+  tracked yet" rather than a real number. Reading's own page is built as of this phase.
+- There's no way yet to edit a book's `currentChapter`/`totalChapters` after creating it
+  (`POST /api/books` only creates), matching the open question already recorded in
+  `backend.md`. The Reading page shows chapter progress if set at creation, nothing more.
+- Reading's 390px phone layout was not confirmed live this session either, same
+  `resize_window` tool limitation as Watering holes.
 - Watering holes' 390px phone layout was not confirmed live this session: `resize_window`
   reported success but the screenshot it produced stayed at the desktop viewport, the same
   tool limitation noted for Phase 5's walkthrough. The page reuses the same `flex-col`/

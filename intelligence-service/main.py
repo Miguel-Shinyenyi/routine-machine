@@ -5,11 +5,16 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from assess_note import AssessmentParseError, build_user_message, parse_assessment_response, ASSESSMENT_SYSTEM_PROMPT
 from patterns import compute_patterns
 from suggestion import NoTopicsAvailableError, choose_suggestion
 from tally import compute_tally
 
 BACKEND_BASE_URL = os.environ.get("BACKEND_BASE_URL", "http://localhost:8080")
+ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+# A small, fast model is enough for a short note-assessment prompt; override via env var
+# rather than a code change if that stops being true.
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 
 app = FastAPI(title="Routine Machine Intelligence Service")
 
@@ -90,6 +95,21 @@ class TallyResponse(BaseModel):
     daysShownUpCount: int
     goalWeekHours: list[GoalWeekHoursView]
     routineShownUp: list[RoutineShownUpView]
+
+
+class ReadingNoteAssessmentRequest(BaseModel):
+    noteText: str
+    bookTitle: str
+    currentChapter: int | None = None
+    totalChapters: int | None = None
+
+
+class ReadingNoteAssessmentResponse(BaseModel):
+    chapterPlaced: str
+    ownWordsPercentage: int
+    ideasConnected: list[str]
+    quotedPhrases: list[str]
+    questionBack: str
 
 
 @app.get("/health")
@@ -179,4 +199,50 @@ def tally(windowDays: int = 28):
             )
             for r in result.routine_shown_up
         ],
+    )
+
+
+@app.post("/reading-notes/assess", response_model=ReadingNoteAssessmentResponse)
+def assess_reading_note(request: ReadingNoteAssessmentRequest):
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not set, reading note assessment is unavailable")
+
+    user_message = build_user_message(
+        request.noteText, request.bookTitle, request.currentChapter, request.totalChapters)
+
+    with httpx.Client(base_url=ANTHROPIC_BASE_URL, timeout=30.0) as client:
+        response = client.post(
+            "/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": ANTHROPIC_MODEL,
+                "max_tokens": 1024,
+                "system": ASSESSMENT_SYSTEM_PROMPT,
+                "messages": [{"role": "user", "content": user_message}],
+            },
+        )
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Anthropic API request failed: {response.status_code} {response.text}",
+        ) from exc
+    raw_text = "".join(block["text"] for block in response.json()["content"] if block["type"] == "text")
+
+    try:
+        result = parse_assessment_response(raw_text)
+    except AssessmentParseError as exc:
+        raise HTTPException(status_code=502, detail=f"could not parse the assessment: {exc}") from exc
+
+    return ReadingNoteAssessmentResponse(
+        chapterPlaced=result.chapter_placed,
+        ownWordsPercentage=result.own_words_percentage,
+        ideasConnected=result.ideas_connected,
+        quotedPhrases=result.quoted_phrases,
+        questionBack=result.question_back,
     )

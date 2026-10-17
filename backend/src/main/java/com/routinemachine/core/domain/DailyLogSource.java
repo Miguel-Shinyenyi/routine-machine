@@ -7,7 +7,8 @@ public enum DailyLogSource {
     WAKATIME_SYNC("wakatime"),
     ACTIVITYWATCH_SYNC("activitywatch"),
     GITHUB_SYNC("github"),
-    RESCUETIME_SYNC("rescuetime");
+    RESCUETIME_SYNC("rescuetime"),
+    READER_NOTES("reader-notes");
 
     private final String value;
 

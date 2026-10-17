@@ -89,6 +89,31 @@ was missing from `MeasurementSource`'s equivalent until now, flagged as a gap wh
 `rescuetime`, for a log written by `RescueTimeSyncService`. Unlike the other three syncs,
 RescueTime is optional and off by default — see `backend.md`'s decisions log.
 
+Phase 7 built via `V11__books.sql`:
+
+- `books(id, title, author, current_chapter, total_chapters, source ('manual' | 'hub-sync'),
+  created_at)`. Supersedes `current_reading_log` as the write target for "what am I reading";
+  `current_reading_log` keeps its existing rows but gets no new ones from hub-sync as of this
+  phase — see `backend.md`'s and `hub-sync.md`'s decisions logs. No `chapters` table: a book's
+  progress is two plain integers, not a maintained catalog of chapter rows (see `backend.md`).
+
+Phase 7 also built via `V12__reading_notes.sql`:
+
+- `reading_notes(id, book_id references books, note_text, chapter_placed, own_words_percentage,
+  ideas_connected, quoted_phrases, question_back, created_at)`, indexed on `book_id`. A check
+  constraint keeps `own_words_percentage` within 0-100 when present. `chapter_placed`,
+  `own_words_percentage`, `ideas_connected`, `quoted_phrases`, and `question_back` are all
+  nullable: the intelligence service's assessment (see `intelligence-service.md`) is optional,
+  not a precondition for saving a note. `ideas_connected`/`quoted_phrases` hold JSON-encoded
+  string arrays in a TEXT column rather than their own tables — see `backend.md`'s decisions
+  log.
+
+Phase 7 also built via `V13__reader_notes_daily_log_source.sql`: `daily_logs.source` gains an
+eighth value, `reader-notes`, for a log `ReadingNoteService` writes when a note's
+`own_words_percentage` clears the named threshold (70, see `backend.md`). This log never
+carries `measured_minutes` — a written reflection has no duration to report, same reasoning
+`GitHubSyncService`'s commit-count logs already apply.
+
 ## Decisions log
 
 | Date | Decision | Reason |
@@ -106,6 +131,7 @@ RescueTime is optional and off by default — see `backend.md`'s decisions log.
 | 2026-09-18 | Four Phase 1 tables: routine_items, learning_topics, daily_logs, goals | Matches the Phase 1 requirement exactly, no speculative tables for Phase 2 or 3 logic |
 | 2026-09-18 | No user table, no auth | Single user, personal tool, see PROJECT.md; revisit only if this needs to be shared |
 | 2026-09-18 | No edit history or versioning on daily_logs | Adds complexity with no current justification; revisit if incorrect logs become a real recurring problem |
+| 2026-10-17 | `books` has no `chapters` table, just `current_chapter`/`total_chapters` integers | Matches `docs/design.md`'s Reading page, which needs chapter progress as a number out of a number, not a catalog; a reader's note's "chapter placed" field (Phase 7, not built yet) is an LLM's free-text guess, not a foreign key |
 | 2026-09-19 | `current_reading_log` is append-only with no status field | The current book is always just the latest row; a status field would duplicate what ordering already tells you |
 
 ## Open questions

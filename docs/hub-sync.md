@@ -30,9 +30,10 @@ Each run:
 - If no routine item is named `journaling` or `writing` (case-insensitive), the file is still
   recorded as seen but nothing is logged, so adding the routine item later doesn't retroactively
   flood daily_logs with every file hub-sync has ever looked at.
-- Also calls `HubJournalReader.readCurrentBook()` (Stage 1, below) and writes a new
-  `current_reading_log` row only when the title actually changed from the latest row, keeping
-  the log append-only without writing a duplicate row on every poll.
+- Also calls `HubJournalReader.readCurrentBook()` (Stage 1, below) and writes a new `books`
+  row (Phase 7's `Book`, which superseded `current_reading_log` as hub-sync's write target —
+  see the decisions log) only when the title actually changed from the current book, keeping
+  it append-only without writing a duplicate row on every poll.
 
 Stage 1 (title extraction) built earlier: `HubJournalReader`. Unlocks a short-lived shallow
 clone of UMWAYI's journal with git-crypt and extracts the `Current book:` line. See the
@@ -58,6 +59,7 @@ below for rotation and the key's blast radius.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `syncCurrentBook()` now writes to Phase 7's `books` table, not `current_reading_log` | Agreed with the user before building Phase 7: `books` is a richer entity (chapter progress, author) that supersedes `current_reading_log` as the source of truth for "what am I reading." `current_reading_log`'s existing rows are kept for history, but hub-sync no longer writes new ones. Flagged and confirmed rather than decided silently, since it changes an existing integration point |
 | 2026-10-17 | Articles come from UMWAYI's real `site/philosophy/` and `site/tech/` directories, not a top-level `articles/` path | This doc originally assumed `articles/`, written before UMWAYI's actual structure was checked. The real repo has no such directory; `site/philosophy/` and `site/tech/` are the closest real equivalent (essay-style personal writing), confirmed by listing the repo directly. Flagged and confirmed rather than guessed silently, per the project's ambiguity rule |
 | 2026-10-17 | Poll on a schedule (`@Scheduled`, default 15 minutes), not a manual trigger | Phase 6 frames hub-sync as "automatic counting"; a personal single-user tool has no reason to make the person remember to ask for a sync. `hub-sync.enabled=false` (set in every test) stops it from firing outside a real deployment |
 | 2026-10-17 | Dedupe by each file's git blob sha, not its path | Answers the open question below: a file renamed in UMWAYI keeps its content sha, so `hub_sync_processed_files` (unique on `content_sha`) still recognises it as already counted. A path-based check would have logged it again under the new name |
