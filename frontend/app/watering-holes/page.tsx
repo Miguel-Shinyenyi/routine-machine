@@ -10,11 +10,44 @@ const SOURCE_LABELS: Record<string, string> = {
   HEALTH: "Health data",
 };
 
+// Matching docs-reference/pages/watering-holes.html's coloured source marks, not an arbitrary
+// new palette — each source keeps the same colour the reference assigns it.
+const SOURCE_COLORS: Record<string, string> = {
+  HUB: "#1d1d1f",
+  WAKATIME: "#0066cc",
+  ACTIVITYWATCH: "#2f5a72",
+  GITHUB: "#6e6e73",
+  RESCUETIME: "#3a3a3c",
+  HEALTH: "#1b7332",
+};
+
 function formatTimestamp(iso: string | null): string {
   if (iso === null) return "Never";
   // Fixed, locale-independent formatting: a server component renders this once, so there is
   // no client-side re-render to drift from it, but a fixed format keeps it that way on purpose.
   return iso.slice(0, 16).replace("T", " ") + " UTC";
+}
+
+function SourceCard({ status }: { status: WateringHoleStatus }) {
+  const label = SOURCE_LABELS[status.source] ?? status.source;
+  return (
+    <div className="card flex flex-col gap-2 p-4">
+      <div className="flex items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] text-[14px] font-bold text-white"
+          style={{ background: SOURCE_COLORS[status.source] ?? "#6e6e73" }}
+        >
+          {label.charAt(0)}
+        </span>
+        <h3 className="text-[16px] font-semibold">{label}</h3>
+      </div>
+      <span className={`chip self-start ${status.enabled ? "chip-tended" : "chip-tint"}`}>
+        {status.enabled ? `Connected · checked ${formatTimestamp(status.lastActivityAt)}` : "Off"}
+      </span>
+      <p className="text-[14px] text-muted">{status.description}</p>
+    </div>
+  );
 }
 
 export default async function WateringHolesPage() {
@@ -23,66 +56,82 @@ export default async function WateringHolesPage() {
     backendFetch<RoutineItem[]>("/api/routine-items"),
   ]);
 
+  const connected = statuses.filter((s) => s.enabled);
+  const notConnected = statuses.filter((s) => !s.enabled);
   const automaticItems = routineItems.filter((item) => item.source !== "MANUAL");
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="page-title">The watering holes.</h1>
+      <div>
+        <p className="text-[15px] font-semibold text-tint-text">Watering holes</p>
+        <h1 className="page-title">Where the records come from.</h1>
+        <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
+          The flock drinks from the tools you already use. Whatever a tool can see, you never
+          have to type. Whatever it can&rsquo;t, you tap once.
+        </p>
+      </div>
 
-      <section className="card p-4">
-        <h2 className="section-title mb-3">Sources</h2>
-        <div className="flex flex-col gap-2">
-          {statuses.map((status) => (
-            <div
-              key={status.source}
-              className="tile flex flex-col gap-1 p-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[15px] font-medium">
-                    {SOURCE_LABELS[status.source] ?? status.source}
-                  </span>
-                  <span className={`chip ${status.enabled ? "chip-tended" : "chip-private"}`}>
-                    {status.enabled ? "On" : "Off"}
-                  </span>
-                </div>
-                <p className="text-[13px] text-muted">{status.description}</p>
-              </div>
-              <span className="text-[13px] text-muted sm:text-right">
-                Last activity: {formatTimestamp(status.lastActivityAt)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {connected.length > 0 && (
+        <section aria-labelledby="conn">
+          <h2 id="conn" className="mb-2.5 px-1 text-[17px] font-semibold">
+            Connected and waiting
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {connected.map((status) => (
+              <SourceCard key={status.source} status={status} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      <section className="card p-4">
-        <h2 className="section-title mb-3">How each activity is counted</h2>
+      {notConnected.length > 0 && (
+        <section aria-labelledby="more">
+          <h2 id="more" className="mb-2.5 px-1 text-[17px] font-semibold">
+            Not connected yet
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {notConnected.map((status) => (
+              <SourceCard key={status.source} status={status} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section aria-labelledby="how">
+        <h2 id="how" className="mb-2.5 px-1 text-[17px] font-semibold">
+          How each activity is counted
+        </h2>
         {automaticItems.length === 0 ? (
-          <p className="text-[13px] text-muted">
+          <p className="px-1 text-[13px] text-muted">
             No routine item is linked to an automatic source yet. Link one through Flock to see
             it listed here.
           </p>
         ) : (
-          <table className="w-full text-left text-[14px]">
-            <thead>
-              <tr className="text-[13px] text-muted">
-                <th className="py-1 pr-4 font-normal">Routine</th>
-                <th className="py-1 pr-4 font-normal">Source</th>
-                <th className="py-1 font-normal">Count rule</th>
-              </tr>
-            </thead>
-            <tbody>
-              {automaticItems.map((item) => (
-                <tr key={item.id} className="border-t hairline">
-                  <td className="py-2 pr-4">{item.name}</td>
-                  <td className="py-2 pr-4">{SOURCE_LABELS[item.source] ?? item.source}</td>
-                  <td className="py-2 text-muted">{item.countRule ?? "—"}</td>
+          <div className="overflow-x-auto rounded-[14px] bg-surface">
+            <table className="w-full text-left text-[14px]">
+              <thead>
+                <tr className="text-[13px] text-muted">
+                  <th className="py-2 px-4 font-normal">Routine</th>
+                  <th className="py-2 px-4 font-normal">Source</th>
+                  <th className="py-2 px-4 font-normal">Count rule</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {automaticItems.map((item) => (
+                  <tr key={item.id} className="border-t hairline">
+                    <td className="py-2 px-4">{item.name}</td>
+                    <td className="py-2 px-4">{SOURCE_LABELS[item.source] ?? item.source}</td>
+                    <td className="py-2 px-4 text-muted">{item.countRule ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
+        <p className="mt-2 px-1 text-[13px] text-muted">
+          Generated from your own routine items, not a fixed list &mdash; link a new one through
+          Flock and it appears here.
+        </p>
       </section>
     </div>
   );

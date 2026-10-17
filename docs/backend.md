@@ -346,6 +346,30 @@ one user's own rows instead. `RoutineItem.assignUser`/`DailyLog.assignUser` are 
 used only by these two controllers (and seeding), not part of either entity's constructor, so
 every existing call site across the sync services is unaffected.
 
+**The hillside built: `GET /api/hillside`.** `HillsideService` computes bands fresh on every
+call, nothing is stored. Query params: `field` (one of `HillsideField`'s names, omitted means
+"general" — a day counts once 3+ distinct non-private routine items were tended, the same
+`TALLY_STICK_THRESHOLD` `intelligence-service/tally.py` uses for its own tally stick, duplicated
+here as `HillsideService.GENERAL_THRESHOLD` since the two live in different languages and can't
+share a constant), `windowDays` (7 or 28), and `asUserId` — **a demo-mode parameter, not a real
+logged-in identity**, since the Next.js session this would normally come from isn't built yet.
+Omit it and the endpoint still returns the real histogram and participant count, just no
+personal band/rank/neighbours.
+
+- Reads every non-private (`routine_items.private = false`), user-owned `daily_log` in the
+  window (`DailyLogRepository.findForHillside`) and groups it by user and day in Java, not SQL
+  — the dataset this phase operates on is small enough that a clear, testable Java loop beat a
+  harder-to-verify aggregate query.
+- Ranks participants by days-shown-up (ties broken by user id, for determinism), computes a
+  percentile (`1 - rank/total`), and buckets it into the same three band descriptions the
+  design reference uses ("Near the front" / "In the middle" / "Walking at the back, and still
+  walking").
+- `HillsidePseudonym.forUserId` derives a two-word-plus-number pseudonym deterministically
+  from the user id alone — never the email or display name — so the same person gets the same
+  pseudonym every call without storing one. No rotation yet (see open questions).
+- "Walking near you" is three ranked entries above and below, clamped at the edges of the
+  list, not a fixed seven; `isYou` marks exactly one row when `asUserId` matches.
+
 ## Decisions log
 
 | Date | Decision | Reason |
@@ -353,6 +377,10 @@ every existing call site across the sync services is unaffected.
 | 2026-10-17 | Only `routine_items` and `daily_logs` get an optional `user_id`, not every table | These two drive "days shown up," the one signal needed to demo real multi-user data; scoping every table (`goals` especially, which has no creation API at all today) is separate, much larger work that doesn't change what this slice needs to prove |
 | 2026-10-17 | User scoping is an optional `userId` query param/field, not required authentication | Full auth enforcement needs the Next.js session side (not built) and would break the existing single-user frontend and every Phase 6 sync service immediately, since none of them have a user to pass yet. Optional scoping is additive: omit it, nothing changes; pass it, the new per-user data is isolated and testable |
 | 2026-10-17 | `assignUser` is a plain setter called after construction, not a new constructor parameter | `RoutineItem` and `DailyLog` are each constructed from many places (eight sync services' worth, plus their own controllers); adding a required constructor parameter would mean touching every one of those call sites for a value most of them have no user to supply yet |
+| 2026-10-17 | `/api/hillside` takes `asUserId` as a plain query param instead of waiting for real login | The same demo-mode pattern already used for `routine_items`/`daily_logs` scoping: it lets the real aggregation logic be built and tested against real seeded data now, rather than blocking the whole feature on the Next.js session, which is separate, larger work |
+| 2026-10-17 | Band/rank/histogram are computed fresh on every request, nothing is cached or stored | The dataset is small (seeded test data, not a real userbase) and the computation is cheap; a stored leaderboard would need its own invalidation logic for no benefit yet |
+| 2026-10-17 | `HillsideService.GENERAL_THRESHOLD` duplicates `tally.py`'s `TALLY_STICK_THRESHOLD` rather than sharing it | Backend (Java) and intelligence-service (Python) are separate codebases with no shared constants module; duplicating one named, documented constant is simpler than building cross-language constant sharing for a single number. Both must be kept in sync by hand if the threshold ever changes |
+| 2026-10-17 | Pseudonyms are derived from the user id alone, with no stored mapping and no rotation | Keeps the privacy property simple to reason about (nothing new to leak, nothing new to store) at the cost of pseudonyms never changing on their own; real rotation is future work, tracked in the open questions |
 | 2026-10-17 | The hillside compares users within one shared deployment, not separate single-user instances reporting in | Asked the user rather than guessing, since this is a far bigger change (every table eventually needs a `user_id`) than the alternative (a lightweight opt-in reporting endpoint). Confirmed before writing any code, per PROJECT.md's explicit gate on this phase |
 | 2026-10-17 | Both password and GitHub OAuth login are supported, not just one | Asked the user directly; they wanted both rather than picking one |
 | 2026-10-17 | Next.js owns the login session; this backend only verifies a signed token Next.js attaches to its own server-side calls | Asked the user rather than guessing, since it determines whether this backend ever renders a login page or handles an OAuth redirect (it won't) and keeps today's "frontend does all the fetching server-side" architecture intact, just adding identity to those calls |
@@ -431,9 +459,18 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 - Whether `Book`'s `currentChapter`/`totalChapters` should be settable through
   `POST /api/books` only, or need their own `PATCH` for updating progress on an existing book
   without re-creating it, isn't decided; no caller needs it yet.
-- Phase 8's actual table-scoping work (which table gets `user_id` first, how the migration
-  backfills existing dev data to a seed user, whether `goals` stays shared fixed reference
-  data or becomes per-user) is not designed yet — this slice only proves accounts can exist.
+- Phase 8's remaining table-scoping work (`goals` especially, which has no creation API at
+  all today and no `user_id`) is not designed yet.
+- There is no real "opt in to the hillside" concept yet. Every user with a non-private daily
+  log in the window is currently treated as a participant; a genuine opt-in flag on `User`,
+  defaulting to off, is real work this slice didn't build, named here so it isn't mistaken
+  for a finished privacy feature.
+- Pseudonym rotation ("change every season," per the design reference) isn't designed. The
+  current scheme can't rotate without breaking its "no stored mapping" property; a rotating
+  scheme would need to store something, which is a real design decision, not an oversight.
+- `asUserId` on `/api/hillside` (and `userId` on the two scoped endpoints) needs to be
+  replaced by a real identity once the Next.js session exists; nothing currently stops any
+  caller from passing any user id and seeing that person's band.
 - The Next.js side of this (next-auth wiring, the GitHub OAuth app registration and its real
   client id/secret, the login UI itself, and actually minting the signed token this backend
   verifies) is not built. `GET /api/users/me` was only tested against a hand-built token in

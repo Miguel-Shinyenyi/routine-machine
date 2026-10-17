@@ -157,9 +157,20 @@ export default async function TodayPage(props: PageProps<"/today">) {
             )}
           </div>
 
-          <div className="tile p-4 text-[13px] text-muted">
-            The hillside isn&rsquo;t built yet &mdash; see Phase 8 in PROJECT.md.
-          </div>
+          <Link href="/hillside" className="card flex items-center gap-3 p-4 text-ink">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="var(--tint-text)" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+              <path d="M2 19l7-10 4 5 3-3 6 8z" />
+            </svg>
+            <span className="min-w-0">
+              <strong className="block font-semibold">See where you walk.</strong>
+              <span className="text-[13px] text-muted">
+                Hillside, anonymous, ranked by days shown up, not by volume.
+              </span>
+            </span>
+            <span className="ml-auto text-tint-text" aria-hidden="true">
+              &rsaquo;
+            </span>
+          </Link>
         </div>
       </div>
     </div>

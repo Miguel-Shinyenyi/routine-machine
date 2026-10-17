@@ -7,6 +7,12 @@ project-tracking-board metaphor (backlog, roadmap, board, reports) to the shephe
 language in `docs/design.md`. The mapping to real data is unchanged, only the names, visual
 language, and page content changed.
 
+**Design reference.** The user supplied a static HTML/CSS canvas export (nav icons, exact
+copy, page layouts, a `tokens.css`) as the visual source of truth, compared against this app
+page by page on 2026-10-17. Real, structural gaps were found and most were closed in the same
+session — see the decisions log below for what changed and what's still a documented,
+deliberate deviation rather than an oversight.
+
 ## The views
 
 - **Flock** (`/flock`, was Backlog): the `schedule_templates`, the recurring definitions
@@ -27,16 +33,25 @@ language, and page content changed.
   (`/patterns`'s `skipHeavyDays`), and the topic/routine correlation. Streak numbers are still
   returned by `/patterns` but are not rendered, per `docs/design.md`'s "no streaks" rule.
 
-- **Watering holes** (`/watering-holes`, new in Phase 6): status of each automatic-counting
-  source (on/off, last activity, what it reads), plus a table of which routine items count
-  automatically and by what rule. Not one of `docs/design.md`'s four original shepherd views;
-  added once Phase 6 built something worth a status page for.
-- **Reading** (`/reading`, new in Phase 7): the current book (title, author, chapter
-  progress), a form to start a book when none is set yet, the note field, "What the Shepherd
-  read." showing the most recent note's assessment (chapter placed, own-words percentage,
-  ideas connected, quoted phrases marked, one question back — or a plain "wasn't assessed"
-  message if the intelligence service's call failed or wasn't configured), and an earlier-
-  notes list below it, per `docs/design.md`'s own layout for this page.
+- **Watering holes** (`/watering-holes`, new in Phase 6): source cards grouped into
+  "Connected and waiting" / "Not connected yet" (coloured mark per source, matching the
+  design reference's own palette), plus a table of which routine items count automatically
+  and by what rule, generated from live data rather than the reference's hand-authored copy
+  (see the decisions log). Not one of `docs/design.md`'s four original shepherd views; added
+  once Phase 6 built something worth a status page for.
+- **Reading** (`/reading`, new in Phase 7): the current book (cover placeholder, title,
+  author, chapter progress bar), a form to start a book when none is set yet, the note field
+  with a live word count, "What the Shepherd read." (a "Counts for today" chip, a 3-stat score
+  grid, the note's own text with quoted phrases marked inline via `<mark>`, ideas connected,
+  one question back — or a plain "wasn't assessed" message), an earlier-notes list, and the
+  "How a note is read" / "Your notes stay yours" explanatory cards, per `docs/design.md`'s
+  layout for this page.
+- **Hillside** (`/hillside`, new in Phase 8): field and window segmented controls (Link-based,
+  server-rendered, not client state — see the decisions log), a band card, a histogram of
+  participants by days shown up, a "walking near you" list of pseudonymous neighbours, and the
+  "why this hillside is calm" rules card. Reads `GET /api/hillside`; `asUserId` is a demo-mode
+  query param until the Next.js session exists (see `backend.md`'s open questions) — omitted,
+  the page still shows the real distribution, just no personal band.
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
@@ -69,8 +84,17 @@ a `useEffect` — the project's lint config flags synchronous `setState` inside 
 this reads cleanly from the external store instead of working around that rule.
 
 **Shell** (`components/Shell.tsx`, replacing `NavBar`): a glass sidebar (220px) on desktop, a
-floating glass tab bar fixed to the bottom on phone. Both list the five built views only;
-Reading and Hillside (Phases 7-8) aren't linked yet since they don't exist.
+floating glass tab bar fixed to the bottom on phone, both client components (needs
+`usePathname()` for active-link state). Nav icons are inline SVGs copied from the design
+reference's own markup, not invented. Desktop lists all seven views, including `/hillside`;
+the phone tab bar matches the reference's stated 5-item set (Today, Path, Reading, Tally,
+Hillside) — Flock and Watering holes are desktop/sidebar-only, same as the reference's own
+"Flock and Watering holes open from Tally on phone" note, though this app doesn't yet add
+that cross-link from Tally itself (open question). The sidebar footer line
+("The Shepherd has kept watch with you for N days.") and Today's "N of M" badge both come
+from real data (`RootLayout` fetches `/api/tasks?date=today` and `/tally` once, read-only,
+never `materializeDay`, which can create tasks as a side effect unsuitable for every page
+load) — not the reference's fixed sample numbers.
 
 - **Flock** (`app/flock`) also manages routine items and learning topics, and current
   reading, not just schedule templates and ad-hoc tasks — see the decisions log; without it,
@@ -82,7 +106,16 @@ Reading and Hillside (Phases 7-8) aren't linked yet since they don't exist.
   `lib/materialize.ts` (see `schedule.md` for the frontend-orchestration decision), then
   renders them as a single list with round check buttons. Status changes are Server Actions
   (`lib/actions.ts::updateTaskStatus`) bound per-row via `TaskCard`, progressively enhanced
-  `<form>`s per Next.js's own guidance, not client-side fetch calls.
+  `<form>`s per Next.js's own guidance, not client-side fetch calls. `TaskCard`'s done check
+  button is solid-filled (`--tended-ink`) with a white check icon, matching the reference; an
+  auto-counted task's source chip turns amber→green on completion rather than staying amber,
+  matching the design reference README's own stated state. The eyebrow date
+  (`lib/formatDate.ts`, tested) and the Shepherd notification card use real data
+  (`suggestion.reason`, already fetched for "The staff") rather than the reference's specific
+  sample insight copy, which this app has no Phase-4-level pattern logic to honestly produce
+  yet. The hillside teaser card links to `/hillside` with a generic invite, not a personalized
+  claim, since there's no logged-in "you" to compute a real one for without the Next.js
+  session.
 - **Tally** (`app/tally`) renders the intelligence service's `/tally` output (tally stick,
   stat tiles, `GoalHoursChart`, per-routine meters) plus `/patterns`'s skip-heavy days and
   topic/routine correlation. `GoalHoursChart` (`components/charts/GoalHoursChart.tsx`) is a
@@ -120,6 +153,12 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | Added `--field-edge`/`--glass-edge` tokens and a shared `.field` input style to `globals.css` | The design reference's `tokens.css` defines both; this app's tokens were missing them, so every form input was using `--hairline` for its border instead of the dedicated, slightly darker field-edge colour the reference specifies |
+| 2026-10-17 | `TaskCard`'s done check button is now solid-filled (`--tended-ink`) with a white check icon, not a pale `--tended-fill` background | Matches the design reference exactly; found during the comparison, not an arbitrary restyle |
+| 2026-10-17 | The hillside's field/window controls are `Link`s with `aria-pressed`, not client state + fetch | Matches this app's existing all-server-rendering pattern (Today's day navigation works the same way); no new client-side data-fetching pattern needed for one page, and the URL stays shareable/bookmarkable per state |
+| 2026-10-17 | `/api/hillside`'s `asUserId` is read from a `?asUserId=` URL param on the page too, not hidden anywhere | Honest about being a demo-mode stand-in for a real logged-in user (see `backend.md`'s decisions log); hiding it would make the page look more finished than it is |
+| 2026-10-17 | `markQuotes` (`lib/markQuotes.ts`) is a pure, tested function the Reading page calls to render `<mark>` spans, not inline string manipulation in the page | The matching logic (find each quoted phrase's exact position, split into segments, handle a phrase not found verbatim) has real edge cases worth testing in isolation, same reasoning `lib/schedule.ts`'s pure functions already follow |
+| 2026-10-17 | Quoted phrases are marked inline in the note's own text (`<mark>`), not rendered as a separate chip list | Matches the design reference exactly; also reads better — the quote appears where it actually occurs in what the user wrote, not detached from it |
 | 2026-10-17 | The theme toggle lives in the desktop sidebar only, not the phone tab bar | The phone tab bar is already near capacity (six links); the toggle isn't core navigation, and desktop is where it's most discoverable as a settings-style control |
 | 2026-10-17 | `ThemeToggle` reads via `useSyncExternalStore` with a tiny pub-sub, not `useState` set inside a `useEffect` | The project's lint config (`react-hooks/set-state-in-effect`) flags synchronous `setState` in effects; `useSyncExternalStore` is the pattern React's own docs recommend for syncing with an external system like `localStorage`, and it also gives a hydration-safe server snapshot for free |
 | 2026-10-17 | `submitReadingNote` is one Server Action doing two sequential calls (assess, then save), not two actions the page coordinates | The assessment's result needs to reach the save call before anything is persisted, and the user only takes one action (clicking "Save note"); splitting it into two actions would need client-side state to pass the assessment between them for no benefit |
@@ -138,8 +177,18 @@ departure from precedent.
 
 ## Open questions
 
-- Hillside (Phase 8) has no page yet; Tally's "learning notes" stat tile still says "Not
-  tracked yet" rather than a real number. Reading's own page is built as of this phase.
+- Tally's "learning notes" stat tile still says "Not tracked yet" rather than a real number.
+- Path, Flock, and Tally were not given the same design-reference fidelity pass Today,
+  Reading, and Watering holes got on 2026-10-17 (icons in page content beyond the nav, the
+  reference's exact copy/structure in each page body). The shared pieces (tokens, nav icons,
+  check button, chip states) apply everywhere already; a dedicated pass on these three pages'
+  own content is still open.
+- Flock and Watering holes aren't reachable from the phone tab bar, matching the design
+  reference's own nav list, but the reference's "they open from Tally on phone" cross-link
+  isn't built — there's currently no way to reach them at all on a 390px phone.
+- The hillside has no real opt-in concept, no pseudonym rotation, and `asUserId` is a plain,
+  unauthenticated query param — see `backend.md`'s open questions for the full list; this
+  page is only as trustworthy as that backend groundwork, not more.
 - There's no way yet to edit a book's `currentChapter`/`totalChapters` after creating it
   (`POST /api/books` only creates), matching the open question already recorded in
   `backend.md`. The Reading page shows chapter progress if set at creation, nothing more.

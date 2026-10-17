@@ -181,3 +181,18 @@ export interface ReadingNoteAssessment {
   quotedPhrases: string[];
   questionBack: string;
 }
+
+export interface HillsideNeighbor {
+  pseudonym: string;
+  daysShownUp: number;
+  isYou: boolean;
+}
+
+export interface Hillside {
+  totalParticipants: number;
+  histogram: number[];
+  yourDaysShownUp: number | null;
+  yourRank: number | null;
+  band: string | null;
+  neighbors: HillsideNeighbor[];
+}

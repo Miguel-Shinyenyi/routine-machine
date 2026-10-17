@@ -126,6 +126,9 @@ exactly that way. Every other table (`goals`, `books`, `reading_notes`, `measure
 the rest) still has no `user_id` at all. See `backend.md`'s decisions log for why only these
 two tables, and why nullable/optional rather than enforced.
 
+Phase 8's hillside (`GET /api/hillside`, see `backend.md`) added no new table: it's computed
+fresh from `daily_logs`/`routine_items`/`users` on every call, nothing is stored or cached.
+
 ## Decisions log
 
 | Date | Decision | Reason |

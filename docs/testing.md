@@ -98,7 +98,15 @@ the wrong secret.
 items and daily logs: two registered users each get their own routine item and daily log,
 and listing with `?userId=` returns only that user's own rows, not the other's; a third case
 confirms an unknown `userId` on create fails. This is additive scoping, not a full auth test
-suite — see `backend.md`'s decisions log for why. 150 backend tests, all passing.
+suite — see `backend.md`'s decisions log for why.
+`HillsidePseudonymTest` covers the pseudonym scheme as a pure function: deterministic for the
+same id, different for different ids, and matches the "Adjective Noun 1234" shape exactly, no
+digits or words leaking in from anywhere else. `HillsideServiceTest` (`@DataJpaTest`) covers
+the real aggregation against real rows: a user with fewer qualifying days ranks behind one
+with more; a private routine item's logs never reach the hillside at all (zero participants);
+omitting `asUserId` returns the histogram with no personal band; and the "general" field only
+counts a day once 3+ distinct routines were tended, not just one.
+`HillsideApiIntegrationTest` covers the HTTP layer. 159 backend tests, all passing.
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
