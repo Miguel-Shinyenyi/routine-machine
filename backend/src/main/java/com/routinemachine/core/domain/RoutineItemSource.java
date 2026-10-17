@@ -8,5 +8,6 @@ public enum RoutineItemSource {
     HEALTH,
     READER_NOTES,
     GITHUB,
-    STRAVA
+    STRAVA,
+    RESCUETIME
 }

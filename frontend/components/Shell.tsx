@@ -5,6 +5,7 @@ const LINKS = [
   { href: "/path", label: "Path" },
   { href: "/flock", label: "Flock" },
   { href: "/tally", label: "Tally" },
+  { href: "/watering-holes", label: "Watering holes" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {

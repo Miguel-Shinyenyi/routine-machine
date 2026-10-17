@@ -1,6 +1,7 @@
 package com.routinemachine.core.repository;
 
 import com.routinemachine.core.domain.RoutineItem;
+import com.routinemachine.core.domain.RoutineItemSource;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -18,4 +19,6 @@ public interface RoutineItemRepository extends JpaRepository<RoutineItem, Long> 
     Optional<RoutineItem> findWithGoalById(Long id);
 
     Optional<RoutineItem> findFirstByNameIgnoreCase(String name);
+
+    List<RoutineItem> findBySource(RoutineItemSource source);
 }

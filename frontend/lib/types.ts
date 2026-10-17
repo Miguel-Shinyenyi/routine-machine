@@ -14,7 +14,8 @@ export type RoutineItemSource =
   | "HEALTH"
   | "READER_NOTES"
   | "GITHUB"
-  | "STRAVA";
+  | "STRAVA"
+  | "RESCUETIME";
 
 export type HillsideField = "READING" | "MOVEMENT" | "DEEP_WORK" | "LEARNING" | "SLEEP" | "WRITING";
 
@@ -141,4 +142,11 @@ export interface Tally {
   daysShownUpCount: number;
   goalWeekHours: GoalWeekHours[];
   routineShownUp: RoutineShownUp[];
+}
+
+export interface WateringHoleStatus {
+  source: string;
+  enabled: boolean;
+  lastActivityAt: string | null;
+  description: string;
 }
