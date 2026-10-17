@@ -1,6 +1,12 @@
 import { backendFetch } from "@/lib/api";
+import { sourceLabel } from "@/lib/sourceLabels";
 import type { RoutineItem, WateringHoleStatus } from "@/lib/types";
 
+// WateringHoleStatus.source is a MeasurementSource (push/pull sync status), a different enum
+// from RoutineItemSource ("How each activity is counted" below) — same names mostly overlap,
+// but "Health data" (a status card) and "Health Connect" (a source chip) are deliberately
+// different labels for the same underlying integration, so this stays its own small map
+// rather than reusing lib/sourceLabels's RoutineItemSource-keyed one.
 const SOURCE_LABELS: Record<string, string> = {
   HUB: "UMWAYI hub",
   WAKATIME: "WakaTime",
@@ -58,7 +64,9 @@ export default async function WateringHolesPage() {
 
   const connected = statuses.filter((s) => s.enabled);
   const notConnected = statuses.filter((s) => !s.enabled);
-  const automaticItems = routineItems.filter((item) => item.source !== "MANUAL");
+  // Same reasoning as Flock: exclude Phase 8's hillside demo users' own items, this table is
+  // this single-user app's own "how my activity gets counted" list, not a multi-user view.
+  const automaticItems = routineItems.filter((item) => item.source !== "MANUAL" && item.userId == null);
 
   return (
     <div className="flex flex-col gap-8">
@@ -120,7 +128,7 @@ export default async function WateringHolesPage() {
                 {automaticItems.map((item) => (
                   <tr key={item.id} className="border-t hairline">
                     <td className="py-2 px-4">{item.name}</td>
-                    <td className="py-2 px-4">{SOURCE_LABELS[item.source] ?? item.source}</td>
+                    <td className="py-2 px-4">{sourceLabel(item.source)}</td>
                     <td className="py-2 px-4 text-muted">{item.countRule ?? "—"}</td>
                   </tr>
                 ))}

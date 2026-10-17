@@ -61,6 +61,43 @@ def test_suggestion_returns_404_when_no_learning_topics_exist_yet():
 
 
 @respx.mock
+def test_suggestion_ignores_goals_and_logs_owned_by_a_hillside_demo_user():
+    # Phase 8's hillside demo users each have their own goals/daily_logs now (userId set);
+    # this service has no "current user" concept and must keep treating only the unowned
+    # (userId None) data as its single-user world, or demo data leaks into real suggestions.
+    respx.get(f"{BACKEND_BASE_URL}/api/goals").mock(
+        return_value=httpx.Response(200, json=[
+            {"id": 1, "name": "cmu-masters-application", "description": None, "userId": None},
+            {"id": 99, "name": "someone else's goal", "description": None, "userId": 7},
+        ])
+    )
+    respx.get(f"{BACKEND_BASE_URL}/api/learning-topics").mock(
+        return_value=httpx.Response(200, json=[
+            {"id": 10, "name": "CMU essay draft", "goalId": 1, "goalName": "cmu-masters-application"},
+        ])
+    )
+    respx.get(f"{BACKEND_BASE_URL}/api/daily-logs").mock(
+        return_value=httpx.Response(200, json=[
+            {
+                "id": 1, "logDate": "2026-09-10", "routineItemId": None, "learningTopicId": 10,
+                "source": "manual", "userId": None,
+            },
+            {
+                "id": 2, "logDate": "2026-10-16", "routineItemId": None, "learningTopicId": 10,
+                "source": "manual", "userId": 7,
+            },
+        ])
+    )
+
+    response = client.get("/suggestion")
+
+    assert response.status_code == 200
+    # Only the unowned log should count toward "last logged on" — if the demo user's log
+    # leaked in, this would be the more recent 2026-10-16 date instead.
+    assert response.json()["lastLoggedOn"] == "2026-09-10"
+
+
+@respx.mock
 def test_patterns_calls_the_backend_and_returns_computed_statistics():
     today = date.today()
     created = today - timedelta(days=1)

@@ -57,6 +57,35 @@ export default async function PathPage(props: PageProps<"/path">) {
   ]);
   const durationsNotSet = templates.some((t) => !t.targetDurationMinutes || t.targetDurationMinutes <= 0);
 
+  // "This week so far": only days that have already happened count toward tended/wandered —
+  // a day that hasn't arrived yet hasn't wandered, it's just ahead (see statusDot's "ahead").
+  let tended = 0;
+  let wandered = 0;
+  let daysShownUp = 0;
+  let daysElapsed = 0;
+  for (let i = 0; i < DAYS.length; i++) {
+    const date = dates[i];
+    if (date > today) {
+      continue;
+    }
+    daysElapsed++;
+    const dayTemplates = templates.filter((t) => t.dayOfWeek === DAYS[i]);
+    const dayTasks = tasksByDay[i];
+    let tendedToday = 0;
+    for (const template of dayTemplates) {
+      const matchingTask = dayTasks.find((t) => t.scheduleTemplateId === template.id);
+      if (matchingTask?.status === "DONE") {
+        tended++;
+        tendedToday++;
+      } else if (date < today) {
+        wandered++;
+      }
+    }
+    if (tendedToday > 0) {
+      daysShownUp++;
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-5">
@@ -85,13 +114,6 @@ export default async function PathPage(props: PageProps<"/path">) {
           </Link>
         </div>
       </div>
-
-      {durationsNotSet && (
-        <div className="tile p-4 text-[13px] text-muted">
-          Durations are not set yet. See the open question in docs/schedule.md &mdash; enter real
-          durations through Flock&rsquo;s schedule-template form.
-        </div>
-      )}
 
       <div className="flex flex-wrap items-center gap-4 text-[13px] text-muted">
         <span className="flex items-center gap-1.5">{statusDot("ok")}Tended</span>
@@ -148,6 +170,29 @@ export default async function PathPage(props: PageProps<"/path">) {
             );
           })}
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="card p-4">
+          <h2 className="section-title mb-2">This week so far.</h2>
+          <p className="text-[13px] text-muted">
+            {daysElapsed === 0
+              ? "The week just started."
+              : `${tended} tended, ${wandered} wandered, ${daysShownUp} of ${daysElapsed} ${daysElapsed === 1 ? "day" : "days"} shown up. The wandered ones carry no penalty. They show you where the path is steep.`}
+          </p>
+        </div>
+        {durationsNotSet && (
+          <div className="card p-4">
+            <h2 className="section-title mb-2">Durations are not set yet.</h2>
+            <p className="text-[13px] text-muted">
+              The schedule was designed without target minutes per block. Set them once, from
+              your records, not from ambition.
+            </p>
+            <Link href="/flock" className="mt-2 inline-block text-[13px] font-medium text-tint-text">
+              Set durations in Flock &rsaquo;
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

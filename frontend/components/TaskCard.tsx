@@ -1,6 +1,7 @@
 "use client";
 
 import { updateTaskStatus } from "@/lib/actions";
+import { sourceLabel } from "@/lib/sourceLabels";
 import type { RoutineItem, Task } from "@/lib/types";
 
 const NEXT_STATUS: Record<Task["status"], Task["status"] | null> = {
@@ -42,7 +43,9 @@ export function TaskCard({ task, routineItem }: { task: Task; routineItem?: Rout
         </p>
         <div className="mt-1 flex items-center gap-2">
           {isAutoCounted && (
-            <span className={`chip ${isDone ? "chip-tended" : "chip-tint"}`}>{routineItem?.source}</span>
+            <span className={`chip ${isDone ? "chip-tended" : "chip-tint"}`}>
+              {routineItem && sourceLabel(routineItem.source)}
+            </span>
           )}
           {routineItem?.isPrivate && <span className="chip chip-private">Private</span>}
           {!isAutoCounted && isDone && <span className="chip chip-tended">Tended</span>}

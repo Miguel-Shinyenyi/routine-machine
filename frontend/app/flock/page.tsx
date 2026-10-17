@@ -1,4 +1,5 @@
 import { backendFetch, ApiError } from "@/lib/api";
+import { sourceLabel } from "@/lib/sourceLabels";
 import type { CurrentReading, Goal, LearningTopic, RoutineItem, ScheduleTemplate, Task } from "@/lib/types";
 import { NewScheduleTemplateForm } from "@/components/NewScheduleTemplateForm";
 import { NewAdHocTaskForm } from "@/components/NewAdHocTaskForm";
@@ -33,7 +34,7 @@ async function fetchCurrentReading(): Promise<CurrentReading | null> {
 }
 
 export default async function FlockPage() {
-  const [templates, routineItems, learningTopics, goals, allTasks, currentReading] = await Promise.all([
+  const [templates, allRoutineItems, learningTopics, goals, allTasks, currentReading] = await Promise.all([
     backendFetch<ScheduleTemplate[]>("/api/schedule-templates"),
     backendFetch<RoutineItem[]>("/api/routine-items"),
     backendFetch<LearningTopic[]>("/api/learning-topics"),
@@ -42,6 +43,11 @@ export default async function FlockPage() {
     fetchCurrentReading(),
   ]);
 
+  // GET /api/routine-items with no userId returns every legacy row AND every demo user's own
+  // items (Phase 8's hillside seed data) in one flat list — Flock is this single-user app's
+  // own management page, not a multi-user view, so it only ever shows the unowned (userId
+  // null) items, same as this page's single-user world before Phase 8 existed.
+  const routineItems = allRoutineItems.filter((item) => item.userId == null);
   const adHocTasks = allTasks.filter((task) => task.scheduleTemplateId === null);
   const uncategorised = routineItems.filter((item) => item.category === null);
 
@@ -90,7 +96,7 @@ export default async function FlockPage() {
                       <p className="text-[15px] font-medium">{item.name}</p>
                       {item.countRule && <p className="text-[13px] text-muted">{item.countRule}</p>}
                     </div>
-                    {item.source !== "MANUAL" && <span className="chip chip-tint">{item.source}</span>}
+                    {item.source !== "MANUAL" && <span className="chip chip-tint">{sourceLabel(item.source)}</span>}
                     {item.hillsideField !== null && (
                       <span className="chip">{HILLSIDE_FIELD_LABELS[item.hillsideField]}</span>
                     )}

@@ -135,7 +135,10 @@ error (502). One of these was also verified against the real Anthropic API durin
 testing (see the decisions log): a real key reached the real endpoint with the correct
 request shape and got a real account-billing error back, which the 502 handling (added after
 finding the unhandled-exception bug this surfaced) now reports cleanly instead of as an
-opaque 500. 44 tests, all passing.
+opaque 500. `test_suggestion_ignores_goals_and_logs_owned_by_a_hillside_demo_user` proves the
+`_unowned()` filter works: a goal/log pair with `userId` set must not change `/suggestion`'s
+`lastLoggedOn`, a case chosen because it would silently pick the wrong (more recent) date if
+the filter were removed, not just return extra rows. 45 tests, all passing.
 
 Frontend: Vitest, for pure logic only — `lib/schedule.ts` (which templates still need a task,
 a date's weekday independent of server timezone), `lib/formatDate.ts` and `lib/weekDates.ts`

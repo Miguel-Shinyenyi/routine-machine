@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reader's notes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="tokens.css">
+</head>
+<body>
+<style>
+body{margin:0}
+*{box-sizing:border-box}
+a{color:#9A5208}a:hover{color:#7A4106}
+.app{display:flex;flex-wrap:wrap;min-height:100vh;background:#F5F5F7;color:#1D1D1F;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;font-size:15px;line-height:1.47;-webkit-font-smoothing:antialiased}
+.side{flex:1 1 220px;max-width:100%;padding:20px 12px;background:rgba(255,255,255,.72);backdrop-filter:blur(20px) saturate(180%);border-right:1px solid rgba(0,0,0,.08);display:flex;flex-direction:column;gap:2px}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 10px 18px;font-weight:600;font-size:15px;color:#1D1D1F;text-decoration:none}
+.logo{width:30px;height:30px;border-radius:8px;background:#E9A23B;display:flex;align-items:center;justify-content:center;flex:none}
+.nav{display:flex;align-items:center;gap:10px;min-height:36px;padding:6px 10px;border-radius:8px;color:#1D1D1F;text-decoration:none;font-size:14px}
+.nav:hover{background:rgba(118,118,128,.12);color:#1D1D1F}
+.nav.on{background:rgba(233,162,59,.2);font-weight:600}
+.nav svg{width:18px;height:18px;flex:none;color:#9A5208}
+.nav small{margin-left:auto;color:#6E6E73;font-size:12px;font-weight:500}
+.sidefoot{margin-top:auto;padding:12px 10px;font-size:12px;color:#6E6E73}
+.main{flex:999 1 560px;min-width:0;padding:32px 40px 64px}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+.eyebrow{font-size:15px;font-weight:600;color:#9A5208;margin:0}
+h1{font-size:40px;line-height:1.08;letter-spacing:-.02em;font-weight:600;margin:4px 0 0}
+h2{font-size:20px;line-height:1.2;font-weight:600;letter-spacing:-.01em;margin:0}
+.sub{font-size:17px;color:#6E6E73;margin:8px 0 0;max-width:62ch}
+.muted{color:#6E6E73}
+.card{background:#fff;border-radius:18px;padding:20px}
+.bar{height:8px;border-radius:4px;background:#E8E8ED;overflow:hidden}
+.bar i{display:block;height:100%;background:#E9A23B;border-radius:4px}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:980px;padding:2px 9px;font-size:12px;font-weight:600;background:rgba(118,118,128,.12);color:#1D1D1F;white-space:nowrap}
+.chip.ok{background:#E3F5E7;color:#1B7332}
+.chip.tint{background:#FBF0DC;color:#9A5208}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:7px 16px;border-radius:980px;border:0;background:#E9A23B;color:#1D1D1F;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;text-decoration:none}
+.btn.gray{background:rgba(118,118,128,.12);color:#9A5208}
+label{font-size:13px;font-weight:600}
+.field{width:100%;border:1px solid #D2D2D7;border-radius:12px;padding:12px 14px;font-family:inherit;font-size:17px;line-height:1.55;color:#1D1D1F;background:#fff;resize:vertical}
+.field:focus{outline:none;border-color:#E9A23B;box-shadow:0 0 0 4px rgba(233,162,59,.3)}
+.note{font-size:17px;line-height:1.6;margin:0}
+mark{background:#FBF0DC;color:#1D1D1F;border-bottom:2px dotted #9A5208;padding:0 2px}
+.list{background:#fff;border-radius:14px;overflow:hidden}
+.lrow{display:flex;gap:12px;align-items:center;min-height:56px;padding:10px 16px;border-top:1px solid #E5E5EA;color:#1D1D1F;text-decoration:none}
+.lrow.first{border-top:0}
+.lrow:hover{color:#1D1D1F;background:#FAFAFC}
+.score{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.score div{background:#F5F5F7;border-radius:12px;padding:12px}
+.score b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.score span{font-size:12px;color:#6E6E73}
+ol.steps{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;color:#3A3A3C}
+</style>
+<div class="app">
+<nav class="side" aria-label="Routine Machine">
+<a class="brand" href="today.html"><span class="logo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1D1D1F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M14 21V8a4 4 0 0 0-8 0"></path></svg></span>Routine Machine</a>
+<a class="nav" href="today.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"></path></svg>Today<small>3 of 9</small></a>
+<a class="nav" href="path.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 21c0-5 12-5 12-10S9 7 9 3"></path></svg>Path</a>
+<a class="nav" href="flock.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M7 16a3 3 0 0 1 0-6 4 4 0 0 1 7.5-1.5A3.5 3.5 0 0 1 17 16z"></path><path d="M9 16v3M14 16v3"></path></svg>Flock</a>
+<a class="nav" href="tally.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6"></path></svg>Tally</a>
+<a class="nav on" href="reading.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path></svg>Reading</a>
+<a class="nav" href="hillside.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 19l7-10 4 5 3-3 6 8z"></path></svg>Hillside</a>
+<a class="nav" href="watering-holes.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"></path></svg>Watering holes</a>
+<div class="sidefoot">The Shepherd has kept watch with you for 47 days.</div>
+</nav>
+
+<main class="main">
+<div class="wrap">
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; justify-content: space-between;">
+<div style="flex: 1 1 420px; min-width: 0;">
+<p class="eyebrow">Reader's notes</p>
+<h1>Read slowly. Say it back.</h1>
+<p class="sub">Write what the pages gave you, in your words. The Shepherd finds where you are in the book from what you understood, not from what you copied.</p>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start;">
+
+<section style="flex: 999 1 540px; min-width: 0; display: flex; flex-direction: column; gap: 16px;" aria-labelledby="book">
+<div class="card" style="display: flex; gap: 18px; align-items: center; flex-wrap: wrap;">
+<div aria-hidden="true" style="width: 72px; height: 108px; border-radius: 6px; background: #1D1D1F; flex: none; display: flex; align-items: flex-end; padding: 8px; color: #F5F5F7; font-size: 11px; font-weight: 600; line-height: 1.2;">[Book cover]</div>
+<div style="flex: 1 1 260px; min-width: 0;">
+<h2 id="book">Sapiens</h2>
+<p class="muted" style="margin: 2px 0 10px; font-size: 14px;">Yuval Noah Harari · set from your journal's "Current book:" line</p>
+<div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px;"><span>Part 4, ch. 14: <strong style="font-weight: 600;">The Discovery of Ignorance</strong></span><span class="muted">14 of 20</span></div>
+<div class="bar"><i style="width: 70%;"></i></div>
+</div>
+</div>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 10px;">
+<label for="note">Tonight's note</label>
+<textarea id="note" class="field" rows="6">Harari's point is that science started when people were willing to say "we don't know". Empire paid for science because both wanted to grow, so discovery and conquest fed each other. It reminded me of the UNKNOWN state in the settlement engine: it stays honest because it can say "not sure yet" instead of guessing. Question for myself: is hype culture the opposite, pretending to know?</textarea>
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+<span class="muted" style="font-size: 13px;">72 words · two lines is enough</span>
+<div style="display: flex; gap: 8px;"><button class="btn gray">Save draft</button><button class="btn">Give it to the Shepherd</button></div>
+</div>
+</div>
+
+<section class="card" aria-labelledby="read" style="display: flex; flex-direction: column; gap: 14px;">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+<h2 id="read" style="font-size: 17px;">What the Shepherd read.</h2>
+<span class="chip ok"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"></path></svg>Counts for today</span>
+</div>
+<div class="score">
+<div><b>Ch. 14</b><span>Where you are · high confidence</span></div>
+<div><b>91%</b><span>In your own words</span></div>
+<div><b>3</b><span>Ideas you connected</span></div>
+</div>
+<p class="note">Harari's point is that science started when people were willing to say <mark>"we don't know"</mark>. Empire paid for science because both wanted to grow, so discovery and conquest fed each other. It reminded me of the UNKNOWN state in the settlement engine…</p>
+<p class="muted" style="margin: 0; font-size: 13px;">Marked: close to the book's own wording. That's fine in a note; it just doesn't count toward your own words.</p>
+<ul style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px;">
+<li>You named the chapter's main idea: admitting ignorance made modern science possible.</li>
+<li>You linked it to the next chapter's theme, science and empire, before reaching it.</li>
+<li>You tied it to your own work. That is synthesis, not summary.</li>
+</ul>
+<div style="background: #F5F5F7; border-radius: 12px; padding: 12px 14px; font-size: 15px;"><strong style="font-weight: 600;">One question back:</strong> Harari says empire funded science for its own growth. What would funding "honest unknowns" look like in your work?</div>
+</section>
+</section>
+
+<aside style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 16px;" aria-label="Earlier notes and how it works">
+<div>
+<h2 style="font-size: 17px; margin: 0 0 8px 4px;">Earlier notes</h2>
+<div class="list">
+<a class="lrow first" href="reading.html"><span class="chip">Ch. 13</span><span style="min-width: 0;"><strong style="font-weight: 600; display: block; font-size: 14px;">The Secret of Success</strong><span class="muted" style="font-size: 12px;">14 Oct · 88% own words</span></span><span style="margin-left: auto; color: #C7C7CC;" aria-hidden="true">›</span></a>
+<a class="lrow" href="reading.html"><span class="chip">Ch. 12</span><span style="min-width: 0;"><strong style="font-weight: 600; display: block; font-size: 14px;">The Law of Religion</strong><span class="muted" style="font-size: 12px;">11 Oct · 93% own words</span></span><span style="margin-left: auto; color: #C7C7CC;" aria-hidden="true">›</span></a>
+<a class="lrow" href="reading.html"><span class="chip">Ch. 12</span><span style="min-width: 0;"><strong style="font-weight: 600; display: block; font-size: 14px;">The Law of Religion</strong><span class="muted" style="font-size: 12px;">9 Oct · not counted, mostly quotes</span></span><span style="margin-left: auto; color: #C7C7CC;" aria-hidden="true">›</span></a>
+<a class="lrow" href="reading.html"><span class="chip">Ch. 11</span><span style="min-width: 0;"><strong style="font-weight: 600; display: block; font-size: 14px;">Imperial Visions</strong><span class="muted" style="font-size: 12px;">7 Oct · 85% own words</span></span><span style="margin-left: auto; color: #C7C7CC;" aria-hidden="true">›</span></a>
+</div>
+</div>
+
+<div class="card">
+<h2 style="font-size: 17px;">How a note is read.</h2>
+<ol class="steps">
+<li>Your note is matched against short idea summaries of each chapter, so the Shepherd knows where you are without needing your page number.</li>
+<li>Overlap with the book's own text is marked. Copied passages never count.</li>
+<li>It looks for synthesis: your examples, links to your life or work, disagreement, a question of your own.</li>
+<li>A note counts when most of it is yours and it names an idea, not just events.</li>
+</ol>
+</div>
+
+<div class="card">
+<h2 style="font-size: 17px;">Your notes stay yours.</h2>
+<p class="muted" style="margin: 6px 0 0; font-size: 14px;">The hillside sees only that a note counted and how far through the book you are. Never the words.</p>
+</div>
+</aside>
+</div>
+</div>
+</main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

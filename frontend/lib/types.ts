@@ -30,6 +30,7 @@ export interface RoutineItem {
   isPrivate: boolean;
   goalId: number | null;
   goalName: string | null;
+  userId: number | null;
   createdAt: string;
 }
 

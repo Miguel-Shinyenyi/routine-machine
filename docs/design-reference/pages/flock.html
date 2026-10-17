@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Your flock</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="tokens.css">
+</head>
+<body>
+<style>
+body{margin:0}
+*{box-sizing:border-box}
+a{color:#9A5208}a:hover{color:#7A4106}
+.app{display:flex;flex-wrap:wrap;min-height:100vh;background:#F5F5F7;color:#1D1D1F;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;font-size:15px;line-height:1.47;-webkit-font-smoothing:antialiased}
+.side{flex:1 1 220px;max-width:100%;padding:20px 12px;background:rgba(255,255,255,.72);backdrop-filter:blur(20px) saturate(180%);border-right:1px solid rgba(0,0,0,.08);display:flex;flex-direction:column;gap:2px}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 10px 18px;font-weight:600;font-size:15px;color:#1D1D1F;text-decoration:none}
+.logo{width:30px;height:30px;border-radius:8px;background:#E9A23B;display:flex;align-items:center;justify-content:center;flex:none}
+.nav{display:flex;align-items:center;gap:10px;min-height:36px;padding:6px 10px;border-radius:8px;color:#1D1D1F;text-decoration:none;font-size:14px}
+.nav:hover{background:rgba(118,118,128,.12);color:#1D1D1F}
+.nav.on{background:rgba(233,162,59,.2);font-weight:600}
+.nav svg{width:18px;height:18px;flex:none;color:#9A5208}
+.nav small{margin-left:auto;color:#6E6E73;font-size:12px;font-weight:500}
+.sidefoot{margin-top:auto;padding:12px 10px;font-size:12px;color:#6E6E73}
+.main{flex:999 1 560px;min-width:0;padding:32px 40px 64px}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+.eyebrow{font-size:15px;font-weight:600;color:#9A5208;margin:0}
+h1{font-size:40px;line-height:1.08;letter-spacing:-.02em;font-weight:600;margin:4px 0 0}
+h2{font-size:20px;line-height:1.2;font-weight:600;letter-spacing:-.01em;margin:0}
+h3{font-size:13px;font-weight:600;color:#6E6E73;margin:0 0 6px 16px}
+.sub{font-size:17px;color:#6E6E73;margin:8px 0 0;max-width:62ch}
+.muted{color:#6E6E73}
+.card{background:#fff;border-radius:18px;padding:20px}
+.list{background:#fff;border-radius:14px;overflow:hidden}
+.row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(180px,1.6fr) minmax(120px,1fr) minmax(110px,.9fr) 16px;gap:14px;align-items:center;min-height:60px;padding:10px 16px;border-top:1px solid #E5E5EA;color:#1D1D1F;text-decoration:none}
+.row.first{border-top:0}
+.row:hover{background:#FAFAFC;color:#1D1D1F}
+.head{min-height:34px;font-size:12px;color:#6E6E73;font-weight:500;background:#FAFAFC}
+.name{font-weight:600;display:flex;align-items:center;gap:10px}
+.sq{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex:none}
+.sq svg{width:16px;height:16px}
+.how{font-size:14px}
+.how span{display:block;font-size:12px;color:#6E6E73}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:980px;padding:2px 9px;font-size:12px;font-weight:600;background:rgba(118,118,128,.12);color:#1D1D1F;white-space:nowrap}
+.chip.tint{background:#FBF0DC;color:#9A5208}
+.chip.priv{background:#EEF3F7;color:#2F5A72}
+.chev{color:#C7C7CC}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:7px 16px;border-radius:980px;border:0;background:#E9A23B;color:#1D1D1F;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;text-decoration:none}
+.btn.gray{background:rgba(118,118,128,.12);color:#9A5208}
+.tbl{overflow-x:auto;border-radius:14px}
+.tbl .list{min-width:760px}
+</style>
+<div class="app">
+<nav class="side" aria-label="Routine Machine">
+<a class="brand" href="today.html"><span class="logo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1D1D1F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M14 21V8a4 4 0 0 0-8 0"></path></svg></span>Routine Machine</a>
+<a class="nav" href="today.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"></path></svg>Today<small>3 of 9</small></a>
+<a class="nav" href="path.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 21c0-5 12-5 12-10S9 7 9 3"></path></svg>Path</a>
+<a class="nav on" href="flock.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M7 16a3 3 0 0 1 0-6 4 4 0 0 1 7.5-1.5A3.5 3.5 0 0 1 17 16z"></path><path d="M9 16v3M14 16v3"></path></svg>Flock<small>15</small></a>
+<a class="nav" href="tally.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6"></path></svg>Tally</a>
+<a class="nav" href="reading.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path></svg>Reading</a>
+<a class="nav" href="hillside.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 19l7-10 4 5 3-3 6 8z"></path></svg>Hillside</a>
+<a class="nav" href="watering-holes.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"></path></svg>Watering holes</a>
+<div class="sidefoot">The Shepherd has kept watch with you for 47 days.</div>
+</nav>
+
+<main class="main">
+<div class="wrap">
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; justify-content: space-between;">
+<div style="flex: 1 1 420px; min-width: 0;">
+<p class="eyebrow">15 routines, 3 goals</p>
+<h1>Your flock.</h1>
+<p class="sub">Every routine you keep, and exactly how it gets counted. A good shepherd knows each one by name.</p>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap;"><button class="btn gray">Edit the path</button><button class="btn">Add to the flock</button></div>
+</div>
+
+<section aria-labelledby="g-body">
+<h3 id="g-body">Body</h3>
+<div class="tbl"><div class="list">
+<div class="row head first"><span>Routine</span><span>Counted by</span><span>Watering hole</span><span>On the hillside</span><span></span></div>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #2F5A72;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z"></path></svg></span>Sleep</span><span class="how">In bed by 23:00, 7 h or more<span>Steady bedtime counts more than long nights</span></span><span><span class="chip tint">Health Connect</span></span><span><span class="chip">Sleep</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #1B7332;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"></path></svg></span>Weight lifting</span><span class="how">A strength workout of 30 min or more<span>Mon, Wed</span></span><span><span class="chip tint">Health Connect</span></span><span><span class="chip">Movement</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #1B7332;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="13" cy="4" r="2"></circle><path d="M9 21l2-7 3 3v5M7 12l3-4 4 1 3 3"></path></svg></span>Walk</span><span class="how">30 active minutes or 4,000 steps<span>Tue, Thu, light on weekends</span></span><span><span class="chip tint">Health Connect</span></span><span><span class="chip">Movement</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #1B7332;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 14h14l2-4M6 18a2 2 0 1 0 0 .1M16 18a2 2 0 1 0 0 .1"></path></svg></span>Skating</span><span class="how">A logged skate session, any length<span>Fri</span></span><span><span class="chip tint">Strava</span></span><span><span class="chip">Movement</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #6E6E73;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3s5 6 5 10a5 5 0 0 1-10 0c0-4 5-10 5-10z"></path></svg></span>Wake and shower</span><span class="how">One tap<span>Nothing can see it, so you say so</span></span><span><span class="chip">Tapped</span></span><span><span class="chip priv">Private</span></span><span class="chev" aria-hidden="true">›</span></a>
+</div></div>
+</section>
+
+<section aria-labelledby="g-mind">
+<h3 id="g-mind">Mind</h3>
+<div class="tbl"><div class="list">
+<a class="row first" href="reading.html"><span class="name"><span class="sq" style="background: #9A5208;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path></svg></span>Reading</span><span class="how">A reader's note in your own words<span>The Shepherd places you in the book from it</span></span><span><span class="chip tint">Reader's note</span></span><span><span class="chip">Reading</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #9A5208;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 8l9-4 9 4-9 4zM7 10v5c3 2 7 2 10 0v-5"></path></svg></span>Learning</span><span class="how">Focused time on the topic, then a two-line note<span>Topic picked toward the least-tended goal</span></span><span><span class="chip tint">ActivityWatch</span></span><span><span class="chip">Learning</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #9A5208;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"></path></svg></span>Journaling</span><span class="how">A new file in journal/entries<span>Read from the UMWAYI repo</span></span><span><span class="chip tint">UMWAYI hub</span></span><span><span class="chip">Writing</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #9A5208;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7"></path></svg></span>Article writing</span><span class="how">A new or changed file in articles/<span>Saturdays</span></span><span><span class="chip tint">UMWAYI hub</span></span><span><span class="chip">Writing</span></span><span class="chev" aria-hidden="true">›</span></a>
+</div></div>
+</section>
+
+<section aria-labelledby="g-work">
+<h3 id="g-work">Work</h3>
+<div class="tbl"><div class="list">
+<a class="row first" href="flock.html"><span class="name"><span class="sq" style="background: #0066CC;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 9l-4 3 4 3M16 9l4 3-4 3"></path></svg></span>Build Routine Machine</span><span class="how">Coding time on the routine-machine repo<span>Deep work: Mon, Wed, Fri</span></span><span><span class="chip tint">WakaTime</span></span><span><span class="chip">Deep work</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #0066CC;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="2"></rect><path d="M9 7V5h6v2"></path></svg></span>Paid work</span><span class="how">About 3 hours, any time of day<span>Counted, never ranked</span></span><span><span class="chip tint">WakaTime</span></span><span><span class="chip priv">Private</span></span><span class="chev" aria-hidden="true">›</span></a>
+</div></div>
+</section>
+
+<section aria-labelledby="g-home">
+<h3 id="g-home">Home and people</h3>
+<div class="tbl"><div class="list">
+<a class="row first" href="flock.html"><span class="name"><span class="sq" style="background: #C93400;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 11h14v3a7 7 0 0 1-14 0zM9 4v4M12 3v5M15 4v4"></path></svg></span>Cooking</span><span class="how">One tap, a photo if you like<span>Sundays: batch meal-prep</span></span><span><span class="chip">Tapped</span></span><span><span class="chip priv">Private</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #C93400;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 21l6-6M14 3l7 7-7 4-4-4z"></path></svg></span>Cleaning</span><span class="how">One tap<span>Saturdays</span></span><span><span class="chip">Tapped</span></span><span><span class="chip priv">Private</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #C93400;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16v12H4zM4 11h16M8 15h3"></path></svg></span>Finances review</span><span class="how">A weekly entry: in, out, saved<span>Sundays</span></span><span><span class="chip">Tapped</span></span><span><span class="chip priv">Private</span></span><span class="chev" aria-hidden="true">›</span></a>
+<a class="row" href="flock.html"><span class="name"><span class="sq" style="background: #C93400;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"></path></svg></span>Mum check-in</span><span class="how">One tap after you call<span>Mon, Wed, Sat</span></span><span><span class="chip">Tapped</span></span><span><span class="chip priv">Private</span></span><span class="chev" aria-hidden="true">›</span></a>
+</div></div>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px;">
+<div class="card" style="flex: 1 1 320px;">
+<h2 style="font-size: 17px;">Learning topics, by green pasture.</h2>
+<ul style="margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 14px;">
+<li><strong style="font-weight: 600;">Target roles</strong><span class="muted"> · idempotency keys, Kafka outbox, PostHog's event pipeline</span></li>
+<li><strong style="font-weight: 600;">AI engineer, with evidence</strong><span class="muted"> · evals, retrieval, agent tool design</span></li>
+<li><strong style="font-weight: 600;">CMU masters application</strong><span class="muted"> · statement of purpose, GRE quant</span></li>
+</ul>
+</div>
+<div class="card" style="flex: 1 1 320px;">
+<h2 style="font-size: 17px;">Private stays private.</h2>
+<p class="muted" style="margin: 6px 0 0; font-size: 14px;">Routines marked Private are counted in your tally and never leave it. Only the fields you choose reach the hillside, and only as a pseudonym.</p>
+</div>
+</div>
+</div>
+</main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

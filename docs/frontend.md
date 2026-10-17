@@ -191,6 +191,10 @@ departure from precedent.
 | 2026-10-17 | Path's status dots don't show real durations per task (the reference shows "48 min", "3 h 10") | That data lives on each day's `DailyLog.measuredMinutes`, not on `Task` itself; wiring a second fetch per day to join it in was judged not worth the complexity for this pass, logged as an open question instead of silently dropped |
 | 2026-10-17 | Flock's routine-item rows use a coloured initial square (first letter, colour by category) instead of the reference's hand-picked per-routine icon | The reference's icons (a moon for sleep, a dumbbell for lifting, etc.) are chosen per specific sample routine; real routine items are free-text names this app can't map to a meaningful icon automatically without guessing |
 | 2026-10-17 | Tally's notches are grouped in fives via nested flex containers, not a single flat row | Matches the design reference's own grouping exactly, and reads better at a glance for a window that can be 28+ days |
+| 2026-10-17 | `docs/design-reference/` copied into the repo and `compare.mjs` run against the live app, per the reference's own `README.md` | Needed to actually verify the fidelity passes above against real screenshots, not just by re-reading HTML source; found and fixed three real gaps: Flock and Watering holes were listing every Phase 8 demo user's own routine items (`GET /api/routine-items` with no `userId` returns everyone's, not just the unowned/legacy ones this single-user page is for), Path was missing its "This week so far." summary card entirely, and routine-item source chips (Today, Flock, Watering holes) printed the raw `RoutineItemSource` enum value instead of a human label |
+| 2026-10-17 | A shared `lib/sourceLabels.ts` (`sourceLabel()`), not a label map duplicated per page | `TaskCard`, Flock, and Watering holes' "how each activity is counted" table all need the same `RoutineItemSource` → human label mapping; Watering holes' own `SOURCE_LABELS` for `WateringHoleStatus.source` (a different enum, `MeasurementSource`) stays separate on purpose — "Health data" and "Health Connect" are deliberately different labels for the same integration in two different contexts |
+| 2026-10-17 | Flock and Watering holes filter `routine-items` to `userId == null` before rendering | Phase 8's hillside demo users each have their own routine items now; these two pages are this single-user app's own management/status views, not multi-user views, so they only ever show the unowned (legacy, pre-Phase-8) items, same as before Phase 8 existed. Today's own fetch of the same endpoint is untouched since it's only used for an id-keyed lookup map, never listed |
+| 2026-10-17 | Path's "This week so far." card (tended/wandered counts, days shown up) was built from the same per-day template/task data the grid already fetches, not a new endpoint | The reference shows exactly this card; the grid loop already computes each day's tended/wandered status to draw its dots, so the summary is a straightforward reduction over data already in hand, not new data |
 
 ## Open questions
 
@@ -201,9 +205,10 @@ departure from precedent.
 - Flock and Watering holes aren't reachable from the phone tab bar, matching the design
   reference's own nav list, but the reference's "they open from Tally on phone" cross-link
   isn't built — there's currently no way to reach them at all on a 390px phone.
-- The hillside has no real opt-in concept, no pseudonym rotation, and `asUserId` is a plain,
-  unauthenticated query param — see `backend.md`'s open questions for the full list; this
-  page is only as trustworthy as that backend groundwork, not more.
+- `PUT /api/users/me/hillside-opt-in` exists (see `backend.md`), but nothing in this frontend
+  calls it yet — there is no settings page or toggle UI. `asUserId` is still a plain,
+  unauthenticated query param; this page is only as trustworthy as that backend groundwork,
+  not more. Pseudonym rotation also isn't designed yet.
 - There's no way yet to edit a book's `currentChapter`/`totalChapters` after creating it
   (`POST /api/books` only creates), matching the open question already recorded in
   `backend.md`. The Reading page shows chapter progress if set at creation, nothing more.
