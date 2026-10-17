@@ -57,8 +57,11 @@ Phase 3 built: the schedule and its tasks, plus current reading.
   the body.
 - `GET /api/current-reading` returns the latest row from `current_reading_log`, 404 if
   nothing's been logged yet. `POST /api/current-reading` adds a new row, always
-  `source=manual` (hub-sync's own writes, once built, won't go through this human-facing
-  endpoint).
+  `source=manual`. **As of Phase 7, `current_reading_log` no longer gets new rows from
+  hub-sync** (see below); this endpoint and its manual Flock form still work exactly as
+  before, they just won't reflect hub-sync's "Current book:" line going forward. Updating the
+  frontend to read `books` instead is deferred to when the Reading page itself is built, not
+  this slice.
 
 **hub-sync Stage 1 built:** `HubJournalReader`
 (`com.routinemachine.core.hubsync.HubJournalReader`), not wired to any endpoint or scheduler.
@@ -99,8 +102,8 @@ test — see `testing.md`). `syncOnce()` is the testable unit the schedule calls
   `writing` routine item (by name, case-insensitive) is still recorded as seen, logging
   nothing, so adding the routine item later doesn't retroactively log every file hub-sync has
   ever looked at.
-- Also calls `HubJournalReader.readCurrentBook()` and writes a new `current_reading_log` row
-  only when the title changed from the latest row.
+- Also calls `HubJournalReader.readCurrentBook()` and writes a new `books` row (Phase 7's
+  `Book`, see below) only when the title changed from the current book.
 
 `RoutineMachineApplication` now has `@EnableScheduling`.
 
@@ -227,10 +230,30 @@ code gets written. Building Strava's own one-off token store now risks either du
 decision or conflicting with it once it's made. See the decisions log and `PROJECT.md`'s own
 framing of this as "a deferred Strava OAuth decision," not an unplanned gap.
 
+**Phase 7 (reader's notes) started: `Book` built.** `Book`
+(`com.routinemachine.core.domain.Book`), `books` table: title, author, currentChapter,
+totalChapters, source (reuses `ReadingSource`, same `MANUAL`/`HUB_SYNC` values
+`current_reading_log` already used). `GET /api/books` lists all, newest first.
+`GET /api/books/current` returns the latest row (404 if none), the same latest-row-wins rule
+`current_reading_log` used. `POST /api/books` creates one, always `source=manual`.
+
+**`Book` supersedes `current_reading_log`** as hub-sync's write target for the "Current book:"
+line (agreed with the user before building, see the decisions log): `HubSyncService.
+syncCurrentBook()` now writes a `Book` row instead of a `CurrentReadingLog` row.
+`current_reading_log`, `CurrentReadingController`, and the frontend's existing manual form
+against it are all untouched and still work; they just won't reflect hub-sync's automatic
+updates anymore. Chapters, reader's notes themselves, the LLM assessment call, and the
+goal-hours rollup are not built yet, deliberately scoped out of this groundwork slice.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | Reader's notes will call the Anthropic Claude API for assessment, not OpenAI or another provider | Asked the user rather than guessing, since this is the first LLM integration in the codebase and involves a new credential. Also matches the project's own tooling |
+| 2026-10-17 | `Book` supersedes `current_reading_log` as the source of truth for "what am I reading"; hub-sync now writes `Book` rows, not `current_reading_log` rows | Asked the user rather than deciding silently, since it changes an existing integration point. `Book` is a richer entity (chapter progress, author) that the plain title-only log can't represent; keeping both as parallel, equally-authoritative writers would create two answers to "what book is this" with no rule for which wins |
+| 2026-10-17 | `current_reading_log`, `CurrentReadingController`, and Flock's manual reading form are left as-is, not removed or migrated this slice | They still work for manual entries; only hub-sync's automatic writes moved. Updating the frontend to read `Book` instead is real work belonging to the Reading page itself, not this groundwork slice, and deleting a still-used endpoint without replacing its caller would break Flock and Tally for no reason |
+| 2026-10-17 | `Book.source` reuses the existing `ReadingSource` enum rather than a new one | Same two origins (`manual`, `hub-sync`) `current_reading_log` already modeled; a second enum with identical values would be duplication with no distinction to justify it |
+| 2026-10-17 | No `chapters` table; `Book` has plain `currentChapter`/`totalChapters` integer columns instead | `docs/design.md`'s Reading page needs "chapter progress" (a number out of a number), not a maintained catalog of chapter entities; the LLM's "chapter placed" field (Phase 7, not built yet) is a free-text guess about where a note falls, not a foreign key into a chapters table the user would have to keep in sync by hand |
 | 2026-10-17 | `ActivityWatchClientImpl` assumes the backend and `aw-server` run on the same machine, reachable via `ACTIVITYWATCH_BASE_URL` | ActivityWatch has no cloud component, unlike WakaTime and GitHub; a pull from the backend only works if it can reach `aw-server`'s local API. Flagged to the user as a real architectural choice rather than decided silently; agreed to pull directly for now, revisit if the backend is ever deployed away from the machine running ActivityWatch (the push-via-health-endpoint alternative was declined for this slice) |
 | 2026-10-17 | `GitHubCommitClientImpl` reads GitHub's public events API, not the search-commits API or a per-repo commit listing | No credential needed (matches hub-sync's existing no-token reads), at the cost of being a true backup signal rather than a complete history: only recent public push events are visible this way. That tradeoff matches how PROJECT.md itself frames GitHub in Phase 6, "optionally RescueTime" aside, as a backup, not a primary source |
 | 2026-10-17 | A `daily_log` written by `GitHubSyncService` has no `measuredMinutes` | Unlike WakaTime/ActivityWatch, the underlying measurement is a commit count, not a duration; forcing a minutes value onto it would be a fabricated number, not a measured one |
@@ -282,3 +305,12 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 - Strava's own sync (client, token storage, refresh, the actual OAuth redirect flow) is not
   designed yet, deliberately, pending Phase 8's accounts/auth architecture decision. Revisit
   once that's agreed, not before.
+- Phase 7's chapters, reader's notes themselves, the Claude API assessment call (own-words
+  percentage, ideas connected, quoted phrases, the one question back, chapter placed), the
+  named ratio threshold that counts a note toward the reading goal, and the Reading frontend
+  page are all not designed or built yet. `Book` is groundwork only.
+- The ratio threshold's exact value and what it's named are not decided yet; this needs its
+  own design pass once the assessment call itself is being built, not guessed at now.
+- Whether `Book`'s `currentChapter`/`totalChapters` should be settable through
+  `POST /api/books` only, or need their own `PATCH` for updating progress on an existing book
+  without re-creating it, isn't decided; no caller needs it yet.

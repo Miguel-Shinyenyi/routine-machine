@@ -31,12 +31,12 @@ class HubSyncServiceTest extends AbstractIntegrationTest {
     private com.routinemachine.core.repository.HubSyncProcessedFileRepository processedFileRepository;
 
     @Autowired
-    private com.routinemachine.core.repository.CurrentReadingLogRepository currentReadingLogRepository;
+    private com.routinemachine.core.repository.BookRepository bookRepository;
 
     private HubSyncService serviceWith(GitHubContentClient client, HubJournalReader journalReader) {
         return new HubSyncService(
                 client, journalReader, routineItemRepository, dailyLogRepository,
-                processedFileRepository, currentReadingLogRepository);
+                processedFileRepository, bookRepository);
     }
 
     private HubSyncService serviceWith(GitHubContentClient client) {
@@ -165,7 +165,7 @@ class HubSyncServiceTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void aNewCurrentBookTitleIsWrittenToTheReadingLog(@TempDir Path tempDir) throws Exception {
+    void aNewCurrentBookTitleIsWrittenToBooks(@TempDir Path tempDir) throws Exception {
         Assumptions.assumeTrue(GitCryptTestFixture.isGitCryptAvailable(), "git-crypt not on PATH, skipping");
         Path repoDir = tempDir.resolve("umwayi");
         String key = GitCryptTestFixture.createEncryptedJournalRepo(repoDir, "2026-10-16.md", "- Current book: Sapiens\n");
@@ -174,9 +174,9 @@ class HubSyncServiceTest extends AbstractIntegrationTest {
 
         serviceWith(client, journalReader).syncOnce();
 
-        assertThat(currentReadingLogRepository.findLatest()).isPresent();
-        assertThat(currentReadingLogRepository.findLatest().orElseThrow().getTitle()).isEqualTo("Sapiens");
-        assertThat(currentReadingLogRepository.findLatest().orElseThrow().getSource().getValue()).isEqualTo("hub-sync");
+        assertThat(bookRepository.findCurrent()).isPresent();
+        assertThat(bookRepository.findCurrent().orElseThrow().getTitle()).isEqualTo("Sapiens");
+        assertThat(bookRepository.findCurrent().orElseThrow().getSource().getValue()).isEqualTo("hub-sync");
     }
 
     @Test
@@ -191,6 +191,6 @@ class HubSyncServiceTest extends AbstractIntegrationTest {
         service.syncOnce();
         service.syncOnce();
 
-        assertThat(currentReadingLogRepository.findAll()).hasSize(1);
+        assertThat(bookRepository.findAll()).hasSize(1);
     }
 }

@@ -1,13 +1,13 @@
 package com.routinemachine.core.hubsync;
 
-import com.routinemachine.core.domain.CurrentReadingLog;
+import com.routinemachine.core.domain.Book;
 import com.routinemachine.core.domain.DailyLog;
 import com.routinemachine.core.domain.DailyLogSource;
 import com.routinemachine.core.domain.HubSyncFileKind;
 import com.routinemachine.core.domain.HubSyncProcessedFile;
 import com.routinemachine.core.domain.ReadingSource;
 import com.routinemachine.core.domain.RoutineItem;
-import com.routinemachine.core.repository.CurrentReadingLogRepository;
+import com.routinemachine.core.repository.BookRepository;
 import com.routinemachine.core.repository.DailyLogRepository;
 import com.routinemachine.core.repository.HubSyncProcessedFileRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
@@ -26,9 +26,9 @@ import java.util.regex.Pattern;
 
 /**
  * hub-sync Phase 1: lists UMWAYI's journal entries and essays over the public GitHub API and
- * marks the matching routine item done for each new file's date, plus keeps
- * {@code current_reading_log} in step with {@link HubJournalReader}'s "Current book:" line.
- * Never parses or stores file content beyond that one line (see {@code docs/hub-sync.md}).
+ * marks the matching routine item done for each new file's date, plus keeps {@code books}
+ * (the "current book") in step with {@link HubJournalReader}'s "Current book:" line. Never
+ * parses or stores file content beyond that one line (see {@code docs/hub-sync.md}).
  */
 @Service
 public class HubSyncService {
@@ -49,7 +49,7 @@ public class HubSyncService {
     private final RoutineItemRepository routineItemRepository;
     private final DailyLogRepository dailyLogRepository;
     private final HubSyncProcessedFileRepository processedFileRepository;
-    private final CurrentReadingLogRepository currentReadingLogRepository;
+    private final BookRepository bookRepository;
     private final boolean enabled;
 
     @Autowired
@@ -59,14 +59,14 @@ public class HubSyncService {
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
             HubSyncProcessedFileRepository processedFileRepository,
-            CurrentReadingLogRepository currentReadingLogRepository,
+            BookRepository bookRepository,
             @Value("${hub-sync.enabled:true}") boolean enabled) {
         this.gitHubContentClient = gitHubContentClient;
         this.hubJournalReader = hubJournalReader;
         this.routineItemRepository = routineItemRepository;
         this.dailyLogRepository = dailyLogRepository;
         this.processedFileRepository = processedFileRepository;
-        this.currentReadingLogRepository = currentReadingLogRepository;
+        this.bookRepository = bookRepository;
         this.enabled = enabled;
     }
 
@@ -78,9 +78,9 @@ public class HubSyncService {
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
             HubSyncProcessedFileRepository processedFileRepository,
-            CurrentReadingLogRepository currentReadingLogRepository) {
+            BookRepository bookRepository) {
         this(gitHubContentClient, hubJournalReader, routineItemRepository, dailyLogRepository,
-                processedFileRepository, currentReadingLogRepository, true);
+                processedFileRepository, bookRepository, true);
     }
 
     // Default 15 minutes; override with HUB_SYNC_POLL_INTERVAL_MS. Polling (not a manual
@@ -146,9 +146,9 @@ public class HubSyncService {
 
     private void syncCurrentBook() {
         hubJournalReader.readCurrentBook().ifPresent(title -> {
-            Optional<CurrentReadingLog> latest = currentReadingLogRepository.findLatest();
-            if (latest.isEmpty() || !latest.get().getTitle().equals(title)) {
-                currentReadingLogRepository.save(new CurrentReadingLog(title, ReadingSource.HUB_SYNC));
+            Optional<Book> current = bookRepository.findCurrent();
+            if (current.isEmpty() || !current.get().getTitle().equals(title)) {
+                bookRepository.save(new Book(title, ReadingSource.HUB_SYNC));
             }
         });
     }

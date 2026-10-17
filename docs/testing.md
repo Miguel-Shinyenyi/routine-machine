@@ -62,7 +62,14 @@ to a pattern that doesn't match any real default (HUB and ACTIVITYWATCH and RESC
 WAKATIME and GITHUB false), so the test can tell the endpoint is actually reading each
 property rather than echoing a hardcoded guess, plus cases for a source with a recorded
 measurement, hub-sync's own last-activity source, and a source with no activity reporting
-`null`. 118 backend tests, all passing.
+`null`. `BookApiIntegrationTest` covers creating two books, confirming the current one is the
+latest and the list is newest-first, as one test method rather than several, since splitting
+it across methods would hit the same shared-Postgres-per-class ordering risk the measurement
+ingest tests already found; `rejectsABlankTitle` is a separate method since it writes nothing.
+`BookApiNoBooksYetTest` is its own class (its own fresh Postgres container) just for the 404
+case, so it isn't order-dependent on the other class's writes. `HubSyncServiceTest`'s two
+current-book cases were updated to assert on `BookRepository` instead of
+`CurrentReadingLogRepository`, same behavior, new target. 121 backend tests, all passing.
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
