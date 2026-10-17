@@ -17,12 +17,15 @@ import org.testcontainers.utility.DockerImageName;
 // context and making real outbound calls during the suite; tests of each sync's logic call it
 // directly instead of waiting on the scheduler. rescuetime-sync.enabled is already false by
 // default (it's an opt-in feature, unlike the other three), listed here anyway so this stays
-// true even if that default ever changes.
+// true even if that default ever changes. auth.jwt-secret has no production default (see
+// application.yml), so every test context needs its own fixed value; this one is a test-only
+// value, never a real secret, long enough for HS256's 256-bit minimum key length.
 @Testcontainers
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
         "hub-sync.enabled=false", "wakatime-sync.enabled=false", "activitywatch-sync.enabled=false",
-        "github-sync.enabled=false", "rescuetime-sync.enabled=false"})
+        "github-sync.enabled=false", "rescuetime-sync.enabled=false",
+        "auth.jwt-secret=test-only-secret-not-for-real-use-0123456789"})
 public abstract class AbstractIntegrationTest {
 
     @Container

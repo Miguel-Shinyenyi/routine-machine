@@ -285,10 +285,67 @@ in the controller. `ReadingNoteController` now calls it instead of the repositor
 
 Only the Reading frontend page itself remains unbuilt for Phase 7.
 
+**Phase 8 (the hillside) started: accounts groundwork built.** Explicitly gated on an
+accounts/auth architecture decision before any code (PROJECT.md); three real decisions were
+asked and confirmed with the user before building, not guessed:
+
+1. **The hillside compares users within one shared deployment**, not separate opt-in
+   reporting between independent single-user instances. This is a much bigger change than
+   the rest of this app: every existing table will eventually need a `user_id` scope, which
+   is **not done yet** — see below for exactly what this slice does and doesn't touch.
+2. **Both password and GitHub OAuth** login are supported.
+3. **Next.js owns the actual login session**, not this backend. The backend never renders a
+   login page or handles an OAuth redirect; it verifies a short-lived signed token Next.js's
+   server attaches to its own calls, and separately verifies credentials when asked to.
+
+**What's built:** `User` (`com.routinemachine.core.domain.User`), `users` table: email
+(unique), an optional bcrypt password hash, an optional GitHub id (unique), a display name.
+A user needs at least one login method (a DB check constraint, same defense-in-depth pattern
+`DailyLog`'s exactly-one-target rule uses). `AuthService` coordinates the login logic:
+
+- `POST /api/auth/register` — email + password (min 8 characters), 400 if the email's
+  already registered.
+- `POST /api/auth/login` — verifies a password against the stored bcrypt hash, 401 on any
+  failure (unknown email, GitHub-only account with no password, wrong password) — never
+  which part was wrong, so a failed guess can't be used to enumerate registered emails.
+- `POST /api/auth/github-login` — finds or creates an account by GitHub id (linking to an
+  existing password account with the same email on first GitHub login). **Trusts the caller
+  already verified the GitHub identity** through a real OAuth flow; this endpoint itself
+  proves nothing about GitHub, so it's protected by its own service-to-service token
+  (`AUTH_INTERNAL_TOKEN`), fails closed if unset, same rule `HEALTH_INGEST_TOKEN` already
+  follows. Only Next.js's own server should ever call it.
+- `GET /api/users/me` — the one endpoint this phase actually requires a valid token for, not
+  a real feature, proof the JWT verification wiring works end to end. Reads the token's
+  `sub` claim as a user id and returns that user.
+
+Spring Security and `spring-boot-starter-oauth2-resource-server` are new dependencies. Two
+separate `SecurityFilterChain` beans, not one — see the decisions log for why a single chain
+broke `MeasurementIngestController` and `github-login`'s own `Authorization: Bearer` headers.
+`AUTH_JWT_SECRET` (the secret both this backend and Next.js's future token-minting will
+share) has no production default and the app won't start without it in a real deployment;
+`docker-compose.yml` supplies an insecure development-only default so `docker compose up`
+still works out of the box, since nothing in the app actually requires login yet.
+
+**What's deliberately not touched:** every existing table (`routine_items`, `daily_logs`,
+`goals`, `books`, `reading_notes`, `measurements`, everything) stays exactly as it was —
+single-user, no `user_id` column, no endpoint requires authentication except the one
+proof-of-concept above. Scoping the rest of the app to a logged-in user, building the
+hillside's own k-anonymous aggregation, the actual Next.js login UI and GitHub OAuth app
+registration, and migrating existing dev data to a seed user are all separate, much larger
+pieces of work, not started.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | The hillside compares users within one shared deployment, not separate single-user instances reporting in | Asked the user rather than guessing, since this is a far bigger change (every table eventually needs a `user_id`) than the alternative (a lightweight opt-in reporting endpoint). Confirmed before writing any code, per PROJECT.md's explicit gate on this phase |
+| 2026-10-17 | Both password and GitHub OAuth login are supported, not just one | Asked the user directly; they wanted both rather than picking one |
+| 2026-10-17 | Next.js owns the login session; this backend only verifies a signed token Next.js attaches to its own server-side calls | Asked the user rather than guessing, since it determines whether this backend ever renders a login page or handles an OAuth redirect (it won't) and keeps today's "frontend does all the fetching server-side" architecture intact, just adding identity to those calls |
+| 2026-10-17 | Two `SecurityFilterChain` beans (`/api/users/**` requiring a JWT, everything else `permitAll`), not one chain with a path-based authorization rule | Found as a real bug while wiring this in: a single chain with `oauth2ResourceServer().jwt()` intercepts *any* request bearing an `Authorization: Bearer` header globally and 401s if it isn't a valid JWT, even on a `permitAll` path — `MeasurementIngestController` and `github-login` both read their own app-level Bearer tokens, and presenting one made Spring Security treat it as a failed authentication attempt rather than deferring to the permitAll rule. Scoping the JWT filter to only the one path that actually needs it fixed this without touching those controllers |
+| 2026-10-17 | `POST /api/auth/login` returns a generic 401 on every kind of failure (unknown email, GitHub-only account, wrong password) | Distinguishing them in the response would let a caller enumerate which emails are registered just by trying logins; a single generic failure gives nothing away |
+| 2026-10-17 | `POST /api/auth/github-login` is protected by its own `AUTH_INTERNAL_TOKEN`, separate from the per-user JWT | This endpoint has no password or OAuth proof of its own — it trusts whoever calls it already verified the GitHub identity through a real OAuth flow. Without this, anyone could call it directly with an arbitrary email/githubId and get back that account's id, since nothing else in the request proves identity |
+| 2026-10-17 | `AUTH_JWT_SECRET` has no default in `application.yml` but gets an insecure one in `docker-compose.yml` | A real deployment with real accounts must never run with a guessable secret, so the app fails to start without one by default; a local `docker compose up` would otherwise break for everyone, even though nothing in the app requires login yet, so the compose file supplies a clearly-labeled dev-only placeholder instead |
+| 2026-10-17 | `User.passwordHash`/`githubId` are both nullable, enforced by a DB check constraint requiring at least one | Mirrors `DailyLog`'s existing exactly-one-of-two-targets pattern: the application layer (the `User` constructor) can't construct an invalid instance, and the DB constraint guards against any future write path that bypasses it |
 | 2026-10-17 | Reader's notes will call the Anthropic Claude API for assessment, not OpenAI or another provider | Asked the user rather than guessing, since this is the first LLM integration in the codebase and involves a new credential. Also matches the project's own tooling |
 | 2026-10-17 | `Book` supersedes `current_reading_log` as the source of truth for "what am I reading"; hub-sync now writes `Book` rows, not `current_reading_log` rows | Asked the user rather than deciding silently, since it changes an existing integration point. `Book` is a richer entity (chapter progress, author) that the plain title-only log can't represent; keeping both as parallel, equally-authoritative writers would create two answers to "what book is this" with no rule for which wins |
 | 2026-10-17 | `current_reading_log`, `CurrentReadingController`, and Flock's manual reading form are left as-is, not removed or migrated this slice | They still work for manual entries; only hub-sync's automatic writes moved. Updating the frontend to read `Book` instead is real work belonging to the Reading page itself, not this groundwork slice, and deleting a still-used endpoint without replacing its caller would break Flock and Tally for no reason |
@@ -347,10 +404,10 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 - Whether `HubJournalReader` should hold the full journal-decrypting key at all, versus a
   least-privilege alternative that needs no key. Tracked in `hub-sync.md`'s open questions,
   to revisit before Stage 3.
-- Strava's own sync (client, token storage, refresh, the actual OAuth redirect flow) is not
-  designed yet, deliberately, pending Phase 8's accounts/auth architecture decision. Revisit
-  once that's agreed, not before.
-- The Reading frontend page is not built yet — the last piece of Phase 7.
+- Strava's own sync (client, token storage, refresh, the actual OAuth redirect flow) is still
+  not designed. Phase 8's accounts/auth architecture is now agreed (see above), so this is no
+  longer blocked on that decision specifically, but Strava's own OAuth design is separate
+  work, not started.
 - Whether `POST /api/reading-notes` should itself call the intelligence service's
   `POST /reading-notes/assess` server-side, instead of expecting the frontend to call it
   first and pass the result along, isn't decided. The current shape matches the project's
@@ -359,3 +416,14 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 - Whether `Book`'s `currentChapter`/`totalChapters` should be settable through
   `POST /api/books` only, or need their own `PATCH` for updating progress on an existing book
   without re-creating it, isn't decided; no caller needs it yet.
+- Phase 8's actual table-scoping work (which table gets `user_id` first, how the migration
+  backfills existing dev data to a seed user, whether `goals` stays shared fixed reference
+  data or becomes per-user) is not designed yet — this slice only proves accounts can exist.
+- The Next.js side of this (next-auth wiring, the GitHub OAuth app registration and its real
+  client id/secret, the login UI itself, and actually minting the signed token this backend
+  verifies) is not built. `GET /api/users/me` was only tested against a hand-built token in
+  this session, the same real-signed-token technique Next.js will need to replicate — it
+  hasn't been proven against a token Next.js itself produced.
+- Whether JWTs should carry an expiry Next.js is expected to refresh, and what refreshing
+  looks like across the frontend/backend boundary, isn't decided; the test token used a short
+  fixed expiry but nothing enforces or exercises refresh behavior yet.

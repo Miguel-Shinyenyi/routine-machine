@@ -81,7 +81,19 @@ creates a `daily_log` for the `READER_NOTES` routine item; a note below the thre
 with no assessment at all, does not; posting two qualifying notes the same day creates only
 one `daily_log` (the idempotency case, tested before the "no matching routine item" case,
 matching the project's own "test the double-count case first" instruction); no `READER_NOTES`
-routine item means no log but the note still saves. 130 backend tests, all passing.
+routine item means no log but the note still saves.
+`AuthServiceTest` (`@DataJpaTest`, `TaskServiceTest`-style direct instantiation) covers
+registration (hashed password, duplicate-email rejection), login (right password, wrong
+password, unknown email, GitHub-only account with no password), and `findOrCreateFromGithub`
+(new account, idempotent repeat login, linking to an existing password account by email).
+`AuthControllerApiIntegrationTest` covers the HTTP layer (register-then-login in one method,
+duplicate email, a too-short password, `github-login` with and without the correct internal
+token). `UserControllerApiIntegrationTest` is the one test in the suite that builds a real
+signed JWT (via `nimbus-jose-jwt`, already on the classpath through the resource-server
+starter) with the same shared secret every test context uses, rather than mocking Spring
+Security's authentication context — proof the actual signature verification wiring works,
+not just the authorization rule around it; also covers a missing token and one signed with
+the wrong secret. 147 backend tests, all passing.
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
@@ -119,6 +131,8 @@ recorded, now confirmed end to end through the browser too.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `UserControllerApiIntegrationTest` builds a real signed JWT with `nimbus-jose-jwt` instead of using Spring Security's test mock-authentication support | Spring Security's `SecurityMockMvcRequestPostProcessors.jwt()` injects an authenticated principal directly, bypassing real token parsing and signature verification entirely; that's the right tool for testing authorization rules, but this phase needed at least one test proving the actual HS256 verification against the real shared secret works, since that's the part a hand-wired `JwtDecoder` bean could get subtly wrong |
+| 2026-10-17 | Adding Spring Security surfaced a real bug, caught by running the full suite, not by a new test written in advance | A single `SecurityFilterChain` with `oauth2ResourceServer().jwt()` broke five unrelated, already-passing tests (`MeasurementIngestControllerTest`'s and `AuthControllerApiIntegrationTest`'s own `Authorization: Bearer` checks) by intercepting their app-level tokens as failed JWTs. Running `./mvnw clean test` immediately after wiring in a new cross-cutting concern like security is exactly the kind of check that catches this before it reaches a report |
 | 2026-10-17 | `assess_reading_note`'s automated tests fake Anthropic's API via `respx`, but it was also manually verified against the real API | Same offline/repeatable reasoning as every other faked external call in this project, but this one happened to have a real `ANTHROPIC_API_KEY` available in the session environment, so the real integration was checked too, not left purely theoretical. It surfaced a real bug (an unhandled `httpx.HTTPStatusError` producing an opaque 500), fixed and covered by a new test before moving on |
 | 2026-10-17 | `BookApiIntegrationTest` covers creating two books, confirming the current one is the latest and the list is newest-first, as one test method rather than several | Splitting it across methods would hit the same shared-Postgres-per-class ordering risk the measurement ingest tests already found; `rejectsABlankTitle` is a separate method since it writes nothing and isn't order-sensitive |
 | 2026-10-17 | `BookApiNoBooksYetTest` is its own test class, not a method in `BookApiIntegrationTest` | Its own class gets its own fresh Postgres container, so the 404-when-nothing-logged-yet case isn't order-dependent on what `BookApiIntegrationTest`'s other tests already wrote |
