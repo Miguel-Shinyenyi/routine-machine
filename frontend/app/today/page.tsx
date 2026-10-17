@@ -1,9 +1,25 @@
 import Link from "next/link";
 import { materializeDay } from "@/lib/materialize";
 import { todayIsoDate } from "@/lib/schedule";
+import { formatEyebrowDate } from "@/lib/formatDate";
 import { backendFetch, intelligenceFetch } from "@/lib/api";
 import type { Goal, Patterns, RoutineItem, Suggestion, Tally } from "@/lib/types";
 import { TaskCard } from "@/components/TaskCard";
+
+// Inline placeholder, same role as docs/design-reference/README.md's "Not in the reference":
+// "The mascot: ... a simple inline SVG placeholder. The full illustrated shepherd lives in
+// the UMWAYI site illustrations."
+function ShepherdMascot() {
+  return (
+    <svg viewBox="0 0 120 150" width="40" height="50" aria-hidden="true" className="shrink-0">
+      <path d="M92 146V44q0-18-14-18-12 0-12 12" fill="none" stroke="#7a4a1e" strokeWidth="6" strokeLinecap="round" />
+      <path d="M30 146L40 74Q60 60 80 74L90 146Z" fill="#3e7b4f" stroke="#1d1d1f" strokeWidth="3" />
+      <path d="M44 74L84 124L78 132L38 86Z" fill="#c8372d" stroke="#1d1d1f" strokeWidth="3" />
+      <circle cx="60" cy="50" r="17" fill="#6b4226" stroke="#1d1d1f" strokeWidth="3" />
+      <circle cx="90" cy="92" r="7" fill="#6b4226" stroke="#1d1d1f" strokeWidth="3" />
+    </svg>
+  );
+}
 
 function adjacentDate(isoDate: string, deltaDays: number): string {
   const [year, month, day] = isoDate.split("-").map(Number);
@@ -47,8 +63,29 @@ export default async function TodayPage(props: PageProps<"/today">) {
 
   return (
     <div>
-      <p className="text-[13px] text-muted">{date}</p>
-      <h1 className="page-title mb-6">Today&rsquo;s pasture.</h1>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-5">
+        <div className="min-w-0 flex-1 basis-[420px]">
+          <p className="text-[15px] font-semibold text-tint-text">{formatEyebrowDate(date)}</p>
+          <h1 className="page-title">Today&rsquo;s pasture.</h1>
+          <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
+            {tasks.length === 0
+              ? "Nothing scheduled yet. The tally keeps every one you tend."
+              : `${tasks.length} small ${tasks.length === 1 ? "thing" : "things"}. None of them is big, and each one counts. The tally keeps every one you tend.`}
+          </p>
+        </div>
+        {suggestion && (
+          <div className="glass flex basis-[380px] items-start gap-3 rounded-[18px] p-4" role="status">
+            <ShepherdMascot />
+            <div className="min-w-0">
+              <div className="flex gap-2 text-[12px] text-muted">
+                <strong className="font-semibold text-ink">Shepherd</strong>
+                <span>now</span>
+              </div>
+              <p className="mt-0.5 text-[15px] leading-tight">{suggestion.reason}</p>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="mb-6 flex items-center justify-between text-[13px]">
         <Link href={`/today?date=${adjacentDate(date, -1)}`} className="text-tint-text hover:underline">

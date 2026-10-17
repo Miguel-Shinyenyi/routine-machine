@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Shell } from "@/components/Shell";
+import { backendFetch, intelligenceFetch } from "@/lib/api";
+import { todayIsoDate } from "@/lib/schedule";
+import type { Tally, Task } from "@/lib/types";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,14 +24,32 @@ const SET_THEME_BEFORE_PAINT = `
 })();
 `;
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+// Read-only, used only for the sidebar's "N of M" badge and "kept watch for N days" line —
+// never materializeDay, which can create tasks as a side effect unsuitable for every page load.
+// Both calls are caught, not awaited into a hard failure: the sidebar still renders, just
+// without that one piece of context, if either service is briefly unreachable.
+async function fetchShellContext(): Promise<{ doneCount: number | null; totalCount: number | null; daysShownUp: number | null }> {
+  const [tasks, tally] = await Promise.all([
+    backendFetch<Task[]>(`/api/tasks?date=${todayIsoDate()}`).catch(() => null),
+    intelligenceFetch<Tally>("/tally").catch(() => null),
+  ]);
+  return {
+    doneCount: tasks ? tasks.filter((t) => t.status === "DONE").length : null,
+    totalCount: tasks ? tasks.length : null,
+    daysShownUp: tally ? tally.daysShownUpCount : null,
+  };
+}
+
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const shellContext = await fetchShellContext();
+
   return (
     <html lang="en" className="h-full antialiased">
       <head>
         <script dangerouslySetInnerHTML={{ __html: SET_THEME_BEFORE_PAINT }} />
       </head>
       <body className="min-h-full bg-canvas text-ink">
-        <Shell>{children}</Shell>
+        <Shell {...shellContext}>{children}</Shell>
       </body>
     </html>
   );

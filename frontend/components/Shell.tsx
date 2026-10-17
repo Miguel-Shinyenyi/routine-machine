@@ -1,30 +1,120 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
 
-const LINKS = [
+// Icon paths copied from docs/design-reference/pages/*.html's inline nav SVGs (the canvas
+// design export), not a new icon set invented here — see docs/frontend.md's decisions log.
+const ICONS: Record<string, React.ReactNode> = {
+  "/today": (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5" />
+    </>
+  ),
+  "/path": <path d="M6 21c0-5 12-5 12-10S9 7 9 3" />,
+  "/flock": (
+    <>
+      <path d="M7 16a3 3 0 0 1 0-6 4 4 0 0 1 7.5-1.5A3.5 3.5 0 0 1 17 16z" />
+      <path d="M9 16v3M14 16v3" />
+    </>
+  ),
+  "/tally": <path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6" />,
+  "/reading": <path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" />,
+  "/hillside": <path d="M2 19l7-10 4 5 3-3 6 8z" />,
+  "/watering-holes": <path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z" />,
+};
+
+const SIDEBAR_LINKS = [
   { href: "/today", label: "Today" },
   { href: "/path", label: "Path" },
   { href: "/flock", label: "Flock" },
   { href: "/tally", label: "Tally" },
   { href: "/reading", label: "Reading" },
+  { href: "/hillside", label: "Hillside" },
   { href: "/watering-holes", label: "Watering holes" },
 ];
 
-export function Shell({ children }: { children: React.ReactNode }) {
+// The reference's phone tab bar is Today, Path, Reading, Tally, Hillside; Flock and
+// Watering holes open from Tally on phone instead (docs/design-reference/README.md).
+const PHONE_LINKS = ["/today", "/path", "/reading", "/tally", "/hillside"];
+
+function NavIcon({ href }: { href: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      {ICONS[href]}
+    </svg>
+  );
+}
+
+export function Shell({
+  children,
+  doneCount,
+  totalCount,
+  daysShownUp,
+}: {
+  children: React.ReactNode;
+  doneCount: number | null;
+  totalCount: number | null;
+  daysShownUp: number | null;
+}) {
+  const pathname = usePathname();
+  const watchedFor =
+    daysShownUp === null
+      ? null
+      : `The Shepherd has kept watch with you for ${daysShownUp} ${daysShownUp === 1 ? "day" : "days"}.`;
+
   return (
     <div className="flex min-h-full flex-col md:flex-row">
-      <aside className="glass sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col gap-1 border-r hairline px-4 py-6 md:flex">
-        <span className="mb-6 px-2 text-[15px] font-semibold">Routine Machine</span>
-        {LINKS.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="rounded-[12px] px-3 py-2 text-[15px] text-ink hover:bg-fill"
+      <aside className="glass sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col gap-1 border-r hairline px-3 py-5 md:flex">
+        <Link href="/today" className="mb-4 flex items-center gap-2.5 px-2.5 py-1.5 text-[15px] font-semibold">
+          <span
+            className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px]"
+            style={{ background: "var(--tint)" }}
+            aria-hidden="true"
           >
-            {link.label}
-          </Link>
-        ))}
-        <div className="mt-auto pt-4">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1d1d1f" strokeWidth="2.4" strokeLinecap="round">
+              <path d="M14 21V8a4 4 0 0 0-8 0" />
+            </svg>
+          </span>
+          Routine Machine
+        </Link>
+        {SIDEBAR_LINKS.map((link) => {
+          const isActive = pathname === link.href;
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              aria-current={isActive ? "page" : undefined}
+              className="flex min-h-9 items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[14px] text-ink hover:bg-fill"
+              style={isActive ? { background: "rgba(233,162,59,.2)", fontWeight: 600 } : undefined}
+            >
+              <span style={{ color: "var(--tint-text)" }}>
+                <NavIcon href={link.href} />
+              </span>
+              {link.label}
+              {link.href === "/today" && doneCount !== null && totalCount !== null && (
+                <small className="ml-auto text-[12px] font-medium text-muted">
+                  {doneCount} of {totalCount}
+                </small>
+              )}
+            </Link>
+          );
+        })}
+        <div className="mt-auto flex flex-col gap-2 pt-4">
+          {watchedFor && <p className="px-2.5 text-[12px] text-muted">{watchedFor}</p>}
           <ThemeToggle />
         </div>
       </aside>
@@ -34,15 +124,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </main>
 
       <nav className="glass fixed inset-x-4 bottom-4 flex items-center justify-around rounded-full border hairline py-2 shadow-none md:hidden">
-        {LINKS.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="min-w-[44px] px-2 py-1 text-center text-[13px] text-ink"
-          >
-            {link.label}
-          </Link>
-        ))}
+        {PHONE_LINKS.map((href) => {
+          const label = SIDEBAR_LINKS.find((l) => l.href === href)?.label ?? href;
+          const isActive = pathname === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={isActive ? "page" : undefined}
+              className="flex min-w-[44px] flex-col items-center gap-0.5 px-2 py-1 text-center text-[11px]"
+              style={{ color: isActive ? "var(--tint-text)" : "var(--ink)" }}
+            >
+              <NavIcon href={href} />
+              {label}
+            </Link>
+          );
+        })}
       </nav>
     </div>
   );

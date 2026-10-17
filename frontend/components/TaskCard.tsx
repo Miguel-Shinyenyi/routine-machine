@@ -20,14 +20,19 @@ export function TaskCard({ task, routineItem }: { task: Task; routineItem?: Rout
         <button
           type="submit"
           disabled={!next}
-          aria-label={isDone ? "Tended" : "Mark tended"}
-          className="check-btn flex h-7 w-7 items-center justify-center border hairline text-sm"
+          aria-pressed={isDone}
+          aria-label={isDone ? `Mark not tended: ${task.label}` : `Mark tended: ${task.label}`}
+          className="check-btn flex h-[30px] w-[30px] items-center justify-center border-2"
           style={{
-            background: isDone ? "var(--tended-fill)" : "transparent",
-            color: isDone ? "var(--tended-ink)" : "var(--muted)",
+            background: isDone ? "var(--tended-ink)" : "var(--surface)",
+            borderColor: isDone ? "var(--tended-ink)" : "#c7c7cc",
           }}
         >
-          {isDone ? "✓" : ""}
+          {isDone && (
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3.5 8.5l3 3 6-7" />
+            </svg>
+          )}
         </button>
       </form>
 
@@ -36,9 +41,11 @@ export function TaskCard({ task, routineItem }: { task: Task; routineItem?: Rout
           {task.label}
         </p>
         <div className="mt-1 flex items-center gap-2">
-          {isAutoCounted && <span className="chip chip-tint">{routineItem?.source}</span>}
+          {isAutoCounted && (
+            <span className={`chip ${isDone ? "chip-tended" : "chip-tint"}`}>{routineItem?.source}</span>
+          )}
           {routineItem?.isPrivate && <span className="chip chip-private">Private</span>}
-          {isDone && <span className="chip chip-tended">Tended</span>}
+          {!isAutoCounted && isDone && <span className="chip chip-tended">Tended</span>}
         </div>
       </div>
 
