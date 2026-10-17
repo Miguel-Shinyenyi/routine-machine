@@ -9,8 +9,10 @@ schedule. Shared by both services.
 
 Built via two Flyway migrations. Four Phase 1 tables:
 
-- `goals(id, name unique, description, created_at)`, seeded with the three tracked goals
-  (`cmu-masters-application`, `target-roles`, `ai-engineer-evidence`) in `V2__seed_goals.sql`.
+- `goals(id, name, description, user_id nullable, created_at)`, seeded with the three tracked
+  goals (`cmu-masters-application`, `target-roles`, `ai-engineer-evidence`) in
+  `V2__seed_goals.sql` (`user_id` added in Phase 8's `V16__goal_user_scoping.sql`, see below;
+  unique on `(user_id, name)`, not `name` alone).
 - `routine_items(id, name, description, created_at)`
 - `learning_topics(id, name, goal_id references goals, created_at)`
 - `daily_logs(id, log_date, routine_item_id references routine_items nullable,
@@ -122,17 +124,27 @@ table is built on.
 Phase 8 also built via `V15__user_scoped_data.sql`: `routine_items` and `daily_logs` each
 gain a nullable `user_id` (indexed), referencing `users`. `NULL` means legacy/unowned — every
 row written before this phase, and everything every Phase 6 sync service writes, stays
-exactly that way. Every other table (`goals`, `books`, `reading_notes`, `measurements`, and
-the rest) still has no `user_id` at all. See `backend.md`'s decisions log for why only these
-two tables, and why nullable/optional rather than enforced.
+exactly that way. `books`, `reading_notes`, `measurements`, and the rest still have no
+`user_id` at all. See `backend.md`'s decisions log for why these tables first, and why
+nullable/optional rather than enforced.
 
 Phase 8's hillside (`GET /api/hillside`, see `backend.md`) added no new table: it's computed
 fresh from `daily_logs`/`routine_items`/`users` on every call, nothing is stored or cached.
+
+Phase 8 also built via `V16__goal_user_scoping.sql`: `goals` gains a nullable `user_id`
+(indexed), referencing `users`. `NULL` still means the three seeded goals, shared and visible
+to everyone, exactly as before. The old global `UNIQUE(name)` constraint
+(`goals_name_key`) is replaced by `UNIQUE(user_id, name)` (`goals_user_id_name_unique`):
+two different users, or a user and the seeded data, can now share a goal name, but one user
+can't have two goals of the same name. This also makes `POST /api/goals` possible for the
+first time (see `backend.md`); goals are no longer only created through migrations.
 
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `goals.user_id` is nullable, `NULL` keeps meaning the three shared seeded goals | Same reasoning as `routine_items`/`daily_logs`'s `user_id`: adding a creation API shouldn't change what every existing reader of `GET /api/goals` already sees |
+| 2026-10-17 | `goals`'s unique constraint moves from `name` alone to `(user_id, name)` | Once goals can be created per user, two different users (or a user and the seed data) needing the same goal name (e.g. "learn X") is normal, not a collision; uniqueness should scope to the owner, not the whole table |
 | 2026-10-17 | `users` is a new table, groundwork only — no existing table gets a `user_id` yet | Phase 8's accounts/auth architecture is now agreed with the user (see `backend.md`'s decisions log), but scoping every existing table to a user is separate, much larger work than proving accounts can exist; this slice is deliberately narrow |
 | 2026-10-17 | `measurements` is unique on `(source, metric, measurement_date)`, not on an external id from the source | Different sources don't all provide a stable external id for a day's total (WakaTime's daily summary isn't a discrete record the way a GitHub commit sha is); keying on the day itself and upserting works the same way for every source, and matches that a day's total can legitimately change between two syncs of the same day |
 | 2026-10-17 | `hub_sync_processed_files` is keyed by `content_sha`, not `repo_path` | A file's git blob sha stays the same across a rename; a path-keyed table would treat the renamed file as new and log it again. See `hub-sync.md`'s decisions log |
@@ -153,6 +165,6 @@ fresh from `daily_logs`/`routine_items`/`users` on every call, nothing is stored
 ## Open questions
 
 - None currently open for Phase 6.
-- Phase 8: which table gets `user_id` first, how existing dev data backfills to a seed user,
-  and whether `goals` stays shared fixed reference data or becomes per-user, are all
-  undecided — see `backend.md`'s open questions for the full list.
+- Phase 8: `routine_items`, `daily_logs`, and now `goals` have an optional `user_id`; how
+  existing dev data backfills to a seed user is still undecided — see `backend.md`'s open
+  questions for the full list.

@@ -28,7 +28,7 @@ class GoalRepositoryTest extends AbstractIntegrationTest {
 
     @Test
     void savesAndReloadsAGoalByName() {
-        Goal found = goalRepository.findByName("target-roles").orElseThrow();
+        Goal found = goalRepository.findFirstByName("target-roles").orElseThrow();
 
         assertThat(found.getDescription()).contains("PostHog");
         assertThat(found.getCreatedAt()).isNotNull();

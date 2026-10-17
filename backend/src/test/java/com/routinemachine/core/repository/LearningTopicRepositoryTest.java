@@ -24,7 +24,7 @@ class LearningTopicRepositoryTest extends AbstractIntegrationTest {
 
     @Test
     void savesATopicLinkedToAGoalAndFindsItByGoalId() {
-        Goal goal = goalRepository.findByName("target-roles").orElseThrow();
+        Goal goal = goalRepository.findFirstByName("target-roles").orElseThrow();
 
         LearningTopic saved = learningTopicRepository.save(new LearningTopic("PostHog product analytics", goal));
 

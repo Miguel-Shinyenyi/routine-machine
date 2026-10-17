@@ -106,7 +106,13 @@ the real aggregation against real rows: a user with fewer qualifying days ranks 
 with more; a private routine item's logs never reach the hillside at all (zero participants);
 omitting `asUserId` returns the histogram with no personal band; and the "general" field only
 counts a day once 3+ distinct routines were tended, not just one.
-`HillsideApiIntegrationTest` covers the HTTP layer. 159 backend tests, all passing.
+`HillsideApiIntegrationTest` covers the HTTP layer.
+`GoalApiIntegrationTest` covers `POST /api/goals` (Phase 8's goal user-scoping): creating a
+goal for a registered user and returning its `userId`, creating one with no `userId` and
+getting `null` back, 400 on a missing name and on an unknown `userId`, 400 on a second goal
+with the same name for the same user (the new `(user_id, name)` uniqueness), and that
+`?userId=` on the list endpoint isolates one user's goals from another's. 165 backend tests,
+all passing.
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested

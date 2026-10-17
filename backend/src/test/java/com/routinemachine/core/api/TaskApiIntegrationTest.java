@@ -95,7 +95,7 @@ class TaskApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void materializesALearningSlotTaskWithASuppliedTopic() throws Exception {
-        Goal goal = goalRepository.findByName("target-roles").orElseThrow();
+        Goal goal = goalRepository.findFirstByName("target-roles").orElseThrow();
         LearningTopic topic = learningTopicRepository.save(new LearningTopic("PostHog analytics", goal));
         ScheduleTemplate template = scheduleTemplateRepository.save(
                 ScheduleTemplate.forLearningSlot(DayOfWeek.TUESDAY, 45, 1, "Goal-suggested topic"));

@@ -49,7 +49,7 @@ class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void createsAFullyCategorisedRoutineItemLinkedToAGoal() throws Exception {
-        var goal = goalRepository.findByName("ai-engineer-evidence").orElseThrow();
+        var goal = goalRepository.findFirstByName("ai-engineer-evidence").orElseThrow();
 
         mockMvc.perform(post("/api/routine-items")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -15,8 +15,16 @@ below and `hub-sync.md`.
 Phase 1 and 2 built: Spring Boot 3.5, Java 21, PostgreSQL via Flyway migrations. Four
 endpoints, matching the four Phase 1 entities in `database.md`:
 
-- `GET /api/goals`, lists the three seeded goals. Read-only; goals are fixed reference data,
-  not user-editable in Phase 1.
+- `GET /api/goals?userId=`, `POST /api/goals`, list and create goals. The three seeded goals
+  (Phase 1) have no `user_id` and remain visible to everyone, unchanged. Phase 8 added the
+  `userId`-scoped creation path: `userId` is optional on both the query (filters the list,
+  omitted returns every goal exactly as Phase 1 did) and the create body (400 on an unknown
+  `userId`, matching every other foreign-key validation in this API). Goal names are unique
+  per user (`UNIQUE(user_id, name)`, not a global `UNIQUE(name)` as before Phase 8); creating
+  a second goal with the same name for the same `userId` is a 400.
+  `GoalRepository.findFirstByName` replaced the old `findByName` for this reason, the lookup
+  callers use to find one of the three fixed seeded goals by name can no longer assume the
+  name is globally unique, only that it is unique among `NULL`-user goals in practice.
 - `GET /api/routine-items`, `POST /api/routine-items`, define and list routine items. List
   responses include each item's `createdAt`, needed by the intelligence service's Phase 2
   pattern detection to bound a completion-rate/skip-heavy-day window per item. Phase 5 added
@@ -459,8 +467,7 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 - Whether `Book`'s `currentChapter`/`totalChapters` should be settable through
   `POST /api/books` only, or need their own `PATCH` for updating progress on an existing book
   without re-creating it, isn't decided; no caller needs it yet.
-- Phase 8's remaining table-scoping work (`goals` especially, which has no creation API at
-  all today and no `user_id`) is not designed yet.
+- `goals` now has a `user_id` and a creation API (see above); no other table is scoped yet.
 - There is no real "opt in to the hillside" concept yet. Every user with a non-private daily
   log in the window is currently treated as a participant; a genuine opt-in flag on `User`,
   defaulting to off, is real work this slice didn't build, named here so it isn't mistaken

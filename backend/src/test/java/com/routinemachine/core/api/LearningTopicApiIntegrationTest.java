@@ -34,7 +34,7 @@ class LearningTopicApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void listsTopicsWithTheirGoalNamePopulated() throws Exception {
-        Goal goal = goalRepository.findByName("ai-engineer-evidence").orElseThrow();
+        Goal goal = goalRepository.findFirstByName("ai-engineer-evidence").orElseThrow();
         learningTopicRepository.save(new LearningTopic("write article on evals", goal));
 
         mockMvc.perform(get("/api/learning-topics"))
@@ -45,7 +45,7 @@ class LearningTopicApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void createsATopicLinkedToAnExistingGoal() throws Exception {
-        Long goalId = goalRepository.findByName("target-roles").orElseThrow().getId();
+        Long goalId = goalRepository.findFirstByName("target-roles").orElseThrow().getId();
 
         mockMvc.perform(post("/api/learning-topics")
                         .contentType(MediaType.APPLICATION_JSON)

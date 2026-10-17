@@ -47,7 +47,7 @@ class DailyLogRepositoryTest extends AbstractIntegrationTest {
 
     @Test
     void savesALearningTopicCompletionAndFindsItByDate() {
-        Goal goal = goalRepository.findByName("target-roles").orElseThrow();
+        Goal goal = goalRepository.findFirstByName("target-roles").orElseThrow();
         LearningTopic topic = learningTopicRepository.save(new LearningTopic("PostHog product analytics", goal));
         LocalDate today = LocalDate.of(2026, 9, 18);
 
