@@ -41,7 +41,9 @@ class HillsideApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void returnsYourBandWhenAsUserIdIsGiven() throws Exception {
-        User user = userRepository.save(new User("hillside-api@example.com", "hash", null, null));
+        User user = new User("hillside-api@example.com", "hash", null, null);
+        user.optIntoHillside();
+        user = userRepository.save(user);
         RoutineItem item = routineItemRepository.save(new RoutineItem(
                 "Reading for hillside api test", null, null, null, RoutineItemSource.MANUAL,
                 HillsideField.READING, false, null));

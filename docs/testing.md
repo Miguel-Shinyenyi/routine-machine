@@ -111,8 +111,13 @@ counts a day once 3+ distinct routines were tended, not just one.
 goal for a registered user and returning its `userId`, creating one with no `userId` and
 getting `null` back, 400 on a missing name and on an unknown `userId`, 400 on a second goal
 with the same name for the same user (the new `(user_id, name)` uniqueness), and that
-`?userId=` on the list endpoint isolates one user's goals from another's. 165 backend tests,
-all passing.
+`?userId=` on the list endpoint isolates one user's goals from another's.
+`HillsideServiceTest` gained a case proving a user who hasn't opted in never reaches the
+hillside even with a qualifying public log; its other cases' `saveUser` helper now opts the
+user in, since that's the real precondition for participating, not an incidental default.
+`UserControllerApiIntegrationTest` covers `PUT /api/users/me/hillside-opt-in`: opting in,
+opting out, and that the endpoint 401s with no token, same as `GET /api/users/me`. 169 backend
+tests, all passing.
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested

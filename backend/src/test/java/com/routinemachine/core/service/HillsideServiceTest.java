@@ -36,6 +36,12 @@ class HillsideServiceTest extends AbstractIntegrationTest {
     }
 
     private User saveUser(String email) {
+        User user = new User(email, "irrelevant-hash", null, null);
+        user.optIntoHillside();
+        return userRepository.save(user);
+    }
+
+    private User saveUserNotOptedIn(String email) {
         return userRepository.save(new User(email, "irrelevant-hash", null, null));
     }
 
@@ -121,5 +127,18 @@ class HillsideServiceTest extends AbstractIntegrationTest {
         HillsideResult result = service().compute(null, 7, you.getId(), today);
 
         assertThat(result.yourDaysShownUp()).isEqualTo(1);
+    }
+
+    @Test
+    void aUserWhoHasNotOptedIntoTheHillsideNeverReachesIt() {
+        LocalDate today = LocalDate.of(2026, 10, 17);
+        User notOptedIn = saveUserNotOptedIn("not-opted-in@example.com");
+        RoutineItem item = savePublicReadingItem("Reading");
+        log(today, item, notOptedIn);
+
+        HillsideResult result = service().compute(HillsideField.READING, 7, notOptedIn.getId(), today);
+
+        assertThat(result.totalParticipants()).isEqualTo(0);
+        assertThat(result.yourDaysShownUp()).isNull();
     }
 }

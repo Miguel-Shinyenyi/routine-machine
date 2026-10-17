@@ -324,7 +324,10 @@ A user needs at least one login method (a DB check constraint, same defense-in-d
   follows. Only Next.js's own server should ever call it.
 - `GET /api/users/me` — the one endpoint this phase actually requires a valid token for, not
   a real feature, proof the JWT verification wiring works end to end. Reads the token's
-  `sub` claim as a user id and returns that user.
+  `sub` claim as a user id and returns that user, including their `hillsideOptIn` flag.
+- `PUT /api/users/me/hillside-opt-in` — `{"optIn": true|false}`, toggles the calling user's
+  `hillsideOptIn` and returns the updated user. Requires the same valid token as `GET
+  /api/users/me`. This is the real consent step the hillside was missing: see below.
 
 Spring Security and `spring-boot-starter-oauth2-resource-server` are new dependencies. Two
 separate `SecurityFilterChain` beans, not one — see the decisions log for why a single chain
@@ -365,9 +368,13 @@ Omit it and the endpoint still returns the real histogram and participant count,
 personal band/rank/neighbours.
 
 - Reads every non-private (`routine_items.private = false`), user-owned `daily_log` in the
-  window (`DailyLogRepository.findForHillside`) and groups it by user and day in Java, not SQL
-  — the dataset this phase operates on is small enough that a clear, testable Java loop beat a
-  harder-to-verify aggregate query.
+  window, from a user who has opted in (`users.hillside_opt_in = true`)
+  (`DailyLogRepository.findForHillside`) and groups it by user and day in Java, not SQL — the
+  dataset this phase operates on is small enough that a clear, testable Java loop beat a
+  harder-to-verify aggregate query. `hillside_opt_in` defaults `false` (migration V17): a user
+  with non-private routine items is not a participant until they explicitly opt in through
+  `PUT /api/users/me/hillside-opt-in`. This closes the "no real opt-in concept" gap flagged
+  when the hillside was first built.
 - Ranks participants by days-shown-up (ties broken by user id, for determinism), computes a
   percentile (`1 - rank/total`), and buckets it into the same three band descriptions the
   design reference uses ("Near the front" / "In the middle" / "Walking at the back, and still
@@ -468,10 +475,9 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
   `POST /api/books` only, or need their own `PATCH` for updating progress on an existing book
   without re-creating it, isn't decided; no caller needs it yet.
 - `goals` now has a `user_id` and a creation API (see above); no other table is scoped yet.
-- There is no real "opt in to the hillside" concept yet. Every user with a non-private daily
-  log in the window is currently treated as a participant; a genuine opt-in flag on `User`,
-  defaulting to off, is real work this slice didn't build, named here so it isn't mistaken
-  for a finished privacy feature.
+- `hillside_opt_in` now gates participation (see above), but nothing in the frontend exposes
+  the toggle yet — only the API exists. Until a UI calls `PUT /api/users/me/hillside-opt-in`,
+  every real user defaults to opted-out and the hillside only has demo data to show.
 - Pseudonym rotation ("change every season," per the design reference) isn't designed. The
   current scheme can't rotate without breaking its "no stored mapping" property; a rotating
   scheme would need to store something, which is a real design decision, not an oversight.

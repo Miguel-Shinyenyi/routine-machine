@@ -131,6 +131,12 @@ nullable/optional rather than enforced.
 Phase 8's hillside (`GET /api/hillside`, see `backend.md`) added no new table: it's computed
 fresh from `daily_logs`/`routine_items`/`users` on every call, nothing is stored or cached.
 
+Phase 8 also built via `V17__hillside_opt_in.sql`: `users` gains `hillside_opt_in` (boolean,
+not null, default `false`). The hillside now only counts a user's logs once they've opted in
+(`PUT /api/users/me/hillside-opt-in`, see `backend.md`) — defaulting to `false` means no
+existing user is silently enrolled by this migration, even if they already have non-private
+routine items.
+
 Phase 8 also built via `V16__goal_user_scoping.sql`: `goals` gains a nullable `user_id`
 (indexed), referencing `users`. `NULL` still means the three seeded goals, shared and visible
 to everyone, exactly as before. The old global `UNIQUE(name)` constraint
@@ -143,6 +149,7 @@ first time (see `backend.md`); goals are no longer only created through migratio
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `users.hillside_opt_in` defaults `false`, not `true` | The hillside previously treated every user with a non-private daily log as a participant with no consent step at all; defaulting the new flag to off is the only choice consistent with calling this a real opt-in, not a relabeled version of the same behaviour |
 | 2026-10-17 | `goals.user_id` is nullable, `NULL` keeps meaning the three shared seeded goals | Same reasoning as `routine_items`/`daily_logs`'s `user_id`: adding a creation API shouldn't change what every existing reader of `GET /api/goals` already sees |
 | 2026-10-17 | `goals`'s unique constraint moves from `name` alone to `(user_id, name)` | Once goals can be created per user, two different users (or a user and the seed data) needing the same goal name (e.g. "learn X") is normal, not a collision; uniqueness should scope to the owner, not the whole table |
 | 2026-10-17 | `users` is a new table, groundwork only — no existing table gets a `user_id` yet | Phase 8's accounts/auth architecture is now agreed with the user (see `backend.md`'s decisions log), but scoping every existing table to a user is separate, much larger work than proving accounts can exist; this slice is deliberately narrow |

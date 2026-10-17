@@ -12,12 +12,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Date;
 
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -55,7 +57,47 @@ class UserControllerApiIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/users/me")
                         .header("Authorization", "Bearer " + signedToken(user.getId().toString())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email", is("reader@example.com")));
+                .andExpect(jsonPath("$.email", is("reader@example.com")))
+                .andExpect(jsonPath("$.hillsideOptIn", is(false)));
+    }
+
+    @Test
+    void optingIntoTheHillsideUpdatesAndReturnsTheUser() throws Exception {
+        User user = userRepository.save(new User("opt-in@example.com", "irrelevant-hash", null, null));
+
+        mockMvc.perform(put("/api/users/me/hillside-opt-in")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"optIn\": true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hillsideOptIn", is(true)));
+
+        mockMvc.perform(get("/api/users/me")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hillsideOptIn", is(true)));
+    }
+
+    @Test
+    void optingOutOfTheHillsideUpdatesAndReturnsTheUser() throws Exception {
+        User user = new User("opt-out@example.com", "irrelevant-hash", null, null);
+        user.optIntoHillside();
+        user = userRepository.save(user);
+
+        mockMvc.perform(put("/api/users/me/hillside-opt-in")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"optIn\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hillsideOptIn", is(false)));
+    }
+
+    @Test
+    void theHillsideOptInEndpointRequiresAValidToken() throws Exception {
+        mockMvc.perform(put("/api/users/me/hillside-opt-in")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"optIn\": true}"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

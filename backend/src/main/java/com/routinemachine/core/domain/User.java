@@ -36,6 +36,11 @@ public class User {
     @Column(name = "display_name")
     private String displayName;
 
+    // Defaults false: the hillside should never enroll a user who hasn't explicitly agreed to
+    // be compared against others, even if they already have non-private routine items.
+    @Column(name = "hillside_opt_in", nullable = false)
+    private boolean hillsideOptIn = false;
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private OffsetDateTime createdAt;
@@ -55,6 +60,18 @@ public class User {
 
     public void linkGithubId(String githubId) {
         this.githubId = Objects.requireNonNull(githubId, "githubId must not be null");
+    }
+
+    public void optIntoHillside() {
+        this.hillsideOptIn = true;
+    }
+
+    public void optOutOfHillside() {
+        this.hillsideOptIn = false;
+    }
+
+    public boolean isHillsideOptIn() {
+        return hillsideOptIn;
     }
 
     public Long getId() {

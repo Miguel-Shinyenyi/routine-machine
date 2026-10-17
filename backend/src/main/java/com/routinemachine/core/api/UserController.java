@@ -1,9 +1,12 @@
 package com.routinemachine.core.api;
 
+import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.UserRepository;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -24,9 +27,29 @@ public class UserController {
 
     @GetMapping("/me")
     public UserResponse me(@AuthenticationPrincipal Jwt jwt) {
+        return currentUser(jwt);
+    }
+
+    // The hillside should never enroll anyone who hasn't explicitly agreed, even if they
+    // already have non-private routine items (see DailyLogRepository.findForHillside).
+    @PutMapping("/me/hillside-opt-in")
+    public UserResponse setHillsideOptIn(@AuthenticationPrincipal Jwt jwt, @RequestBody HillsideOptInRequest request) {
+        User user = findUser(jwt);
+        if (request.optIn()) {
+            user.optIntoHillside();
+        } else {
+            user.optOutOfHillside();
+        }
+        return UserResponse.from(userRepository.save(user));
+    }
+
+    private UserResponse currentUser(Jwt jwt) {
+        return UserResponse.from(findUser(jwt));
+    }
+
+    private User findUser(Jwt jwt) {
         Long userId = Long.valueOf(jwt.getSubject());
         return userRepository.findById(userId)
-                .map(UserResponse::from)
                 .orElseThrow(() -> new NoSuchElementException("No user with id " + userId));
     }
 }
