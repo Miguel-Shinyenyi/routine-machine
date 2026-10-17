@@ -4,10 +4,31 @@ export interface Goal {
   description: string | null;
 }
 
+export type RoutineItemCategory = "BODY" | "MIND" | "WORK" | "HOME";
+
+export type RoutineItemSource =
+  | "MANUAL"
+  | "HUB"
+  | "WAKATIME"
+  | "ACTIVITYWATCH"
+  | "HEALTH"
+  | "READER_NOTES"
+  | "GITHUB"
+  | "STRAVA";
+
+export type HillsideField = "READING" | "MOVEMENT" | "DEEP_WORK" | "LEARNING" | "SLEEP" | "WRITING";
+
 export interface RoutineItem {
   id: number;
   name: string;
   description: string | null;
+  category: RoutineItemCategory | null;
+  countRule: string | null;
+  source: RoutineItemSource;
+  hillsideField: HillsideField | null;
+  isPrivate: boolean;
+  goalId: number | null;
+  goalName: string | null;
   createdAt: string;
 }
 
@@ -24,6 +45,7 @@ export interface DailyLog {
   routineItemId: number | null;
   learningTopicId: number | null;
   source: string;
+  measuredMinutes: number | null;
 }
 
 export interface ScheduleTemplate {
@@ -94,4 +116,29 @@ export interface Patterns {
   streaks: Streak[];
   skipHeavyDays: SkipHeavyDay[];
   topicRoutineCorrelation: TopicRoutineCorrelation;
+}
+
+export interface DayShownUp {
+  date: string;
+  shownUp: boolean;
+}
+
+export interface GoalWeekHours {
+  goalId: number;
+  weekStart: string;
+  cumulativeHours: number;
+}
+
+export interface RoutineShownUp {
+  routineItemId: number;
+  name: string;
+  shownUpDays: number;
+  windowDays: number;
+}
+
+export interface Tally {
+  daysShownUp: DayShownUp[];
+  daysShownUpCount: number;
+  goalWeekHours: GoalWeekHours[];
+  routineShownUp: RoutineShownUp[];
 }

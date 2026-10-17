@@ -1,15 +1,43 @@
 "use client";
 
 import { createRoutineItem } from "@/lib/actions";
+import type { Goal } from "@/lib/types";
 
-export function NewRoutineItemForm() {
+const CATEGORIES = ["BODY", "MIND", "WORK", "HOME"] as const;
+
+export function NewRoutineItemForm({ goals }: { goals: Goal[] }) {
   return (
-    <form action={createRoutineItem} className="flex items-end gap-2 text-sm">
+    <form action={createRoutineItem} className="flex flex-wrap items-end gap-2 text-sm">
       <label className="flex flex-col gap-1">
         Name
-        <input name="name" required className="rounded border border-black/20 px-2 py-1 dark:border-white/20" />
+        <input name="name" required className="rounded-[10px] border hairline bg-surface px-2 py-1" />
       </label>
-      <button type="submit" className="rounded bg-black/90 px-3 py-1 text-white dark:bg-white/90 dark:text-black">
+
+      <label className="flex flex-col gap-1">
+        Category
+        <select name="category" defaultValue="" className="rounded-[10px] border hairline bg-surface px-2 py-1">
+          <option value="">Uncategorised</option>
+          {CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="flex flex-col gap-1">
+        Goal (optional, for hours roll-up)
+        <select name="goalId" defaultValue="" className="rounded-[10px] border hairline bg-surface px-2 py-1">
+          <option value="">None</option>
+          {goals.map((goal) => (
+            <option key={goal.id} value={goal.id}>
+              {goal.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <button type="submit" className="btn-fill px-4 py-1.5">
         Add
       </button>
     </form>

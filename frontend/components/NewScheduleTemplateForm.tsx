@@ -13,7 +13,7 @@ export function NewScheduleTemplateForm({ routineItems }: { routineItems: Routin
     <form action={createScheduleTemplate} className="flex flex-wrap items-end gap-2 text-sm">
       <label className="flex flex-col gap-1">
         Day
-        <select name="dayOfWeek" required className="rounded border border-black/20 px-2 py-1 dark:border-white/20">
+        <select name="dayOfWeek" required className="rounded-[10px] border hairline bg-surface px-2 py-1">
           {DAYS.map((day) => (
             <option key={day} value={day}>
               {day}
@@ -28,7 +28,7 @@ export function NewScheduleTemplateForm({ routineItems }: { routineItems: Routin
           name="targetType"
           value={targetType}
           onChange={(e) => setTargetType(e.target.value as "ROUTINE_ITEM" | "LEARNING_SLOT")}
-          className="rounded border border-black/20 px-2 py-1 dark:border-white/20"
+          className="rounded-[10px] border hairline bg-surface px-2 py-1"
         >
           <option value="ROUTINE_ITEM">Routine item</option>
           <option value="LEARNING_SLOT">Learning slot</option>
@@ -38,7 +38,7 @@ export function NewScheduleTemplateForm({ routineItems }: { routineItems: Routin
       {targetType === "ROUTINE_ITEM" && (
         <label className="flex flex-col gap-1">
           Routine item
-          <select name="routineItemId" required className="rounded border border-black/20 px-2 py-1 dark:border-white/20">
+          <select name="routineItemId" required className="rounded-[10px] border hairline bg-surface px-2 py-1">
             {routineItems.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -56,7 +56,7 @@ export function NewScheduleTemplateForm({ routineItems }: { routineItems: Routin
           min={1}
           defaultValue={30}
           required
-          className="w-20 rounded border border-black/20 px-2 py-1 dark:border-white/20"
+          className="w-20 rounded-[10px] border hairline bg-surface px-2 py-1"
         />
       </label>
 
@@ -67,16 +67,16 @@ export function NewScheduleTemplateForm({ routineItems }: { routineItems: Routin
           name="sortOrder"
           defaultValue={1}
           required
-          className="w-16 rounded border border-black/20 px-2 py-1 dark:border-white/20"
+          className="w-16 rounded-[10px] border hairline bg-surface px-2 py-1"
         />
       </label>
 
       <label className="flex flex-col gap-1">
         Label
-        <input name="label" required className="rounded border border-black/20 px-2 py-1 dark:border-white/20" />
+        <input name="label" required className="rounded-[10px] border hairline bg-surface px-2 py-1" />
       </label>
 
-      <button type="submit" className="rounded bg-black/90 px-3 py-1 text-white dark:bg-white/90 dark:text-black">
+      <button type="submit" className="btn-fill px-4 py-1.5">
         Add
       </button>
     </form>

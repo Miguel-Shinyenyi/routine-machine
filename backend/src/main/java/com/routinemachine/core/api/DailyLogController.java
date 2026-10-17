@@ -57,8 +57,12 @@ public class DailyLogController {
                 : DailyLogSource.fromValue(request.source());
 
         DailyLog log = request.routineItemId() != null
-                ? DailyLog.forRoutineItem(request.logDate(), findRoutineItem(request.routineItemId()), source)
-                : DailyLog.forLearningTopic(request.logDate(), findLearningTopic(request.learningTopicId()), source);
+                ? DailyLog.forRoutineItem(
+                        request.logDate(), findRoutineItem(request.routineItemId()), source,
+                        request.measuredMinutes())
+                : DailyLog.forLearningTopic(
+                        request.logDate(), findLearningTopic(request.learningTopicId()), source,
+                        request.measuredMinutes());
 
         return DailyLogResponse.from(dailyLogRepository.save(log));
     }

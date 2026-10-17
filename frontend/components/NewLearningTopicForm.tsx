@@ -8,11 +8,11 @@ export function NewLearningTopicForm({ goals }: { goals: Goal[] }) {
     <form action={createLearningTopic} className="flex items-end gap-2 text-sm">
       <label className="flex flex-col gap-1">
         Name
-        <input name="name" required className="rounded border border-black/20 px-2 py-1 dark:border-white/20" />
+        <input name="name" required className="rounded-[10px] border hairline bg-surface px-2 py-1" />
       </label>
       <label className="flex flex-col gap-1">
         Goal
-        <select name="goalId" required className="rounded border border-black/20 px-2 py-1 dark:border-white/20">
+        <select name="goalId" required className="rounded-[10px] border hairline bg-surface px-2 py-1">
           {goals.map((goal) => (
             <option key={goal.id} value={goal.id}>
               {goal.name}
@@ -20,7 +20,7 @@ export function NewLearningTopicForm({ goals }: { goals: Goal[] }) {
           ))}
         </select>
       </label>
-      <button type="submit" className="rounded bg-black/90 px-3 py-1 text-white dark:bg-white/90 dark:text-black">
+      <button type="submit" className="btn-fill px-4 py-1.5">
         Add
       </button>
     </form>

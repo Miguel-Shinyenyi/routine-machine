@@ -1,26 +1,171 @@
 @import "tailwindcss";
 
+/* Design tokens from docs/design.md. Light values are the defaults; dark values apply
+   under prefers-color-scheme. No manual theme toggle exists, the system setting decides. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --canvas: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #f5f5f7;
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --hairline: #e5e5ea;
+  --fill: rgba(118, 118, 128, 0.12);
+  --tint: #e9a23b;
+  --tint-text: #9a5208;
+  --tint-fill: #fbf0dc;
+  --tended-ink: #1b7332;
+  --tended-fill: #e3f5e7;
+  --private-ink: #2f5a72;
+  --private-fill: #eef3f7;
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --goal-line-1: #c27a12;
+  --goal-line-2: #0066cc;
+  --goal-line-3: #1b7332;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --canvas: #000000;
+    --surface: #1c1c1e;
+    --surface-2: #2c2c2e;
+    --ink: #f5f5f7;
+    --muted: #a1a1a6;
+    --hairline: #38383a;
+    --fill: rgba(118, 118, 128, 0.24);
+    --tint: #f0ae4e;
+    --tint-text: #f0ae4e;
+    --tint-fill: #2a2215;
+    --tended-ink: #30d158;
+    --tended-fill: #16301c;
+    --private-ink: #8ec5e8;
+    --private-fill: #12232e;
+    --glass-bg: rgba(28, 28, 30, 0.72);
+    --goal-line-1: #d99232;
+    --goal-line-2: #4d9bf0;
+    --goal-line-3: #30d158;
   }
 }
 
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-hairline: var(--hairline);
+  --color-fill: var(--fill);
+  --color-tint: var(--tint);
+  --color-tint-text: var(--tint-text);
+  --color-tint-fill: var(--tint-fill);
+  --color-tended-ink: var(--tended-ink);
+  --color-tended-fill: var(--tended-fill);
+  --color-private-ink: var(--private-ink);
+  --color-private-fill: var(--private-fill);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+.page-title {
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: 18px;
+}
+
+.tile {
+  background: var(--surface-2);
+  border-radius: 12px;
+}
+
+.hairline {
+  border-color: var(--hairline);
+}
+
+.btn-fill {
+  background: var(--tint);
+  color: #1d1d1f;
+  border-radius: 999px;
+  transition: transform 150ms ease;
+}
+
+.btn-fill:hover {
+  transform: scale(0.97);
+}
+
+.check-btn {
+  border-radius: 999px;
+  transition:
+    background-color 200ms ease,
+    transform 150ms ease;
+}
+
+.check-btn:active {
+  transform: scale(0.97);
+}
+
+.chip {
+  border-radius: 999px;
+  font-size: 13px;
+  padding: 2px 10px;
+}
+
+.chip-tended {
+  background: var(--tended-fill);
+  color: var(--tended-ink);
+}
+
+.chip-private {
+  background: var(--private-fill);
+  color: var(--private-ink);
+}
+
+.chip-tint {
+  background: var(--tint-fill);
+  color: var(--tint-text);
 }

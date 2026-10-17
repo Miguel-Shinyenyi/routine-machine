@@ -7,9 +7,9 @@ export function CurrentReadingForm() {
     <form action={createCurrentReading} className="flex items-end gap-2 text-sm">
       <label className="flex flex-col gap-1">
         New title
-        <input name="title" required className="rounded border border-black/20 px-2 py-1 dark:border-white/20" />
+        <input name="title" required className="rounded-[10px] border hairline bg-surface px-2 py-1" />
       </label>
-      <button type="submit" className="rounded bg-black/90 px-3 py-1 text-white dark:bg-white/90 dark:text-black">
+      <button type="submit" className="btn-fill px-4 py-1.5">
         Update
       </button>
     </form>

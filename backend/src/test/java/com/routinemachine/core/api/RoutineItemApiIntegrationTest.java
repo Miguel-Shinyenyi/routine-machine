@@ -2,6 +2,7 @@ package com.routinemachine.core.api;
 
 import com.routinemachine.core.AbstractIntegrationTest;
 import com.routinemachine.core.domain.RoutineItem;
+import com.routinemachine.core.repository.GoalRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,9 @@ class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private RoutineItemRepository routineItemRepository;
 
+    @Autowired
+    private GoalRepository goalRepository;
+
     @Test
     void createsARoutineItemAndReturnsIt() throws Exception {
         mockMvc.perform(post("/api/routine-items")
@@ -38,7 +42,40 @@ class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.name", is("journaling")))
                 .andExpect(jsonPath("$.description", is("Daily journal entry")))
+                .andExpect(jsonPath("$.source", is("MANUAL")))
+                .andExpect(jsonPath("$.isPrivate", is(true)))
                 .andExpect(jsonPath("$.createdAt").exists());
+    }
+
+    @Test
+    void createsAFullyCategorisedRoutineItemLinkedToAGoal() throws Exception {
+        var goal = goalRepository.findByName("ai-engineer-evidence").orElseThrow();
+
+        mockMvc.perform(post("/api/routine-items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "deep work", "category": "WORK", "countRule": "30 active minutes",
+                                 "source": "WAKATIME", "hillsideField": "DEEP_WORK", "isPrivate": false,
+                                 "goalId": %d}
+                                """.formatted(goal.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.category", is("WORK")))
+                .andExpect(jsonPath("$.countRule", is("30 active minutes")))
+                .andExpect(jsonPath("$.source", is("WAKATIME")))
+                .andExpect(jsonPath("$.hillsideField", is("DEEP_WORK")))
+                .andExpect(jsonPath("$.isPrivate", is(false)))
+                .andExpect(jsonPath("$.goalId", is(goal.getId().intValue())))
+                .andExpect(jsonPath("$.goalName", is("ai-engineer-evidence")));
+    }
+
+    @Test
+    void rejectsARoutineItemWithAnUnknownGoalId() throws Exception {
+        mockMvc.perform(post("/api/routine-items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "deep work", "goalId": 999999}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

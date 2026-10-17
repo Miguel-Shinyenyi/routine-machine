@@ -14,18 +14,18 @@ export function NewAdHocTaskForm({ routineItems }: { routineItems: RoutineItem[]
           name="taskDate"
           defaultValue={todayIsoDate()}
           required
-          className="rounded border border-black/20 px-2 py-1 dark:border-white/20"
+          className="rounded-[10px] border hairline bg-surface px-2 py-1"
         />
       </label>
 
       <label className="flex flex-col gap-1">
         Label
-        <input name="label" required className="rounded border border-black/20 px-2 py-1 dark:border-white/20" />
+        <input name="label" required className="rounded-[10px] border hairline bg-surface px-2 py-1" />
       </label>
 
       <label className="flex flex-col gap-1">
         Routine item (optional)
-        <select name="routineItemId" defaultValue="" className="rounded border border-black/20 px-2 py-1 dark:border-white/20">
+        <select name="routineItemId" defaultValue="" className="rounded-[10px] border hairline bg-surface px-2 py-1">
           <option value="">None</option>
           {routineItems.map((item) => (
             <option key={item.id} value={item.id}>
@@ -35,7 +35,7 @@ export function NewAdHocTaskForm({ routineItems }: { routineItems: RoutineItem[]
         </select>
       </label>
 
-      <button type="submit" className="rounded bg-black/90 px-3 py-1 text-white dark:bg-white/90 dark:text-black">
+      <button type="submit" className="btn-fill px-4 py-1.5">
         Add
       </button>
     </form>
