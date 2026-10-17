@@ -99,9 +99,19 @@ load) — not the reference's fixed sample numbers.
 - **Flock** (`app/flock`) also manages routine items and learning topics, and current
   reading, not just schedule templates and ad-hoc tasks — see the decisions log; without it,
   the schedule-template form would have nothing to point `routineItemId` at on first use.
-  Routine items render grouped by `category` (Body, Mind, Work, Home, Uncategorised), each
-  row showing its `countRule`, a source chip when `source` isn't `MANUAL`, and a Private chip.
-- **Path** (`app/path`) reads all schedule templates and groups them by day client-side.
+  Routine items render grouped by `category` (Body, Mind, Work, Home, Uncategorised), each as
+  a list row with a coloured initial square (colour by category, matching the design
+  reference's palette; the reference's hand-picked per-routine icons aren't reproduced since
+  there's no data to pick one per real routine item), its `countRule`, a source chip when
+  `source` isn't `MANUAL`, a `hillsideField` chip when set, and a Private chip. Eyebrow shows
+  the real routine/goal counts, not the reference's fixed sample numbers.
+- **Path** (`app/path?monday=`, defaults to the current week) reads schedule templates once
+  and the week's seven days of existing tasks (`GET /api/tasks?date=`, one call per day, never
+  `materializeDay` — a week-wide read view must not create tasks for days nobody has opened
+  yet). Each day shows a status dot per scheduled routine: tended (a matching task is `DONE`),
+  wandered (past day, not done), today (still open), or ahead (future day, or today before
+  it's tended) — `lib/weekDates.ts` (tested) computes the week's Monday and its seven dates
+  from any date in it, used for both rendering and the Last/This/Next week links.
 - **Today** (`app/today?date=`, defaults to today) materializes the day's tasks on load via
   `lib/materialize.ts` (see `schedule.md` for the frontend-orchestration decision), then
   renders them as a single list with round check buttons. Status changes are Server Actions
@@ -118,7 +128,10 @@ load) — not the reference's fixed sample numbers.
   session.
 - **Tally** (`app/tally`) renders the intelligence service's `/tally` output (tally stick,
   stat tiles, `GoalHoursChart`, per-routine meters) plus `/patterns`'s skip-heavy days and
-  topic/routine correlation. `GoalHoursChart` (`components/charts/GoalHoursChart.tsx`) is a
+  topic/routine correlation. The tally stick is grouped in fives (`<div>` per group of notch
+  pills), matching the design reference's own grouping, with a real "N notches in M days."
+  headline and a real "Since {date}" eyebrow from the window's first day, not the reference's
+  fixed sample numbers. `GoalHoursChart` (`components/charts/GoalHoursChart.tsx`) is a
   hand-rolled SVG line chart (three goal-line colors from `docs/design.md`, reserved for this
   one chart) with a table underneath, following the dataviz skill's "form before color" and
   "table view under every chart" conventions, same as the components it replaced.
@@ -174,15 +187,17 @@ departure from precedent.
 | 2026-09-19 | Backlog (now Flock) also manages routine items and learning topics | Not in the original four-views description, but the schedule-template form needs an existing routine item to point at and there was no other way to create one through the UI; Flock's "master list" framing covers this without stretching it |
 | 2026-09-18 | Next.js, matching settlement-engine's frontend | Reuses a known-working stack rather than introducing a fourth technology into the project for a UI layer |
 | 2026-09-18 | Reports (now Tally) render Phase 2's existing `/patterns` output directly, no new statistics computed in the frontend for that data; Phase 5 added `/tally` in the intelligence service for the data `/patterns` doesn't have | Keeps all pattern/statistics logic in one place (the intelligence service); the frontend's job is display, not calculation |
+| 2026-10-17 | Path reads existing tasks per day (`GET /api/tasks?date=`), never `materializeDay`, for the week view | `materializeDay` creates tasks as a side effect; calling it for six days nobody has opened (especially future days) would prematurely materialize a week ahead of schedule, which the single-day Today page was never meant to trigger in bulk |
+| 2026-10-17 | Path's status dots don't show real durations per task (the reference shows "48 min", "3 h 10") | That data lives on each day's `DailyLog.measuredMinutes`, not on `Task` itself; wiring a second fetch per day to join it in was judged not worth the complexity for this pass, logged as an open question instead of silently dropped |
+| 2026-10-17 | Flock's routine-item rows use a coloured initial square (first letter, colour by category) instead of the reference's hand-picked per-routine icon | The reference's icons (a moon for sleep, a dumbbell for lifting, etc.) are chosen per specific sample routine; real routine items are free-text names this app can't map to a meaningful icon automatically without guessing |
+| 2026-10-17 | Tally's notches are grouped in fives via nested flex containers, not a single flat row | Matches the design reference's own grouping exactly, and reads better at a glance for a window that can be 28+ days |
 
 ## Open questions
 
 - Tally's "learning notes" stat tile still says "Not tracked yet" rather than a real number.
-- Path, Flock, and Tally were not given the same design-reference fidelity pass Today,
-  Reading, and Watering holes got on 2026-10-17 (icons in page content beyond the nav, the
-  reference's exact copy/structure in each page body). The shared pieces (tokens, nav icons,
-  check button, chip states) apply everywhere already; a dedicated pass on these three pages'
-  own content is still open.
+- Path's day blocks don't show a tended task's actual duration, only its target from the
+  schedule template; joining in each day's `DailyLog.measuredMinutes` would need a second
+  per-day fetch (or a backend endpoint that returns both together), not built this pass.
 - Flock and Watering holes aren't reachable from the phone tab bar, matching the design
   reference's own nav list, but the reference's "they open from Tally on phone" cross-link
   isn't built — there's currently no way to reach them at all on a 390px phone.

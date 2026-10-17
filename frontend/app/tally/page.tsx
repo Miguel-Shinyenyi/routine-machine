@@ -42,34 +42,59 @@ export default async function TallyPage() {
     }
   }
   const totalHours = Array.from(latestHoursByGoal.values()).reduce((a, b) => a + b, 0);
+  const sinceDate = tally.daysShownUp[0]?.date;
+
+  // Grouped in fives, matching a shepherd's tally stick in the design reference.
+  const notchGroups: typeof tally.daysShownUp[] = [];
+  for (let i = 0; i < tally.daysShownUp.length; i += 5) {
+    notchGroups.push(tally.daysShownUp.slice(i, i + 5));
+  }
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="page-title">The tally.</h1>
+      <div>
+        {sinceDate && <p className="text-[15px] font-semibold text-tint-text">Since {sinceDate}</p>}
+        <h1 className="page-title">The tally.</h1>
+        <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
+          A shepherd cut one notch for every sheep that came home. Each notch here is a day you
+          showed up. Small days count the same as big ones.
+        </p>
+      </div>
 
       <section className="card p-4">
-        <h2 className="section-title mb-3">Tally stick</h2>
-        <div className="flex flex-wrap gap-1">
-          {tally.daysShownUp.map((day) => {
-            const weekday = new Date(`${day.date}T00:00:00Z`).getUTCDay();
-            const stillWaters = STILL_WATERS_DAYS.has(weekday);
-            return (
-              <span
-                key={day.date}
-                title={day.date}
-                className="h-4 w-2 rounded-full"
-                style={{
-                  background: day.shownUp ? "var(--tint)" : "var(--fill)",
-                  border: stillWaters && !day.shownUp ? "1px dashed var(--private-ink)" : "none",
-                }}
-              />
-            );
-          })}
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="section-title">
+            {tally.daysShownUpCount} notches in {tally.daysShownUp.length} days.
+          </h2>
+          <span className="text-[14px] text-muted">
+            A day counts when you tend at least {TALLY_STICK_THRESHOLD} of your flock. Dashed: you rested.
+          </span>
         </div>
-        <p className="mt-2 text-[13px] text-muted">
-          Shown up {tally.daysShownUpCount} of the last {tally.daysShownUp.length} days. A day counts once at
-          least {TALLY_STICK_THRESHOLD} routines were tended.
-        </p>
+        <div
+          className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5"
+          role="img"
+          aria-label={`Tally stick: ${tally.daysShownUpCount} days shown up out of ${tally.daysShownUp.length}`}
+        >
+          {notchGroups.map((group, gi) => (
+            <div key={gi} className="flex gap-1">
+              {group.map((day) => {
+                const weekday = new Date(`${day.date}T00:00:00Z`).getUTCDay();
+                const stillWaters = STILL_WATERS_DAYS.has(weekday);
+                return (
+                  <span
+                    key={day.date}
+                    title={day.date}
+                    className="h-4 w-2 rounded-full"
+                    style={{
+                      background: day.shownUp ? "var(--tint)" : "var(--fill)",
+                      border: stillWaters && !day.shownUp ? "1px dashed var(--private-ink)" : "none",
+                    }}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">

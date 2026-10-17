@@ -7,6 +7,21 @@ import { NewLearningTopicForm } from "@/components/NewLearningTopicForm";
 import { CurrentReadingForm } from "@/components/CurrentReadingForm";
 
 const CATEGORIES = ["BODY", "MIND", "WORK", "HOME"] as const;
+const CATEGORY_LABELS: Record<string, string> = { BODY: "Body", MIND: "Mind", WORK: "Work", HOME: "Home" };
+const CATEGORY_COLORS: Record<string, string> = {
+  BODY: "#2f5a72",
+  MIND: "#9a5208",
+  WORK: "#0066cc",
+  HOME: "#c93400",
+};
+const HILLSIDE_FIELD_LABELS: Record<string, string> = {
+  READING: "Reading",
+  MOVEMENT: "Movement",
+  DEEP_WORK: "Deep work",
+  LEARNING: "Learning",
+  SLEEP: "Sleep",
+  WRITING: "Writing",
+};
 
 async function fetchCurrentReading(): Promise<CurrentReading | null> {
   try {
@@ -32,7 +47,17 @@ export default async function FlockPage() {
 
   return (
     <div className="flex flex-col gap-10">
-      <h1 className="page-title">Your flock.</h1>
+      <div>
+        <p className="text-[15px] font-semibold text-tint-text">
+          {routineItems.length} {routineItems.length === 1 ? "routine" : "routines"}, {goals.length}{" "}
+          {goals.length === 1 ? "goal" : "goals"}
+        </p>
+        <h1 className="page-title">Your flock.</h1>
+        <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
+          Every routine you keep, and exactly how it gets counted. A good shepherd knows each
+          one by name.
+        </p>
+      </div>
 
       <section>
         <h2 className="section-title mb-3">Currently reading</h2>
@@ -40,44 +65,55 @@ export default async function FlockPage() {
         <CurrentReadingForm />
       </section>
 
-      <section>
-        <h2 className="section-title mb-3">Routine items</h2>
-        <div className="card mb-4 flex flex-col gap-4 p-4">
-          {CATEGORIES.map((category) => {
-            const items = routineItems.filter((item) => item.category === category);
-            if (items.length === 0) return null;
-            return (
-              <div key={category}>
-                <p className="mb-1 text-[13px] font-medium text-muted">
-                  {category[0] + category.slice(1).toLowerCase()}
-                </p>
-                <ul className="flex flex-col gap-1 text-[15px]">
-                  {items.map((item) => (
-                    <li key={item.id} className="flex items-center gap-2 border-b hairline py-1">
-                      <span className="flex-1">{item.name}</span>
-                      {item.countRule && <span className="text-[13px] text-muted">{item.countRule}</span>}
-                      {item.source !== "MANUAL" && <span className="chip chip-tint">{item.source}</span>}
-                      {item.isPrivate && <span className="chip chip-private">Private</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-          {uncategorised.length > 0 && (
-            <div>
-              <p className="mb-1 text-[13px] font-medium text-muted">Uncategorised</p>
-              <ul className="flex flex-col gap-1 text-[15px]">
-                {uncategorised.map((item) => (
-                  <li key={item.id} className="border-b hairline py-1">
-                    {item.name}
-                  </li>
+      <section className="flex flex-col gap-6">
+        <h2 className="section-title">Routine items</h2>
+        {CATEGORIES.map((category) => {
+          const items = routineItems.filter((item) => item.category === category);
+          if (items.length === 0) return null;
+          return (
+            <div key={category}>
+              <h3 className="mb-1.5 px-1 text-[15px] font-semibold">{CATEGORY_LABELS[category]}</h3>
+              <div className="overflow-hidden rounded-[14px] bg-surface">
+                {items.map((item, i) => (
+                  <div
+                    key={item.id}
+                    className={`flex items-center gap-3 px-4 py-2.5 ${i === 0 ? "" : "border-t hairline"}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-[13px] font-bold text-white"
+                      style={{ background: CATEGORY_COLORS[category] }}
+                    >
+                      {item.name.charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] font-medium">{item.name}</p>
+                      {item.countRule && <p className="text-[13px] text-muted">{item.countRule}</p>}
+                    </div>
+                    {item.source !== "MANUAL" && <span className="chip chip-tint">{item.source}</span>}
+                    {item.hillsideField !== null && (
+                      <span className="chip">{HILLSIDE_FIELD_LABELS[item.hillsideField]}</span>
+                    )}
+                    {item.isPrivate && <span className="chip chip-private">Private</span>}
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
-          )}
-          {routineItems.length === 0 && <p className="text-[13px] text-muted">None yet</p>}
-        </div>
+          );
+        })}
+        {uncategorised.length > 0 && (
+          <div>
+            <h3 className="mb-1.5 px-1 text-[15px] font-semibold">Uncategorised</h3>
+            <div className="overflow-hidden rounded-[14px] bg-surface">
+              {uncategorised.map((item, i) => (
+                <div key={item.id} className={`px-4 py-2.5 text-[15px] ${i === 0 ? "" : "border-t hairline"}`}>
+                  {item.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {routineItems.length === 0 && <p className="text-[13px] text-muted">None yet</p>}
         <NewRoutineItemForm goals={goals} />
       </section>
 

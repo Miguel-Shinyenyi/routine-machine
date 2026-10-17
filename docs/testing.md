@@ -126,11 +126,21 @@ request shape and got a real account-billing error back, which the 502 handling 
 finding the unhandled-exception bug this surfaced) now reports cleanly instead of as an
 opaque 500. 44 tests, all passing.
 
-Frontend: Vitest, but only for `lib/schedule.ts`'s pure logic (which templates still need a
-task, and computing a date's weekday independent of server timezone) — 5 tests, unchanged by
-Phase 5's redesign, Phase 6's watering holes page, or Phase 7's Reading page, since none added
-new pure logic to the frontend (`submitReadingNote` is a sequence of two external calls, not
-a pure function worth isolating and unit-testing on its own). Page components are verified by
+Frontend: Vitest, for pure logic only — `lib/schedule.ts` (which templates still need a task,
+a date's weekday independent of server timezone), `lib/formatDate.ts` and `lib/weekDates.ts`
+(Phase 8's design-fidelity pass: an eyebrow date, and a week's Monday/seven dates, both
+UTC-based for the same server-timezone-independence reason `schedule.ts` already established),
+and `lib/markQuotes.ts` (splitting a note's text around its quoted phrases for inline
+`<mark>` rendering) — 17 tests total. `submitReadingNote` stays untested as a unit, since it's
+a sequence of two external calls, not a pure function worth isolating. Page components are
+verified by running the app and clicking through the views and the full materialize → start
+→ done flow in a browser instead, matching settlement-engine's frontend, which has no
+automated test framework at all (see decisions log). `npm run lint` and `npm run build`
+(strict TypeScript) also run as part of finishing a phase. Reading's full flow (create a
+book, submit a note, see it rendered back), Path's week navigation, Flock's routine-item
+rows, Tally's grouped notches, and the hillside's field/window switching and real computed
+band were all verified live via Docker Compose against real seeded data, not just the
+automated suite. Reading's live check included a real call through to
 running the app and clicking through the views and the full materialize → start → done flow
 in a browser instead, matching settlement-engine's frontend, which has no automated test
 framework at all (see decisions log). `npm run lint` and `npm run build` (strict TypeScript)
