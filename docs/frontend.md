@@ -67,6 +67,20 @@ deliberate deviation rather than an oversight.
   One form, one `updateProfile` Server Action, partial updates only (unset checkboxes send no
   value, so only what's actually ticked is sent — matching the backend's own
   only-apply-non-null-fields update). Reads/writes `GET`/`PUT /api/users/me/profile`.
+- **Granary** (`/granary`, new in Phase 11, signed-in only — redirects to `/login`
+  otherwise): a "set a daily amount" prompt until one exists, then a real "Store {amount}
+  today" button; four stat tiles (stored this month against a target, days stored, pauses
+  kept, stored since you started); the "one grain a day" jar (a filled or dashed mark per
+  elapsed day this month); "the pause" — a form logging a tempting decision ("Wait 24 hours"
+  or "I've already decided," both create the same entry; the pause list below always offers
+  Decline/Proceed on an undecided entry, not only once the 24-hour mark has passed — see the
+  decisions log) and a table of every pause logged, with inline decide/reflect controls; and a
+  sidebar ("Where the granary drinks from," a static boundaries card). Reads/writes
+  `GET /api/granary/summary`, `PUT /api/granary/saving-target-amount`,
+  `POST /api/granary/savings`, `GET`/`POST /api/granary/pauses`,
+  `PATCH /api/granary/pauses/{id}/decide`, `PATCH .../reflect`. M-Pesa import
+  ("Import M-Pesa statement" in the reference) isn't built — flagged, not silently dropped, see
+  the open questions.
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
@@ -150,7 +164,10 @@ load) — not the reference's fixed sample numbers.
   link to Profile to turn it off. A failed or unconfigured call (`.catch(() => null)`, same
   pattern `submitReadingNote` already uses for the assessment call) just means no analogy box,
   never a page crash — verified live against the real Anthropic API, which failed on the same
-  account-billing issue Phase 7's reading-note assessment already hit, caught cleanly.
+  account-billing issue Phase 7's reading-note assessment already hit, caught cleanly. Phase
+  11: Today also shows a Shepherd-style prompt card for each granary pause due for a
+  follow-up (`GET /api/granary/pauses/due`) — "have you decided?" with inline Decline/Proceed
+  for a 24-hour-due pause, or a short reflection field for a 30-day-due one.
 - **Tally** (`app/tally`) renders the intelligence service's `/tally` output (tally stick,
   stat tiles, `GoalHoursChart`, per-routine meters) plus `/patterns`'s skip-heavy days and
   topic/routine correlation. The tally stick is grouped in fives (`<div>` per group of notch
@@ -191,6 +208,8 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-19 | `Shell`'s phone tab bar changed from Today/Path/Reading/Tally/Hillside to Today/Reading/Granary/Tally/Hillside, matching the updated design reference exactly | Granary now exists, removing the reason the old order was kept (the reference's own target order needed a page that didn't exist yet). Path's "opens from Today" cross-link still isn't built, same already-flagged gap this doc records for Flock/Watering holes |
+| 2026-10-19 | The granary's "Decline"/"Proceed" buttons are shown on every undecided pause, not gated behind `dueForTwentyFourHourFollowUp` | The design reference's create-pause form has both "Wait 24 hours" and "I've already decided" as alternate submit buttons; both create the identical entry (there's no backend distinction for "already decided" — see `backend.md`'s decisions log), so "I've already decided" needs the decide controls to already be visible on the new row, not hidden until a 24-hour timer passes. The still-waiting case keeps a "Waiting · {date}" hint alongside the buttons so the timing isn't lost |
 | 2026-10-19 | `Shell`'s sidebar no longer shows the signed-in email + "Sign out" row; the sidebar's only account-related control is the Profile link (avatar + "Profile"), and "Sign out" moved onto `/profile` itself | User flagged that the email/sign-out row no longer matched the design reference's sidebar, which only ever shows the avatar/name "Profile" link (`docs/design-reference/pages/profile.html`'s `.sidefoot`/nav). Signing out is now a real action on the one page that's about the account, not a second place doing the same job the sidebar used to |
 | 2026-10-18 | Profile is its own page/route with a real `GET /api/users/me/profile` fetch, not folded into the existing `me` fetch `RootLayout` already does for the sidebar | The sidebar's existing `fetchShellContext()` call is on every single page load and only needs `email`/`hillsideOptIn`; adding a second backend round trip there for data only the Profile page itself uses would slow down every page for a fetch 99% of page loads never use |
 | 2026-10-18 | Interest/learning-preference pick-chips are real `<input type="checkbox">` elements styled via a CSS `:has()` selector (`.pick label:has(input:checked)`), not client-side state | Matches this app's established server-rendered-everything pattern (no client component, no `useState`) — the same reasoning the hillside's `.switch` and every segmented control already follow. `:has()` is supported in every browser this app already targets (the design reference's own pages assume a similarly modern baseline) |
@@ -270,6 +289,12 @@ departure from precedent.
 
 ## Open questions
 
+- M-Pesa statement import isn't built — the "Import M-Pesa statement" button and the "Where
+  it went" category-totals sidebar card from the design reference aren't on `/granary` yet.
+  Explicitly flagged, since the task asked for a proposal on handling password-protected
+  PDFs and format changes before writing that code.
+- Granary isn't reachable from the phone tab bar's own page content — it's in `PHONE_LINKS`
+  now, but nothing within `/granary` itself has been checked at 390px width this phase.
 - Profile's "Export my data"/"Delete my account" buttons from the design reference weren't
   built — no backend endpoint exists for either, explicitly out of this phase's scope (see
   `backend.md`'s open questions).

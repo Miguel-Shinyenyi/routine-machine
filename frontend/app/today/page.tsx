@@ -3,8 +3,9 @@ import { materializeDay } from "@/lib/materialize";
 import { todayIsoDate } from "@/lib/schedule";
 import { formatEyebrowDate } from "@/lib/formatDate";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
-import { getSessionToken } from "@/lib/auth/session";
-import type { AnalogyResponse, Goal, Patterns, Profile, RoutineItem, Suggestion, Tally } from "@/lib/types";
+import { getSessionToken, getSessionUserId } from "@/lib/auth/session";
+import { decidePause, reflectPause } from "@/lib/actions";
+import type { AnalogyResponse, Goal, Patterns, PauseDecision, Profile, RoutineItem, Suggestion, Tally } from "@/lib/types";
 import { TaskCard } from "@/components/TaskCard";
 
 // Inline placeholder, same role as docs/design-reference/README.md's "Not in the reference":
@@ -39,13 +40,18 @@ export default async function TodayPage(props: PageProps<"/today">) {
     ? await authenticatedBackendFetch<Profile>("/api/users/me/profile", sessionToken).catch(() => null)
     : null;
 
-  const [tasks, routineItems, goals, suggestion, tally, patterns] = await Promise.all([
+  const sessionUserId = await getSessionUserId();
+
+  const [tasks, routineItems, goals, suggestion, tally, patterns, duePauses] = await Promise.all([
     materializeDay(date),
     backendFetch<RoutineItem[]>("/api/routine-items"),
     backendFetch<Goal[]>("/api/goals"),
     intelligenceFetch<Suggestion>("/suggestion").catch(() => null),
     intelligenceFetch<Tally>("/tally").catch(() => null),
     intelligenceFetch<Patterns>("/patterns").catch(() => null),
+    sessionUserId !== null
+      ? backendFetch<PauseDecision[]>(`/api/granary/pauses/due?userId=${sessionUserId}`).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   // Phase 10: explained through the first interest the user picked on their Profile page,
@@ -105,6 +111,58 @@ export default async function TodayPage(props: PageProps<"/today">) {
           </div>
         )}
       </div>
+
+      {duePauses.length > 0 && (
+        <div className="mb-6 flex flex-col gap-3">
+          {duePauses.map((pause) => (
+            <div key={pause.id} className="glass flex items-start gap-3 rounded-[18px] p-4">
+              <ShepherdMascot />
+              <div className="min-w-0 flex-1">
+                <div className="flex gap-2 text-[12px] text-muted">
+                  <strong className="font-semibold text-ink">Shepherd</strong>
+                  <span>about {pause.what}</span>
+                </div>
+                {pause.dueForTwentyFourHourFollowUp ? (
+                  <>
+                    <p className="mt-0.5 text-[15px] leading-tight">
+                      You wrote this down yesterday. Have you decided?
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <form action={decidePause}>
+                        <input type="hidden" name="pauseId" value={pause.id} />
+                        <input type="hidden" name="outcome" value="DECLINED" />
+                        <button type="submit" className="rounded-full px-3.5 py-1.5 text-[13px] font-semibold" style={{ background: "var(--tended-fill)", color: "var(--tended-ink)" }}>
+                          Declined
+                        </button>
+                      </form>
+                      <form action={decidePause}>
+                        <input type="hidden" name="pauseId" value={pause.id} />
+                        <input type="hidden" name="outcome" value="PROCEEDED" />
+                        <button type="submit" className="rounded-full px-3.5 py-1.5 text-[13px] font-semibold" style={{ background: "var(--fill)" }}>
+                          Proceeded
+                        </button>
+                      </form>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-0.5 text-[15px] leading-tight">
+                      Thirty days on — looking back, how do you feel about it?
+                    </p>
+                    <form action={reflectPause} className="mt-2 flex flex-wrap gap-2">
+                      <input type="hidden" name="pauseId" value={pause.id} />
+                      <input name="reflection" required placeholder="A short note…" className="field w-[220px]" />
+                      <button type="submit" className="rounded-full px-3.5 py-1.5 text-[13px] font-semibold btn-fill">
+                        Save
+                      </button>
+                    </form>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mb-6 flex items-center justify-between text-[13px]">
         <Link href={`/today?date=${adjacentDate(date, -1)}`} className="text-tint-text hover:underline">

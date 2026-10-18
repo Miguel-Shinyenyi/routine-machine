@@ -155,6 +155,20 @@ markers appear anywhere in the raw response body — not just that the response 
 name those fields, which would be true by construction and wouldn't actually catch a future
 regression that accidentally serialized the whole `User`. 200 backend tests, all passing (193
 plus 7 new for Phase 10).
+`GranaryServiceTest` covers the granary's own logic: storing twice the same day doesn't
+duplicate it; a missed day subtracts nothing; the month's target is the daily amount times
+days *elapsed* so far, not the whole month; the jar has exactly one entry per elapsed day;
+`totalStoredEver` includes savings from other months; creating a pause sets both follow-up
+dates; the 24-hour follow-up is due only once its time has passed and the pause is still
+undecided, and stops being due once decided; the 30-day follow-up is due independently of
+whether the pause was decided, and stops once reflected on; `pausesDueForFollowUp` finds only
+one user's own due pauses, not another user's. `GranaryApiIntegrationTest` covers the HTTP
+layer: setting the daily amount then storing updates the summary, storing twice the same day
+doesn't double it, storing with no amount set 400s, creating a pause then deciding then
+reflecting updates its state end to end, and deciding an unknown pause 404s.
+`HillsideV2ApiIntegrationTest` gained `granaryDataNeverAppearsInTheHillsideResponse`, the same
+marker-string technique as Phase 10's profile privacy test, for Phase 11's explicit "test it"
+boundary. 214 backend tests, all passing (200 plus 14 new for Phase 11).
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
@@ -207,7 +221,9 @@ added no new pure-logic module: `seasonNumber` and `evidenceDescription` in `/hi
 are small presentational helpers, same tier as the already-untested `formatDay` in the same
 file, not isolated business logic; Phase 10 added no new pure-logic module either — `/profile`
 and Today's analogy wiring are both plain data-fetch-and-render, verified live instead, same
-as every other page). `submitReadingNote` stays untested as a unit, since it's
+as every other page; Phase 11's `/granary` is the same — all the real logic, month targets,
+the jar, due-follow-up checks, lives in `GranaryService` on the backend, already covered by
+`GranaryServiceTest`). `submitReadingNote` stays untested as a unit, since it's
 a sequence of two external calls, not a pure function worth isolating. Page components are
 verified by running the app and clicking through the views and the full materialize → start
 → done flow in a browser instead, matching settlement-engine's frontend, which has no
@@ -241,7 +257,12 @@ deployment bug, not a logic bug: the intelligence service's Docker image crash-l
 `ModuleNotFoundError: No module named 'analogy'` because its `Dockerfile` copies an explicit
 file list that `analogy.py` hadn't been added to — caught by the live verification step, not by
 `pytest` (which runs against the real filesystem, not the built image), fixed, and the
-container confirmed actually starting before reporting.
+container confirmed actually starting before reporting. Phase 11's granary was verified live
+via Docker Compose: set a daily amount, tapped "store," confirmed the stats/jar/target updated
+correctly; logged a pause decision, confirmed both "Wait 24 hours" and "I've already decided"
+land on the same list with working Decline/Proceed controls regardless of the 24-hour timer,
+confirmed a decision persists on reload; confirmed the phone tab bar now matches the updated
+design reference exactly (Today/Reading/Granary/Tally/Hillside) via `compare.mjs`.
 
 ## Decisions log
 

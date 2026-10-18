@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "./api";
-import { getSessionToken } from "./auth/session";
+import { getSessionToken, getSessionUserId } from "./auth/session";
 import type { ReadingNoteAssessment } from "./types";
 
 function optionalNumber(value: FormDataEntryValue | null): number | null {
@@ -198,5 +198,65 @@ export async function updateProfile(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/profile");
+  revalidatePath("/today");
+}
+
+// Phase 11: the granary. userId always comes from the verified session, never from the form
+// — the same reasoning every other authenticated action here already follows.
+export async function storeSaving(): Promise<void> {
+  const userId = await getSessionUserId();
+  if (userId === null) return;
+  await backendFetch("/api/granary/savings", { method: "POST", body: JSON.stringify({ userId }) });
+  revalidatePath("/granary");
+  revalidatePath("/today");
+}
+
+export async function setSavingTargetAmount(formData: FormData): Promise<void> {
+  const userId = await getSessionUserId();
+  if (userId === null) return;
+  const amount = Number(formData.get("amount"));
+  await backendFetch("/api/granary/saving-target-amount", {
+    method: "PUT",
+    body: JSON.stringify({ userId, amount }),
+  });
+  revalidatePath("/granary");
+}
+
+export async function createPause(formData: FormData): Promise<void> {
+  const userId = await getSessionUserId();
+  if (userId === null) return;
+  await backendFetch("/api/granary/pauses", {
+    method: "POST",
+    body: JSON.stringify({
+      userId,
+      what: formData.get("what"),
+      amount: formData.get("amount") || null,
+      why: formData.get("why") || null,
+      heardFrom: formData.get("heardFrom") || null,
+    }),
+  });
+  revalidatePath("/granary");
+  revalidatePath("/today");
+}
+
+export async function decidePause(formData: FormData): Promise<void> {
+  const pauseId = formData.get("pauseId");
+  const outcome = formData.get("outcome");
+  await backendFetch(`/api/granary/pauses/${pauseId}/decide`, {
+    method: "PATCH",
+    body: JSON.stringify({ outcome }),
+  });
+  revalidatePath("/granary");
+  revalidatePath("/today");
+}
+
+export async function reflectPause(formData: FormData): Promise<void> {
+  const pauseId = formData.get("pauseId");
+  const reflection = formData.get("reflection");
+  await backendFetch(`/api/granary/pauses/${pauseId}/reflect`, {
+    method: "PATCH",
+    body: JSON.stringify({ reflection }),
+  });
+  revalidatePath("/granary");
   revalidatePath("/today");
 }

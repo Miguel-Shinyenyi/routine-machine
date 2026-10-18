@@ -32,4 +32,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleNotFound(NoSuchElementException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "not found"));
     }
+
+    // E.g. GranaryService.storeSaving before a saving target amount has been set — a real,
+    // client-fixable precondition failure, not a server bug.
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalState(IllegalStateException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", ex.getMessage()));
+    }
 }

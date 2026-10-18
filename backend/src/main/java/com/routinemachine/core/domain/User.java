@@ -79,6 +79,12 @@ public class User {
     @Column(name = "analogies_enabled", nullable = false)
     private boolean analogiesEnabled = true;
 
+    // Phase 11 (docs/product-direction.md's granary section): "a daily amount the user picks
+    // (KSh 50 in the design)." Null until the user sets one on the granary page; a tap with no
+    // amount set must ask for one rather than guessing a figure.
+    @Column(name = "saving_target_amount")
+    private Integer savingTargetAmount;
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private OffsetDateTime createdAt;
@@ -159,6 +165,17 @@ public class User {
         }
         if (timeZone != null) this.timeZone = timeZone;
         if (analogiesEnabled != null) this.analogiesEnabled = analogiesEnabled;
+    }
+
+    public Integer getSavingTargetAmount() {
+        return savingTargetAmount;
+    }
+
+    public void changeSavingTargetAmount(int savingTargetAmount) {
+        if (savingTargetAmount <= 0) {
+            throw new IllegalArgumentException("savingTargetAmount must be positive");
+        }
+        this.savingTargetAmount = savingTargetAmount;
     }
 
     public Long getId() {

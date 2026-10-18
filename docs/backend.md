@@ -462,10 +462,45 @@ which carry profile data. `HillsideV2ApiIntegrationTest.profileDataNeverAppearsI
 proves this against the real serialized JSON, not just by reasoning about the types, per
 `docs/product-direction.md`'s explicit "write a test that proves it" instruction.
 
+**Phase 11: the granary built.** `GranaryService` + two new tables (migration V22,
+`savings`/`pause_decisions`) and `users.saving_target_amount`. Never holds or moves money —
+every write only records that a saving or a decision happened.
+
+- **Savings**: `storeSaving(user, today)` is idempotent via `savings`' own
+  `UNIQUE(user_id, local_date)` plus a find-first check — tapping twice the same day is one
+  saving, not two. `monthSummary(user, month, today)` computes `storedThisMonth`,
+  `targetThisMonth` (the daily amount times days *elapsed* so far this month, not the whole
+  month — a target on day 3 of October isn't already "31 days behind"), `daysStored`, the
+  per-day `jar` array (one boolean per elapsed day), and `totalStoredEver` (every saving,
+  any month).
+- **The pause**: `PauseDecision` sets both `followUp24hAt` and `followUp30dAt` at creation
+  (`now + 24h`, `now + 30d`). `outcome` stays null until `decidePause` is called — from the
+  24-hour follow-up or immediately ("I've already decided"); `isDueForTwentyFourHourFollowUp`
+  only fires while `outcome` is still null. `reflectionThirtyDay` is separate and independent:
+  `isDueForThirtyDayFollowUp` fires regardless of what `outcome` ended up being, since the
+  30-day look-back is about how the decision feels in hindsight, not a second chance to
+  change it.
+- **New endpoints**: `POST /api/granary/savings`, `PUT /api/granary/saving-target-amount`,
+  `GET /api/granary/summary`, `POST /api/granary/pauses`, `GET /api/granary/pauses`,
+  `GET /api/granary/pauses/due` (what Today prompts about), `PATCH .../decide`,
+  `PATCH .../reflect`. None are JWT-protected (same `permitAll` pattern `/api/evidence-events`
+  already uses) — the frontend resolves `userId` from the verified session itself before
+  calling any of them, never from client-submitted form data.
+- **Privacy**: same structural guarantee as Phase 10's profile data — no hillside/credit
+  response type has a path to `savings`/`pause_decisions` at all.
+  `HillsideV2ApiIntegrationTest.granaryDataNeverAppearsInTheHillsideResponse` proves it against
+  the real serialized JSON, the explicit "test it" requirement.
+- **A new `IllegalStateException` → 400 handler** was added to `GlobalExceptionHandler`:
+  `storeSaving` throws it when no `savingTargetAmount` is set yet, a real client-fixable
+  precondition failure ("set an amount first"), not a server bug that should 500.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
+| 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
+| 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |
 | 2026-10-18 | Profile is its own `GET`/`PUT /api/users/me/profile` response type, not added to `UserResponse`/`GET /api/users/me` | `GET /api/users/me` is already called from several places that have no reason to ever see profile data (the sidebar's "signed in as," Hillside's session check); keeping it lean means there's no response path that could ever leak interests/thinkers/currency by accident just because something reused the "get the current user" call. The privacy test (`profileDataNeverAppearsInTheHillsideResponse`) is stronger for having two genuinely separate response shapes to prove apart, not one shape with fields that happen to be omitted sometimes |
 | 2026-10-18 | `User.updateProfile(...)` takes every field as nullable and only applies the ones that aren't null, rather than requiring the full profile on every `PUT` | Matches this project's existing partial-update precedent (`HillsideOptInRequest` aside, most PATCH/PUT endpoints here update one concern at a time); a Profile form with many independent fields (interests, thinkers, currency, time zone, day-end hour, the analogies switch) shouldn't need to resend fields the user isn't currently touching |
 | 2026-10-18 | `day_end_hour` defaults to 0, which is a mathematical no-op in `EvidenceCreditService`'s `hour < dayEndHour` check | Every existing Phase 9 test, and every real user until they visit Profile and change it, needs to see exactly the same local-date behavior as before this column existed — an hour comparison that can never be true at the default value guarantees that without a separate "is this feature on" flag |
@@ -546,6 +581,14 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 
 ## Open questions
 
+- M-Pesa statement import (the design reference's "Import M-Pesa statement" button and
+  "Where it went" category-totals card) isn't built yet — the task explicitly flagged this as
+  something to propose a handling approach for (password-protected PDFs, format changes)
+  before writing code, asked separately from the rest of Phase 11.
+- `pause_decisions.amount`/`heard_from` are free text; there's no structured currency amount
+  or a fixed enum for "where did you hear it" (the frontend offers a fixed radio set, but the
+  backend accepts anything) — fine for the current single-field-per-pause scope, but would
+  need revisiting if this data were ever aggregated or charted.
 - No endpoint deletes a profile's data or exports it (the design reference shows "Export my
   data"/"Delete my account" buttons; not built — out of this phase's explicit scope).
 - Nothing yet calls `PUT /api/users/me/profile` except the frontend's own Profile page; no
