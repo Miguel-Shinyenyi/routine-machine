@@ -1,5 +1,7 @@
-// Server-side only: no auth exists in this project (single user, no login), so these are plain
-// fetch wrappers, unlike settlement-engine's frontend which layers a bearer token on top.
+// Server-side only. Most of this app still talks to the backend unauthenticated (single-user
+// demo mode, or the demo-mode asUserId/userId query params — see docs/backend.md); real
+// sessions exist now (lib/auth/session.ts) but only one endpoint currently requires one, via
+// authenticatedBackendFetch below.
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8080";
 const INTELLIGENCE_SERVICE_URL = process.env.INTELLIGENCE_SERVICE_URL ?? "http://localhost:8000";
 
@@ -37,6 +39,16 @@ async function request<T>(baseUrl: string, path: string, init: RequestInit = {})
 
 export function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return request<T>(BACKEND_URL, path, init);
+}
+
+// For the one call that needs the session's own token as a bearer header (GET
+// /api/users/me) — see lib/auth/session.ts. Everything else in this app still talks to the
+// backend unauthenticated, matching the demo-mode asUserId pattern documented in backend.md.
+export function authenticatedBackendFetch<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
+  return request<T>(BACKEND_URL, path, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
+  });
 }
 
 export function intelligenceFetch<T>(path: string, init?: RequestInit): Promise<T> {

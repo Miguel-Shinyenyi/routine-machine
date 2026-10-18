@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Shell } from "@/components/Shell";
-import { backendFetch, intelligenceFetch } from "@/lib/api";
+import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
 import { todayIsoDate } from "@/lib/schedule";
+import { getSessionToken } from "@/lib/auth/session";
 import type { RoutineItem, Tally, Task, WateringHoleStatus } from "@/lib/types";
 import "./globals.css";
 
@@ -34,12 +35,17 @@ async function fetchShellContext(): Promise<{
   daysShownUp: number | null;
   routineCount: number | null;
   connectedCount: number | null;
+  userEmail: string | null;
 }> {
-  const [tasks, tally, routineItems, wateringHoles] = await Promise.all([
+  const sessionToken = await getSessionToken();
+  const [tasks, tally, routineItems, wateringHoles, me] = await Promise.all([
     backendFetch<Task[]>(`/api/tasks?date=${todayIsoDate()}`).catch(() => null),
     intelligenceFetch<Tally>("/tally").catch(() => null),
     backendFetch<RoutineItem[]>("/api/routine-items").catch(() => null),
     backendFetch<WateringHoleStatus[]>("/api/watering-holes").catch(() => null),
+    sessionToken
+      ? authenticatedBackendFetch<{ email: string }>("/api/users/me", sessionToken).catch(() => null)
+      : Promise.resolve(null),
   ]);
   return {
     doneCount: tasks ? tasks.filter((t) => t.status === "DONE").length : null,
@@ -51,6 +57,9 @@ async function fetchShellContext(): Promise<{
     // Reader's notes is always-on but isn't in /api/watering-holes (it's not a toggleable
     // external sync) — +1 matches Watering holes' own page, which always shows it connected.
     connectedCount: wateringHoles ? wateringHoles.filter((s) => s.enabled).length + 1 : null,
+    // null when logged out, or when the cookie's token has expired/been tampered with — the
+    // sidebar treats both exactly like "not signed in", same as getSessionUserId elsewhere.
+    userEmail: me ? me.email : null,
   };
 }
 

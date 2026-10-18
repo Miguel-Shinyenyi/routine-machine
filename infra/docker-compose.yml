@@ -52,6 +52,10 @@ services:
     environment:
       BACKEND_URL: http://backend:8080
       INTELLIGENCE_SERVICE_URL: http://intelligence-service:8000
+      # Same shared secret the backend verifies GET /api/users/me's bearer token against (see
+      # lib/auth/session.ts) — must stay identical to the backend service's own AUTH_JWT_SECRET
+      # below, hence the same default rather than a second, independently-generated one.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-only-insecure-default-change-before-real-use-0123456789}
     ports:
       - "3000:3000"
     depends_on:

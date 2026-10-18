@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
+import { logoutAction } from "@/lib/auth/actions";
 
 // Icon paths copied from docs/design-reference/pages/*.html's inline nav SVGs (the canvas
 // design export), not a new icon set invented here — see docs/frontend.md's decisions log.
@@ -66,6 +67,7 @@ export function Shell({
   daysShownUp,
   routineCount,
   connectedCount,
+  userEmail,
 }: {
   children: React.ReactNode;
   doneCount: number | null;
@@ -73,6 +75,7 @@ export function Shell({
   daysShownUp: number | null;
   routineCount: number | null;
   connectedCount: number | null;
+  userEmail: string | null;
 }) {
   const pathname = usePathname();
   const watchedFor =
@@ -125,6 +128,22 @@ export function Shell({
         })}
         <div className="mt-auto flex flex-col gap-2 pt-4">
           {watchedFor && <p className="px-2.5 text-[12px] text-muted">{watchedFor}</p>}
+          {userEmail ? (
+            <div className="flex items-center justify-between gap-2 px-2.5">
+              <span className="truncate text-[12px] text-muted" title={userEmail}>
+                {userEmail}
+              </span>
+              <form action={logoutAction}>
+                <button type="submit" className="text-[12px] font-medium text-tint-text hover:underline">
+                  Sign out
+                </button>
+              </form>
+            </div>
+          ) : (
+            <Link href="/login" className="px-2.5 text-[12px] font-medium text-tint-text hover:underline">
+              Sign in
+            </Link>
+          )}
           <ThemeToggle />
         </div>
       </aside>
