@@ -83,6 +83,15 @@ export function Shell({
       ? null
       : `The Shepherd has kept watch with you for ${daysShownUp} ${daysShownUp === 1 ? "day" : "days"}.`;
 
+  // /login and /register are the one place in this app meant for someone who isn't signed in
+  // yet, including a brand-new visitor — the nav (every link in it leads to data scoped to an
+  // account that may not exist yet) and the "N of M tended" badges it carries would be
+  // premature and, on phone, the floating tab bar would sit over a two-field form for no
+  // reason. No Shell chrome at all on these two routes.
+  if (pathname === "/login" || pathname === "/register") {
+    return <main className="mx-auto w-full max-w-[1100px] px-5 py-6">{children}</main>;
+  }
+
   return (
     <div className="flex min-h-full flex-col md:flex-row">
       <aside className="glass sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col gap-1 border-r hairline px-3 py-5 md:flex">
