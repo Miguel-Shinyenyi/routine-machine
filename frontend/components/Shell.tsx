@@ -81,7 +81,7 @@ export function Shell({
   return (
     <div className="flex min-h-full flex-col md:flex-row">
       <aside className="glass sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col gap-1 border-r hairline px-3 py-5 md:flex">
-        <Link href="/today" className="mb-4 flex items-center gap-2.5 px-2.5 py-1.5 text-[15px] font-semibold">
+        <Link href="/today" className="mb-4 flex items-center gap-2.5 px-2.5 py-1.5 text-[15px] font-semibold text-ink">
           <span
             className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px]"
             style={{ background: "var(--tint)" }}

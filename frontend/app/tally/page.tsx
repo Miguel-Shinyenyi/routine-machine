@@ -72,16 +72,16 @@ export default async function TallyPage(props: PageProps<"/tally">) {
           <Link
             href="/tally"
             aria-pressed={!sinceStart}
-            className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium"
-            style={!sinceStart ? { background: "var(--surface)", fontWeight: 600 } : undefined}
+            className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink"
+            style={!sinceStart ? { background: "var(--surface)", fontWeight: 600, boxShadow: "0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04)" } : undefined}
           >
             4 weeks
           </Link>
           <Link
             href="/tally?window=all"
             aria-pressed={sinceStart}
-            className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium"
-            style={sinceStart ? { background: "var(--surface)", fontWeight: 600 } : undefined}
+            className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink"
+            style={sinceStart ? { background: "var(--surface)", fontWeight: 600, boxShadow: "0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04)" } : undefined}
           >
             Since the start
           </Link>

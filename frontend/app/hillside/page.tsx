@@ -53,8 +53,8 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
               key={w}
               href={buildHref(field, w, asUserId)}
               aria-pressed={windowDays === w}
-              className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium"
-              style={windowDays === w ? { background: "var(--surface)", fontWeight: 600 } : undefined}
+              className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink"
+              style={windowDays === w ? { background: "var(--surface)", fontWeight: 600, boxShadow: "0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04)" } : undefined}
             >
               Last {w} days
             </Link>
@@ -68,8 +68,8 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
             key={f.label}
             href={buildHref(f.value, windowDays, asUserId)}
             aria-pressed={field === f.value}
-            className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium"
-            style={field === f.value ? { background: "var(--surface)", fontWeight: 600 } : undefined}
+            className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink"
+            style={field === f.value ? { background: "var(--surface)", fontWeight: 600, boxShadow: "0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04)" } : undefined}
           >
             {f.label}
           </Link>
@@ -120,10 +120,11 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
             {hillside.histogram.map((count, days) => (
               <div key={days} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
                 <div
-                  className="w-full rounded-t-[6px]"
+                  className="w-full"
                   style={{
                     height: `${Math.round((count / maxHistogram) * 110)}px`,
-                    background: days === hillside.yourDaysShownUp ? "var(--tint)" : "var(--fill)",
+                    borderRadius: "6px 6px 2px 2px",
+                    background: days === hillside.yourDaysShownUp ? "var(--tint)" : "#d2d2d7",
                   }}
                 />
                 <span className="text-[12px] text-muted">{days}</span>
@@ -144,41 +145,65 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
           ) : (
             <div className="overflow-x-auto rounded-[14px] bg-surface">
               <div style={{ minWidth: "560px" }}>
-                {hillside.neighbors.map((row, i) => (
-                  <div
-                    key={row.pseudonym}
-                    className={`flex items-center gap-3 px-4 py-2 ${i === 0 ? "" : "border-t hairline"}`}
-                    style={row.isYou ? { background: "var(--tint-fill)" } : undefined}
-                  >
-                    <span className="min-w-0 flex-1 text-[14px] font-semibold">
-                      {row.pseudonym}
-                      {row.isYou && " (you)"}
-                    </span>
-                    <span
-                      className="flex gap-1"
-                      role="img"
-                      aria-label={`${row.daysShownUp} of ${windowDays} days`}
+                {hillside.neighbors.map((row, i) => {
+                  // An honest, data-derived stand-in for the reference's own "Ahead by a
+                  // day"/"Close behind" captions, which are hand-picked for its sample rows
+                  // rather than computed from anything — this compares each neighbour's real
+                  // days-shown-up against yours instead of inventing similar-sounding text.
+                  const diff = hillside.yourDaysShownUp === null ? null : row.daysShownUp - hillside.yourDaysShownUp;
+                  const caption =
+                    row.isYou || diff === null
+                      ? null
+                      : diff === 0
+                        ? "Same pace as you"
+                        : diff > 0
+                          ? `${diff} ${diff === 1 ? "day" : "days"} ahead of you`
+                          : `${-diff} ${-diff === 1 ? "day" : "days"} behind you`;
+                  return (
+                    <div
+                      key={row.pseudonym}
+                      className={`grid items-center gap-3 px-4 py-2 ${i === 0 ? "" : "border-t hairline"}`}
+                      style={{
+                        gridTemplateColumns: "44px minmax(150px,1.3fr) minmax(130px,1fr) minmax(140px,1.3fr)",
+                        background: row.isYou ? "var(--tint-fill)" : undefined,
+                      }}
                     >
-                      {Array.from({ length: Math.min(7, windowDays) }).map((_, dotIndex) => (
-                        <i
-                          key={dotIndex}
-                          className="h-3 w-3 rounded-full"
-                          style={{
-                            background:
-                              dotIndex < Math.round((row.daysShownUp / windowDays) * Math.min(7, windowDays))
-                                ? row.isYou
-                                  ? "var(--tint-text)"
-                                  : "var(--ink)"
-                                : "var(--fill)",
-                          }}
-                        />
-                      ))}
-                    </span>
-                    <span className="text-[13px] text-muted">
-                      {row.daysShownUp} of {windowDays}
-                    </span>
-                  </div>
-                ))}
+                      <span className="text-[15px] font-semibold text-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+                        {row.rank}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[14px] font-semibold">
+                          {row.pseudonym}
+                          {row.isYou && " (you)"}
+                        </span>
+                        {caption && <span className="text-[12px] text-muted">{caption}</span>}
+                      </span>
+                      <span
+                        className="flex gap-1"
+                        role="img"
+                        aria-label={`${row.daysShownUp} of ${windowDays} days`}
+                      >
+                        {Array.from({ length: Math.min(7, windowDays) }).map((_, dotIndex) => (
+                          <i
+                            key={dotIndex}
+                            className="h-3 w-3 rounded-full"
+                            style={{
+                              background:
+                                dotIndex < Math.round((row.daysShownUp / windowDays) * Math.min(7, windowDays))
+                                  ? row.isYou
+                                    ? "var(--tint-text)"
+                                    : "var(--ink)"
+                                  : "#e8e8ed",
+                            }}
+                          />
+                        ))}
+                      </span>
+                      <span className="text-[13px] text-muted">
+                        {row.daysShownUp} of {windowDays}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

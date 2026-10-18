@@ -77,6 +77,10 @@ class HillsideServiceTest extends AbstractIntegrationTest {
         assertThat(result.band()).isEqualTo("Walking at the back, and still walking.");
         assertThat(result.neighbors()).extracting(NeighborRow::pseudonym)
                 .contains(HillsidePseudonym.forUserId(you.getId()), HillsidePseudonym.forUserId(rival.getId()));
+        // Rival tended more days, so ranks 1st; you rank 2nd — rank is the row's 1-indexed
+        // position in the full ranked list, not its position within this neighbours slice.
+        assertThat(result.neighbors()).extracting(NeighborRow::rank)
+                .contains(1, 2);
     }
 
     @Test

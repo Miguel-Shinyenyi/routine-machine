@@ -27,6 +27,15 @@ const SOURCE_COLORS: Record<string, string> = {
   HEALTH: "#1b7332",
 };
 
+const HILLSIDE_FIELD_LABELS: Record<string, string> = {
+  READING: "Reading",
+  MOVEMENT: "Movement",
+  DEEP_WORK: "Deep work",
+  LEARNING: "Learning",
+  SLEEP: "Sleep",
+  WRITING: "Writing",
+};
+
 function formatTimestamp(iso: string | null): string {
   if (iso === null) return "Never";
   // Fixed, locale-independent formatting: a server component renders this once, so there is
@@ -34,7 +43,19 @@ function formatTimestamp(iso: string | null): string {
   return iso.slice(0, 16).replace("T", " ") + " UTC";
 }
 
-function SourceCard({ status }: { status: WateringHoleStatus }) {
+// Maps a watering hole's own MeasurementSource name onto the matching RoutineItemSource, the
+// enum routine items actually carry, so a card can show which categories/fields its own data
+// feeds — the reference shows this as a bottom chip ("Journaling, Writing, Reading" for the
+// hub), generated here from real routine items rather than written by hand.
+const MEASUREMENT_TO_ROUTINE_SOURCE: Record<string, string> = {
+  HUB: "HUB",
+  WAKATIME: "WAKATIME",
+  ACTIVITYWATCH: "ACTIVITYWATCH",
+  GITHUB: "GITHUB",
+  RESCUETIME: "RESCUETIME",
+};
+
+function SourceCard({ status, feedsInto }: { status: WateringHoleStatus; feedsInto: string[] }) {
   const label = SOURCE_LABELS[status.source] ?? status.source;
   return (
     <div className="card flex flex-col gap-2 p-4">
@@ -52,6 +73,7 @@ function SourceCard({ status }: { status: WateringHoleStatus }) {
         {status.enabled ? `Connected · checked ${formatTimestamp(status.lastActivityAt)}` : "Off"}
       </span>
       <p className="text-[14px] text-muted">{status.description}</p>
+      {feedsInto.length > 0 && <span className="chip self-start">{feedsInto.join(", ")}</span>}
     </div>
   );
 }
@@ -66,7 +88,17 @@ export default async function WateringHolesPage() {
   const notConnected = statuses.filter((s) => !s.enabled);
   // Same reasoning as Flock: exclude Phase 8's hillside demo users' own items, this table is
   // this single-user app's own "how my activity gets counted" list, not a multi-user view.
-  const automaticItems = routineItems.filter((item) => item.source !== "MANUAL" && item.userId == null);
+  // Unlike an earlier version, this now includes manually-tapped items too — the reference's
+  // own table does (shown with "Tapped" as the main source), not just automatic ones.
+  const countedItems = routineItems.filter((item) => item.userId == null);
+
+  function feedsInto(measurementSource: string): string[] {
+    const routineSource = MEASUREMENT_TO_ROUTINE_SOURCE[measurementSource];
+    const fields = countedItems
+      .filter((item) => item.source === routineSource && item.hillsideField !== null)
+      .map((item) => HILLSIDE_FIELD_LABELS[item.hillsideField as string] ?? item.hillsideField);
+    return Array.from(new Set(fields));
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -101,9 +133,10 @@ export default async function WateringHolesPage() {
             <p className="text-[14px] text-muted">
               Your notes, read by the Shepherd to place you in the book and check they are yours.
             </p>
+            <span className="chip self-start">Reading</span>
           </div>
           {connected.map((status) => (
-            <SourceCard key={status.source} status={status} />
+            <SourceCard key={status.source} status={status} feedsInto={feedsInto(status.source)} />
           ))}
         </div>
       </section>
@@ -115,7 +148,7 @@ export default async function WateringHolesPage() {
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {notConnected.map((status) => (
-              <SourceCard key={status.source} status={status} />
+              <SourceCard key={status.source} status={status} feedsInto={feedsInto(status.source)} />
             ))}
           </div>
         </section>
@@ -125,27 +158,36 @@ export default async function WateringHolesPage() {
         <h2 id="how" className="mb-2.5 px-1 text-[17px] font-semibold">
           How each activity is counted
         </h2>
-        {automaticItems.length === 0 ? (
+        {countedItems.length === 0 ? (
           <p className="px-1 text-[13px] text-muted">
-            No routine item is linked to an automatic source yet. Link one through Flock to see
-            it listed here.
+            No routine item exists yet. Add one through Flock to see it listed here.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-[14px] bg-surface">
-            <table className="w-full text-left text-[14px]">
+            <table className="w-full min-w-[760px] text-left text-[14px]">
               <thead>
-                <tr className="text-[13px] text-muted">
-                  <th className="py-2 px-4 font-normal">Routine</th>
-                  <th className="py-2 px-4 font-normal">Source</th>
-                  <th className="py-2 px-4 font-normal">Count rule</th>
+                <tr className="text-[12px] font-medium text-muted" style={{ background: "#fafafc" }}>
+                  <th className="h-[34px] px-4 font-medium">Activity</th>
+                  <th className="h-[34px] px-4 font-medium">A day counts when</th>
+                  <th className="h-[34px] px-4 font-medium">Main source</th>
+                  <th className="h-[34px] px-4 font-medium">Backup</th>
+                  <th className="h-[34px] px-4 font-medium">Hillside</th>
                 </tr>
               </thead>
               <tbody>
-                {automaticItems.map((item) => (
+                {countedItems.map((item) => (
                   <tr key={item.id} className="border-t hairline">
                     <td className="py-2 px-4">{item.name}</td>
-                    <td className="py-2 px-4">{sourceLabel(item.source)}</td>
                     <td className="py-2 px-4 text-muted">{item.countRule ?? "—"}</td>
+                    <td className="py-2 px-4">{sourceLabel(item.source)}</td>
+                    <td className="py-2 px-4 text-muted">&mdash;</td>
+                    <td className="py-2 px-4">
+                      {item.hillsideField !== null
+                        ? HILLSIDE_FIELD_LABELS[item.hillsideField]
+                        : item.isPrivate
+                          ? "Private"
+                          : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -184,6 +184,7 @@ export interface ReadingNoteAssessment {
 }
 
 export interface HillsideNeighbor {
+  rank: number;
   pseudonym: string;
   daysShownUp: number;
   isYou: boolean;

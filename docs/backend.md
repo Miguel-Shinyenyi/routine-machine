@@ -383,12 +383,16 @@ personal band/rank/neighbours.
   from the user id alone — never the email or display name — so the same person gets the same
   pseudonym every call without storing one. No rotation yet (see open questions).
 - "Walking near you" is three ranked entries above and below, clamped at the edges of the
-  list, not a fixed seven; `isYou` marks exactly one row when `asUserId` matches.
+  list, not a fixed seven; `isYou` marks exactly one row when `asUserId` matches. Each
+  `NeighborRow` also carries `rank`, its 1-indexed position in the *full* ranked list (not
+  its position within this slice of neighbours) — the design reference shows a rank number
+  per row, which this field exists to support.
 
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-18 | `NeighborRow` gained `rank` (the row's 1-indexed position in the full ranked list) | The frontend's hillside page had no way to show a rank number per "walking near you" row, which the design reference does; computed once in `HillsideService.compute` from the loop index already used to build the slice, not a second pass |
 | 2026-10-17 | Only `routine_items` and `daily_logs` get an optional `user_id`, not every table | These two drive "days shown up," the one signal needed to demo real multi-user data; scoping every table (`goals` especially, which has no creation API at all today) is separate, much larger work that doesn't change what this slice needs to prove |
 | 2026-10-17 | User scoping is an optional `userId` query param/field, not required authentication | Full auth enforcement needs the Next.js session side (not built) and would break the existing single-user frontend and every Phase 6 sync service immediately, since none of them have a user to pass yet. Optional scoping is additive: omit it, nothing changes; pass it, the new per-user data is isolated and testable |
 | 2026-10-17 | `assignUser` is a plain setter called after construction, not a new constructor parameter | `RoutineItem` and `DailyLog` are each constructed from many places (eight sync services' worth, plus their own controllers); adding a required constructor parameter would mean touching every one of those call sites for a value most of them have no user to supply yet |

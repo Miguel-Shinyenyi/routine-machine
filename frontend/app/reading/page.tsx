@@ -81,9 +81,9 @@ export default async function ReadingPage() {
                     <div className="mb-1.5 flex justify-between text-[14px]">
                       <span>{chapterProgress(book)}</span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--fill)" }}>
+                    <div className="h-2 overflow-hidden rounded-[4px]" style={{ background: "#e8e8ed" }}>
                       <div
-                        className="h-full rounded-full"
+                        className="h-full rounded-[4px]"
                         style={{
                           width: `${Math.round(((book.currentChapter ?? 0) / (book.totalChapters ?? 1)) * 100)}%`,
                           background: "var(--tint)",
@@ -136,7 +136,15 @@ export default async function ReadingPage() {
                     <p className="text-[17px] leading-relaxed">
                       {markQuotes(latestNote.noteText, latestNote.quotedPhrases ?? []).map((segment, i) =>
                         segment.quoted ? (
-                          <mark key={i} className="chip-tint rounded-none px-0.5 py-0">
+                          <mark
+                            key={i}
+                            className="px-0.5"
+                            style={{
+                              background: "var(--tint-fill)",
+                              color: "var(--ink)",
+                              borderBottom: "2px dotted var(--tint-text)",
+                            }}
+                          >
                             {segment.text}
                           </mark>
                         ) : (

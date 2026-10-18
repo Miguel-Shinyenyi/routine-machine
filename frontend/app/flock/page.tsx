@@ -85,7 +85,7 @@ export default async function FlockPage() {
                 <div className="min-w-[760px] overflow-hidden rounded-[14px] bg-surface">
                   <div
                     className="grid min-h-[34px] items-center gap-3.5 px-4 text-[12px] font-medium text-muted"
-                    style={{ gridTemplateColumns: ROW_GRID, background: "var(--surface-2)" }}
+                    style={{ gridTemplateColumns: ROW_GRID, background: "#fafafc" }}
                   >
                     <span>Routine</span>
                     <span>Counted by</span>

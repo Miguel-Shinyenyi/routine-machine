@@ -104,8 +104,8 @@ export default async function TodayPage(props: PageProps<"/today">) {
               <span>Tended today</span>
               <span>{progress}%</span>
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full" style={{ background: "var(--fill)" }}>
-              <div className="h-full rounded-full" style={{ width: `${progress}%`, background: "var(--tint)" }} />
+            <div className="h-2 w-full overflow-hidden rounded-[4px]" style={{ background: "#e8e8ed" }}>
+              <div className="h-full rounded-[4px]" style={{ width: `${progress}%`, background: "var(--tint)" }} />
             </div>
           </div>
 
@@ -139,8 +139,8 @@ export default async function TodayPage(props: PageProps<"/today">) {
                       <strong className="font-semibold">{goalById.get(goalId) ?? `Goal ${goalId}`}</strong>
                       <span>{hours.toFixed(1)} h</span>
                     </div>
-                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--fill)" }}>
-                      <div className="h-full rounded-full" style={{ width: `${width}%`, background: "var(--tint)" }} />
+                    <div className="mt-1.5 h-2 overflow-hidden rounded-[4px]" style={{ background: "#e8e8ed" }}>
+                      <div className="h-full rounded-[4px]" style={{ width: `${width}%`, background: "var(--tint)" }} />
                     </div>
                   </div>
                 );

@@ -98,18 +98,18 @@ export default async function PathPage(props: PageProps<"/path">) {
           </p>
         </div>
         <div className="inline-flex gap-0.5 rounded-[9px] p-0.5" style={{ background: "var(--fill)" }}>
-          <Link href={`/path?monday=${addDays(monday, -7)}`} className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium">
+          <Link href={`/path?monday=${addDays(monday, -7)}`} className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink">
             Last week
           </Link>
           <Link
             href={`/path?monday=${mondayOf(today)}`}
             aria-pressed={monday === mondayOf(today)}
-            className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium"
-            style={monday === mondayOf(today) ? { background: "var(--surface)", fontWeight: 600 } : undefined}
+            className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink"
+            style={monday === mondayOf(today) ? { background: "var(--surface)", fontWeight: 600, boxShadow: "0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04)" } : undefined}
           >
             This week
           </Link>
-          <Link href={`/path?monday=${addDays(monday, 7)}`} className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium">
+          <Link href={`/path?monday=${addDays(monday, 7)}`} className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink">
             Next week
           </Link>
         </div>

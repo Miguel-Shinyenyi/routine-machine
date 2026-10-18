@@ -13,9 +13,9 @@ public record HillsideResponse(
         String band,
         List<NeighborRowResponse> neighbors) {
 
-    public record NeighborRowResponse(String pseudonym, int daysShownUp, boolean isYou) {
+    public record NeighborRowResponse(int rank, String pseudonym, int daysShownUp, boolean isYou) {
         static NeighborRowResponse from(NeighborRow row) {
-            return new NeighborRowResponse(row.pseudonym(), row.daysShownUp(), row.isYou());
+            return new NeighborRowResponse(row.rank(), row.pseudonym(), row.daysShownUp(), row.isYou());
         }
     }
 

@@ -104,8 +104,11 @@ same id, different for different ids, and matches the "Adjective Noun 1234" shap
 digits or words leaking in from anywhere else. `HillsideServiceTest` (`@DataJpaTest`) covers
 the real aggregation against real rows: a user with fewer qualifying days ranks behind one
 with more; a private routine item's logs never reach the hillside at all (zero participants);
-omitting `asUserId` returns the histogram with no personal band; and the "general" field only
-counts a day once 3+ distinct routines were tended, not just one.
+omitting `asUserId` returns the histogram with no personal band; the "general" field only
+counts a day once 3+ distinct routines were tended, not just one; and (added for the
+frontend's rank-number display) a rival who outranks you gets `rank: 1` while you get `rank:
+2`, the row's real 1-indexed position in the full ranked list, not its position within the
+returned neighbours slice.
 `HillsideApiIntegrationTest` covers the HTTP layer.
 `GoalApiIntegrationTest` covers `POST /api/goals` (Phase 8's goal user-scoping): creating a
 goal for a registered user and returning its `userId`, creating one with no `userId` and
