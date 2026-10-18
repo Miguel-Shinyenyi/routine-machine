@@ -115,3 +115,26 @@ def test_routine_shown_up_window_is_clipped_to_the_items_lifetime():
 
     # the item has only existed for 2 days, so its window can't be the full 28
     assert result.routine_shown_up[0].window_days == 2
+
+
+def test_since_start_windows_from_the_earliest_log_not_a_fixed_calendar_window():
+    items = [item(1, "a", "2026-01-01"), item(2, "b", "2026-01-01"), item(3, "c", "2026-01-01")]
+    logs = [
+        log(routine_item_id=1, log_date="2026-08-20"),
+        log(routine_item_id=2, log_date="2026-08-20"),
+        log(routine_item_id=3, log_date="2026-08-20"),
+    ]
+
+    # window_days is deliberately tiny and should be ignored once since_start is set.
+    result = compute_tally(items, [], logs, today=date(2026, 9, 1), window_days=2, since_start=True)
+
+    assert result.days_shown_up[0].date == "2026-08-20"
+    assert len(result.days_shown_up) == 13  # 2026-08-20 through 2026-09-01 inclusive
+    assert result.days_shown_up_count == 1
+
+
+def test_since_start_with_no_logs_at_all_windows_from_today():
+    result = compute_tally([], [], [], today=date(2026, 9, 1), window_days=2, since_start=True)
+
+    assert len(result.days_shown_up) == 1
+    assert result.days_shown_up[0].date == "2026-09-01"

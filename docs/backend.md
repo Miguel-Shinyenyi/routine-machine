@@ -15,8 +15,16 @@ below and `hub-sync.md`.
 Phase 1 and 2 built: Spring Boot 3.5, Java 21, PostgreSQL via Flyway migrations. Four
 endpoints, matching the four Phase 1 entities in `database.md`:
 
-- `GET /api/goals`, lists the three seeded goals. Read-only; goals are fixed reference data,
-  not user-editable in Phase 1.
+- `GET /api/goals?userId=`, `POST /api/goals`, list and create goals. The three seeded goals
+  (Phase 1) have no `user_id` and remain visible to everyone, unchanged. Phase 8 added the
+  `userId`-scoped creation path: `userId` is optional on both the query (filters the list,
+  omitted returns every goal exactly as Phase 1 did) and the create body (400 on an unknown
+  `userId`, matching every other foreign-key validation in this API). Goal names are unique
+  per user (`UNIQUE(user_id, name)`, not a global `UNIQUE(name)` as before Phase 8); creating
+  a second goal with the same name for the same `userId` is a 400.
+  `GoalRepository.findFirstByName` replaced the old `findByName` for this reason, the lookup
+  callers use to find one of the three fixed seeded goals by name can no longer assume the
+  name is globally unique, only that it is unique among `NULL`-user goals in practice.
 - `GET /api/routine-items`, `POST /api/routine-items`, define and list routine items. List
   responses include each item's `createdAt`, needed by the intelligence service's Phase 2
   pattern detection to bound a completion-rate/skip-heavy-day window per item. Phase 5 added
@@ -285,10 +293,123 @@ in the controller. `ReadingNoteController` now calls it instead of the repositor
 
 Only the Reading frontend page itself remains unbuilt for Phase 7.
 
+**Phase 8 (the hillside) started: accounts groundwork built.** Explicitly gated on an
+accounts/auth architecture decision before any code (PROJECT.md); three real decisions were
+asked and confirmed with the user before building, not guessed:
+
+1. **The hillside compares users within one shared deployment**, not separate opt-in
+   reporting between independent single-user instances. This is a much bigger change than
+   the rest of this app: every existing table will eventually need a `user_id` scope, which
+   is **not done yet** — see below for exactly what this slice does and doesn't touch.
+2. **Both password and GitHub OAuth** login are supported.
+3. **Next.js owns the actual login session**, not this backend. The backend never renders a
+   login page or handles an OAuth redirect; it verifies a short-lived signed token Next.js's
+   server attaches to its own calls, and separately verifies credentials when asked to.
+
+**What's built:** `User` (`com.routinemachine.core.domain.User`), `users` table: email
+(unique), an optional bcrypt password hash, an optional GitHub id (unique), a display name.
+A user needs at least one login method (a DB check constraint, same defense-in-depth pattern
+`DailyLog`'s exactly-one-target rule uses). `AuthService` coordinates the login logic:
+
+- `POST /api/auth/register` — email + password (min 8 characters), 400 if the email's
+  already registered.
+- `POST /api/auth/login` — verifies a password against the stored bcrypt hash, 401 on any
+  failure (unknown email, GitHub-only account with no password, wrong password) — never
+  which part was wrong, so a failed guess can't be used to enumerate registered emails.
+- `POST /api/auth/github-login` — finds or creates an account by GitHub id (linking to an
+  existing password account with the same email on first GitHub login). **Trusts the caller
+  already verified the GitHub identity** through a real OAuth flow; this endpoint itself
+  proves nothing about GitHub, so it's protected by its own service-to-service token
+  (`AUTH_INTERNAL_TOKEN`), fails closed if unset, same rule `HEALTH_INGEST_TOKEN` already
+  follows. Only Next.js's own server should ever call it.
+- `GET /api/users/me` — the one endpoint this phase actually requires a valid token for, not
+  a real feature, proof the JWT verification wiring works end to end. Reads the token's
+  `sub` claim as a user id and returns that user, including their `hillsideOptIn` flag.
+- `PUT /api/users/me/hillside-opt-in` — `{"optIn": true|false}`, toggles the calling user's
+  `hillsideOptIn` and returns the updated user. Requires the same valid token as `GET
+  /api/users/me`. This is the real consent step the hillside was missing: see below.
+
+Spring Security and `spring-boot-starter-oauth2-resource-server` are new dependencies. Two
+separate `SecurityFilterChain` beans, not one — see the decisions log for why a single chain
+broke `MeasurementIngestController` and `github-login`'s own `Authorization: Bearer` headers.
+`AUTH_JWT_SECRET` (the secret both this backend and Next.js's future token-minting will
+share) has no production default and the app won't start without it in a real deployment;
+`docker-compose.yml` supplies an insecure development-only default so `docker compose up`
+still works out of the box, since nothing in the app actually requires login yet.
+
+**What's deliberately not touched:** `goals`, `books`, `reading_notes`, `measurements`, and
+every other table stay exactly as they were — single-user, no `user_id` column. No endpoint
+requires authentication except the one proof-of-concept above. Building the hillside's own
+k-anonymous aggregation, the actual Next.js login UI and GitHub OAuth app registration, and
+migrating existing dev data to a seed user are all separate, much larger pieces of work, not
+started.
+
+**Optional `user_id` added to `routine_items` and `daily_logs`** (migration V15), the two
+tables that actually drive "days shown up" — the one signal needed to demo multiple users
+having genuinely different data, without first inventing a goals-creation API or touching
+every table in the schema. This is additive scoping, not enforced auth: `userId` is an
+optional query param on `GET /api/routine-items`/`GET /api/daily-logs` and an optional field
+on their `POST` bodies. Omitted, both behave exactly as before this change (every legacy,
+unowned row, `NULL` `user_id`) — the existing frontend and every Phase 6 sync service
+(`WakaTimeSyncService`, `HubSyncService`, etc.) are untouched and keep working against that
+same unscoped data, since none of them pass `userId`. Passed, the response is scoped to that
+one user's own rows instead. `RoutineItem.assignUser`/`DailyLog.assignUser` are plain setters
+used only by these two controllers (and seeding), not part of either entity's constructor, so
+every existing call site across the sync services is unaffected.
+
+**The hillside built: `GET /api/hillside`.** `HillsideService` computes bands fresh on every
+call, nothing is stored. Query params: `field` (one of `HillsideField`'s names, omitted means
+"general" — a day counts once 3+ distinct non-private routine items were tended, the same
+`TALLY_STICK_THRESHOLD` `intelligence-service/tally.py` uses for its own tally stick, duplicated
+here as `HillsideService.GENERAL_THRESHOLD` since the two live in different languages and can't
+share a constant), `windowDays` (7 or 28), and `asUserId` — **a demo-mode parameter, not a real
+logged-in identity**, since the Next.js session this would normally come from isn't built yet.
+Omit it and the endpoint still returns the real histogram and participant count, just no
+personal band/rank/neighbours.
+
+- Reads every non-private (`routine_items.private = false`), user-owned `daily_log` in the
+  window, from a user who has opted in (`users.hillside_opt_in = true`)
+  (`DailyLogRepository.findForHillside`) and groups it by user and day in Java, not SQL — the
+  dataset this phase operates on is small enough that a clear, testable Java loop beat a
+  harder-to-verify aggregate query. `hillside_opt_in` defaults `false` (migration V17): a user
+  with non-private routine items is not a participant until they explicitly opt in through
+  `PUT /api/users/me/hillside-opt-in`. This closes the "no real opt-in concept" gap flagged
+  when the hillside was first built.
+- Ranks participants by days-shown-up (ties broken by user id, for determinism), computes a
+  percentile (`1 - rank/total`), and buckets it into the same three band descriptions the
+  design reference uses ("Near the front" / "In the middle" / "Walking at the back, and still
+  walking").
+- `HillsidePseudonym.forUserId` derives a two-word-plus-number pseudonym deterministically
+  from the user id and the current "season" (a 90-day block of the epoch, folded into the
+  hash input) — never the email or display name — so the same person gets the same pseudonym
+  for roughly a quarter, then automatically a different one, with nothing stored anywhere.
+- "Walking near you" is three ranked entries above and below, clamped at the edges of the
+  list, not a fixed seven; `isYou` marks exactly one row when `asUserId` matches. Each
+  `NeighborRow` also carries `rank`, its 1-indexed position in the *full* ranked list (not
+  its position within this slice of neighbours) — the design reference shows a rank number
+  per row, which this field exists to support.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-18 | `NeighborRow` gained `rank` (the row's 1-indexed position in the full ranked list) | The frontend's hillside page had no way to show a rank number per "walking near you" row, which the design reference does; computed once in `HillsideService.compute` from the loop index already used to build the slice, not a second pass |
+| 2026-10-17 | Only `routine_items` and `daily_logs` get an optional `user_id`, not every table | These two drive "days shown up," the one signal needed to demo real multi-user data; scoping every table (`goals` especially, which has no creation API at all today) is separate, much larger work that doesn't change what this slice needs to prove |
+| 2026-10-17 | User scoping is an optional `userId` query param/field, not required authentication | Full auth enforcement needs the Next.js session side (not built) and would break the existing single-user frontend and every Phase 6 sync service immediately, since none of them have a user to pass yet. Optional scoping is additive: omit it, nothing changes; pass it, the new per-user data is isolated and testable |
+| 2026-10-17 | `assignUser` is a plain setter called after construction, not a new constructor parameter | `RoutineItem` and `DailyLog` are each constructed from many places (eight sync services' worth, plus their own controllers); adding a required constructor parameter would mean touching every one of those call sites for a value most of them have no user to supply yet |
+| 2026-10-17 | `/api/hillside` takes `asUserId` as a plain query param instead of waiting for real login | The same demo-mode pattern already used for `routine_items`/`daily_logs` scoping: it lets the real aggregation logic be built and tested against real seeded data now, rather than blocking the whole feature on the Next.js session, which is separate, larger work |
+| 2026-10-17 | Band/rank/histogram are computed fresh on every request, nothing is cached or stored | The dataset is small (seeded test data, not a real userbase) and the computation is cheap; a stored leaderboard would need its own invalidation logic for no benefit yet |
+| 2026-10-17 | `HillsideService.GENERAL_THRESHOLD` duplicates `tally.py`'s `TALLY_STICK_THRESHOLD` rather than sharing it | Backend (Java) and intelligence-service (Python) are separate codebases with no shared constants module; duplicating one named, documented constant is simpler than building cross-language constant sharing for a single number. Both must be kept in sync by hand if the threshold ever changes |
+| 2026-10-17 | Pseudonyms are derived from the user id alone, with no stored mapping and no rotation | Keeps the privacy property simple to reason about (nothing new to leak, nothing new to store) at the cost of pseudonyms never changing on their own; real rotation is future work, tracked in the open questions |
+| 2026-10-18 | Pseudonym rotation folds a "season" number (days-since-epoch ÷ 90, from the same `today` already threaded through `HillsideService.compute`) into the pseudonym hash, instead of storing a pseudonym plus a rotated-at timestamp | The open question noted a stored, explicitly-rotated pseudonym needs real design work and breaks the "no stored mapping" property. Folding the season into the existing deterministic hash gets real rotation (a different pseudonym roughly every 90 days, "change every season" per the design reference) with no new column, no migration, and no rotation job to run — the hash input changing on its own as time passes is the entire mechanism |
+| 2026-10-17 | The hillside compares users within one shared deployment, not separate single-user instances reporting in | Asked the user rather than guessing, since this is a far bigger change (every table eventually needs a `user_id`) than the alternative (a lightweight opt-in reporting endpoint). Confirmed before writing any code, per PROJECT.md's explicit gate on this phase |
+| 2026-10-17 | Both password and GitHub OAuth login are supported, not just one | Asked the user directly; they wanted both rather than picking one |
+| 2026-10-17 | Next.js owns the login session; this backend only verifies a signed token Next.js attaches to its own server-side calls | Asked the user rather than guessing, since it determines whether this backend ever renders a login page or handles an OAuth redirect (it won't) and keeps today's "frontend does all the fetching server-side" architecture intact, just adding identity to those calls |
+| 2026-10-17 | Two `SecurityFilterChain` beans (`/api/users/**` requiring a JWT, everything else `permitAll`), not one chain with a path-based authorization rule | Found as a real bug while wiring this in: a single chain with `oauth2ResourceServer().jwt()` intercepts *any* request bearing an `Authorization: Bearer` header globally and 401s if it isn't a valid JWT, even on a `permitAll` path — `MeasurementIngestController` and `github-login` both read their own app-level Bearer tokens, and presenting one made Spring Security treat it as a failed authentication attempt rather than deferring to the permitAll rule. Scoping the JWT filter to only the one path that actually needs it fixed this without touching those controllers |
+| 2026-10-17 | `POST /api/auth/login` returns a generic 401 on every kind of failure (unknown email, GitHub-only account, wrong password) | Distinguishing them in the response would let a caller enumerate which emails are registered just by trying logins; a single generic failure gives nothing away |
+| 2026-10-17 | `POST /api/auth/github-login` is protected by its own `AUTH_INTERNAL_TOKEN`, separate from the per-user JWT | This endpoint has no password or OAuth proof of its own — it trusts whoever calls it already verified the GitHub identity through a real OAuth flow. Without this, anyone could call it directly with an arbitrary email/githubId and get back that account's id, since nothing else in the request proves identity |
+| 2026-10-17 | `AUTH_JWT_SECRET` has no default in `application.yml` but gets an insecure one in `docker-compose.yml` | A real deployment with real accounts must never run with a guessable secret, so the app fails to start without one by default; a local `docker compose up` would otherwise break for everyone, even though nothing in the app requires login yet, so the compose file supplies a clearly-labeled dev-only placeholder instead |
+| 2026-10-17 | `User.passwordHash`/`githubId` are both nullable, enforced by a DB check constraint requiring at least one | Mirrors `DailyLog`'s existing exactly-one-of-two-targets pattern: the application layer (the `User` constructor) can't construct an invalid instance, and the DB constraint guards against any future write path that bypasses it |
 | 2026-10-17 | Reader's notes will call the Anthropic Claude API for assessment, not OpenAI or another provider | Asked the user rather than guessing, since this is the first LLM integration in the codebase and involves a new credential. Also matches the project's own tooling |
 | 2026-10-17 | `Book` supersedes `current_reading_log` as the source of truth for "what am I reading"; hub-sync now writes `Book` rows, not `current_reading_log` rows | Asked the user rather than deciding silently, since it changes an existing integration point. `Book` is a richer entity (chapter progress, author) that the plain title-only log can't represent; keeping both as parallel, equally-authoritative writers would create two answers to "what book is this" with no rule for which wins |
 | 2026-10-17 | `current_reading_log`, `CurrentReadingController`, and Flock's manual reading form are left as-is, not removed or migrated this slice | They still work for manual entries; only hub-sync's automatic writes moved. Updating the frontend to read `Book` instead is real work belonging to the Reading page itself, not this groundwork slice, and deleting a still-used endpoint without replacing its caller would break Flock and Tally for no reason |
@@ -347,10 +468,10 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 - Whether `HubJournalReader` should hold the full journal-decrypting key at all, versus a
   least-privilege alternative that needs no key. Tracked in `hub-sync.md`'s open questions,
   to revisit before Stage 3.
-- Strava's own sync (client, token storage, refresh, the actual OAuth redirect flow) is not
-  designed yet, deliberately, pending Phase 8's accounts/auth architecture decision. Revisit
-  once that's agreed, not before.
-- The Reading frontend page is not built yet — the last piece of Phase 7.
+- Strava's own sync (client, token storage, refresh, the actual OAuth redirect flow) is still
+  not designed. Phase 8's accounts/auth architecture is now agreed (see above), so this is no
+  longer blocked on that decision specifically, but Strava's own OAuth design is separate
+  work, not started.
 - Whether `POST /api/reading-notes` should itself call the intelligence service's
   `POST /reading-notes/assess` server-side, instead of expecting the frontend to call it
   first and pass the result along, isn't decided. The current shape matches the project's
@@ -359,3 +480,25 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 - Whether `Book`'s `currentChapter`/`totalChapters` should be settable through
   `POST /api/books` only, or need their own `PATCH` for updating progress on an existing book
   without re-creating it, isn't decided; no caller needs it yet.
+- `goals` now has a `user_id` and a creation API (see above); no other table is scoped yet.
+- `hillside_opt_in` now has a real frontend toggle (`/hillside`'s "Join the hillside"/"Leave
+  the hillside" link, a Server Action calling `PUT /api/users/me/hillside-opt-in` — see
+  `frontend.md`). Still true: a real user defaults to opted-out until they use it.
+- Pseudonym rotation is now live (season folded into the hash — see the decisions log above),
+  not just an open question.
+- `asUserId` on `/api/hillside` is now overridden by the real session when one exists (the
+  frontend ignores the query param entirely once a user is signed in — see `frontend.md`);
+  `userId` on the two scoped endpoints (`routine_items`, `daily_logs`) is still a plain,
+  unauthenticated param nothing in the frontend writes through yet, since neither endpoint has
+  a creation flow in the UI that would need it.
+- The Next.js side of password login is now built and live-verified (`/login`, `/register`,
+  `lib/auth/jwt.ts`/`session.ts` — see `frontend.md`): `GET /api/users/me` has been proven
+  against a real token Next.js itself minted and signed, not just the hand-built token
+  `UserControllerApiIntegrationTest` uses. The GitHub OAuth side (next-auth or equivalent
+  wiring, the GitHub OAuth app registration and its real client id/secret, the login UI's
+  GitHub button) is still not built — explicitly deferred, not an oversight.
+- Sessions last a fixed 7 days (`SESSION_TTL_SECONDS` in `frontend/lib/auth/jwt.ts`) with no
+  refresh — a user who stays logged in past that is just signed out, same as the cookie never
+  existing. Whether JWTs should carry a shorter expiry Next.js actively refreshes, and what
+  that refresh looks like across the frontend/backend boundary, isn't decided; nothing
+  exercises refresh behavior yet, since nothing refreshes.

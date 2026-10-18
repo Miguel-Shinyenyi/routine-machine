@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
-/* Design tokens from docs/design.md. Light values are the defaults; dark values apply
-   under prefers-color-scheme. No manual theme toggle exists, the system setting decides. */
+/* Design tokens from docs/design.md. Light values are the defaults; dark values apply under
+   prefers-color-scheme, unless overridden by the manual toggle (components/ThemeToggle.tsx),
+   which sets data-theme="light"/"dark" on <html> and is read back on load from localStorage. */
 :root {
   --canvas: #f5f5f7;
   --surface: #ffffff;
@@ -9,6 +10,8 @@
   --ink: #1d1d1f;
   --muted: #6e6e73;
   --hairline: #e5e5ea;
+  --field-edge: #d2d2d7;
+  --glass-edge: rgba(255, 255, 255, 0.8);
   --fill: rgba(118, 118, 128, 0.12);
   --tint: #e9a23b;
   --tint-text: #9a5208;
@@ -24,13 +27,15 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --canvas: #000000;
     --surface: #1c1c1e;
     --surface-2: #2c2c2e;
     --ink: #f5f5f7;
     --muted: #a1a1a6;
     --hairline: #38383a;
+    --field-edge: #48484a;
+    --glass-edge: rgba(255, 255, 255, 0.12);
     --fill: rgba(118, 118, 128, 0.24);
     --tint: #f0ae4e;
     --tint-text: #f0ae4e;
@@ -44,6 +49,30 @@
     --goal-line-2: #4d9bf0;
     --goal-line-3: #30d158;
   }
+}
+
+/* Manual override, independent of system preference (components/ThemeToggle.tsx). */
+:root[data-theme="dark"] {
+  --canvas: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --ink: #f5f5f7;
+  --muted: #a1a1a6;
+  --hairline: #38383a;
+  --field-edge: #48484a;
+  --glass-edge: rgba(255, 255, 255, 0.12);
+  --fill: rgba(118, 118, 128, 0.24);
+  --tint: #f0ae4e;
+  --tint-text: #f0ae4e;
+  --tint-fill: #2a2215;
+  --tended-ink: #30d158;
+  --tended-fill: #16301c;
+  --private-ink: #8ec5e8;
+  --private-fill: #12232e;
+  --glass-bg: rgba(28, 28, 30, 0.72);
+  --goal-line-1: #d99232;
+  --goal-line-2: #4d9bf0;
+  --goal-line-3: #30d158;
 }
 
 @theme inline {
@@ -76,15 +105,35 @@ body {
   background: var(--canvas);
   color: var(--ink);
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   font-size: 15px;
-  line-height: 1.45;
+  line-height: 1.47;
 }
 
 .glass {
   background: var(--glass-bg);
+  border: 1px solid var(--glass-edge);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+.field {
+  width: 100%;
+  border: 1px solid var(--field-edge);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--surface);
+  resize: vertical;
+}
+
+.field:focus {
+  outline: none;
+  border-color: var(--tint);
+  box-shadow: 0 0 0 4px rgba(233, 162, 59, 0.3);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -104,13 +153,16 @@ body {
 
 .page-title {
   font-size: 40px;
+  line-height: 1.08;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .section-title {
   font-size: 20px;
+  line-height: 1.2;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .card {
@@ -150,6 +202,9 @@ body {
 }
 
 .chip {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
   border-radius: 999px;
   font-size: 13px;
   padding: 2px 10px;

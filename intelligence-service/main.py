@@ -117,12 +117,21 @@ def health():
     return {"status": "ok"}
 
 
+def _unowned(records: list[dict]) -> list[dict]:
+    # This service has no concept of "current user" (see docs/intelligence-service.md): it
+    # computes suggestions/patterns/tally for the one legacy, single-user world, the same
+    # unowned (userId None) data Flock and Watering holes already restrict themselves to.
+    # Without this filter, Phase 8's hillside demo users' routine items/daily logs would get
+    # mixed into every computation here too.
+    return [r for r in records if r.get("userId") is None]
+
+
 @app.get("/suggestion", response_model=SuggestionResponse)
 def suggestion():
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
-        goals = client.get("/api/goals").raise_for_status().json()
+        goals = _unowned(client.get("/api/goals").raise_for_status().json())
         topics = client.get("/api/learning-topics").raise_for_status().json()
-        logs = client.get("/api/daily-logs").raise_for_status().json()
+        logs = _unowned(client.get("/api/daily-logs").raise_for_status().json())
 
     try:
         result = choose_suggestion(goals, topics, logs)
@@ -140,8 +149,8 @@ def suggestion():
 @app.get("/patterns", response_model=PatternsResponse)
 def patterns():
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
-        routine_items = client.get("/api/routine-items").raise_for_status().json()
-        logs = client.get("/api/daily-logs").raise_for_status().json()
+        routine_items = _unowned(client.get("/api/routine-items").raise_for_status().json())
+        logs = _unowned(client.get("/api/daily-logs").raise_for_status().json())
 
     result = compute_patterns(routine_items, logs, today=date.today())
 
@@ -177,13 +186,15 @@ def patterns():
 
 
 @app.get("/tally", response_model=TallyResponse)
-def tally(windowDays: int = 28):
+def tally(windowDays: int = 28, sinceStart: bool = False):
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
-        routine_items = client.get("/api/routine-items").raise_for_status().json()
+        routine_items = _unowned(client.get("/api/routine-items").raise_for_status().json())
         learning_topics = client.get("/api/learning-topics").raise_for_status().json()
-        logs = client.get("/api/daily-logs").raise_for_status().json()
+        logs = _unowned(client.get("/api/daily-logs").raise_for_status().json())
 
-    result = compute_tally(routine_items, learning_topics, logs, today=date.today(), window_days=windowDays)
+    result = compute_tally(
+        routine_items, learning_topics, logs, today=date.today(), window_days=windowDays,
+        since_start=sinceStart)
 
     return TallyResponse(
         daysShownUp=[DayShownUpView(date=d.date, shownUp=d.shown_up) for d in result.days_shown_up],

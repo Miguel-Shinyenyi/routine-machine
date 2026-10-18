@@ -51,7 +51,7 @@ class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void logsALearningTopicCompletionWithAnExplicitHubSyncSource() throws Exception {
-        var goal = goalRepository.findByName("ai-engineer-evidence").orElseThrow();
+        var goal = goalRepository.findFirstByName("ai-engineer-evidence").orElseThrow();
         var topic = learningTopicRepository.save(
                 new com.routinemachine.core.domain.LearningTopic("write article on evals", goal));
 
@@ -81,7 +81,7 @@ class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     void rejectsALogWithBothTargetsSet() throws Exception {
         RoutineItem item = routineItemRepository.save(new RoutineItem("exercise", null));
-        var goal = goalRepository.findByName("target-roles").orElseThrow();
+        var goal = goalRepository.findFirstByName("target-roles").orElseThrow();
         var topic = learningTopicRepository.save(
                 new com.routinemachine.core.domain.LearningTopic("PostHog analytics", goal));
 

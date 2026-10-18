@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Reader's note, phone</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="tokens.css">
+</head>
+<body>
+<style>
+body{margin:0}
+*{box-sizing:border-box}
+a{color:#9A5208}a:hover{color:#7A4106}
+.ph{position:relative;width:390px;height:1500px;overflow:hidden;background:#F5F5F7;color:#1D1D1F;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.pad{padding:56px 20px 120px;display:flex;flex-direction:column;gap:16px}
+.eyebrow{font-size:13px;font-weight:600;color:#9A5208;margin:0}
+h1{font-size:34px;line-height:1.1;letter-spacing:-.02em;font-weight:700;margin:2px 0 0}
+h2{font-size:17px;font-weight:600;margin:0}
+.muted{color:#6E6E73}
+.glass{background:rgba(255,255,255,.72);backdrop-filter:blur(20px) saturate(180%);border:1px solid rgba(255,255,255,.8);box-shadow:0 8px 32px rgba(0,0,0,.10);border-radius:20px}
+.card{background:#fff;border-radius:18px;padding:16px}
+.bar{height:8px;border-radius:4px;background:#E8E8ED;overflow:hidden}
+.bar i{display:block;height:100%;background:#E9A23B}
+label{font-size:13px;font-weight:600}
+.field{width:100%;border:1px solid #D2D2D7;border-radius:12px;padding:12px;font-family:inherit;font-size:17px;line-height:1.5;color:#1D1D1F;background:#fff;resize:none}
+.btn{display:flex;align-items:center;justify-content:center;min-height:50px;border-radius:14px;border:0;background:#E9A23B;color:#1D1D1F;font-family:inherit;font-size:17px;font-weight:600;width:100%}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:980px;padding:2px 9px;font-size:12px;font-weight:600;background:#E3F5E7;color:#1B7332}
+.score{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.score div{background:#F5F5F7;border-radius:12px;padding:10px}
+.score b{display:block;font-size:20px;font-weight:600}
+.score span{font-size:11px;color:#6E6E73}
+mark{background:#FBF0DC;color:#1D1D1F;border-bottom:2px dotted #9A5208}
+.tabbar{position:absolute;left:16px;right:16px;bottom:24px;height:64px;display:flex;justify-content:space-around;align-items:center;padding:0 6px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:56px;min-height:48px;justify-content:center;font-size:10px;font-weight:500;color:#6E6E73;text-decoration:none}
+.tab svg{width:24px;height:24px}
+.tab.on{color:#9A5208}
+</style>
+<div class="ph">
+<div class="pad">
+<div>
+<p class="eyebrow">Sapiens · ch. 14 of 20</p>
+<h1>Tonight's note</h1>
+</div>
+<div class="bar" aria-hidden="true"><i style="width: 70%;"></i></div>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 10px;">
+<label for="pnote">In your own words</label>
+<textarea id="pnote" class="field" rows="8">Harari's point is that science started when people were willing to say "we don't know". Empire paid for science because both wanted to grow. It reminded me of the UNKNOWN state in the settlement engine: honest because it can say "not sure yet". Is hype the opposite, pretending to know?</textarea>
+<span class="muted" style="font-size: 12px;">Two lines is enough. Quotes are fine; they just don't count as yours.</span>
+</div>
+<button class="btn">Give it to the Shepherd</button>
+
+<div class="card" style="display: flex; flex-direction: column; gap: 12px;">
+<div style="display: flex; justify-content: space-between; align-items: center;"><h2>What the Shepherd read</h2><span class="chip">Counts</span></div>
+<div class="score"><div><b>Ch. 14</b><span>Where you are</span></div><div><b>91%</b><span>Your words</span></div><div><b>3</b><span>Ideas linked</span></div></div>
+<p style="margin: 0; font-size: 15px;">…willing to say <mark>"we don't know"</mark>. Empire paid for science…</p>
+<ul style="margin: 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 4px;">
+<li>You named the chapter's main idea.</li>
+<li>You reached ahead to science and empire.</li>
+<li>You tied it to your own work.</li>
+</ul>
+</div>
+
+<div class="glass" style="padding: 14px; display: flex; gap: 12px; align-items: flex-start;">
+<svg viewBox="0 0 120 150" width="32" height="40" aria-hidden="true" style="flex: none;"><path d="M92 146V44q0-18-14-18-12 0-12 12" fill="none" stroke="#7A4A1E" stroke-width="6" stroke-linecap="round"></path><path d="M30 146L40 74Q60 60 80 74L90 146Z" fill="#3E7B4F" stroke="#1D1D1F" stroke-width="3"></path><path d="M44 74L84 124L78 132L38 86Z" fill="#C8372D" stroke="#1D1D1F" stroke-width="3"></path><circle cx="60" cy="50" r="17" fill="#6B4226" stroke="#1D1D1F" stroke-width="3"></circle></svg>
+<div><div style="font-size: 12px;" class="muted"><strong style="color: #1D1D1F; font-weight: 600;">Shepherd</strong> · one question back</div><p style="margin: 2px 0 0; font-size: 15px;">What would funding "honest unknowns" look like in your work?</p></div>
+</div>
+
+<p class="muted" style="margin: 0; font-size: 13px; text-align: center;">The hillside sees only that this note counted. Never the words.</p>
+</div>
+
+<nav class="tabbar glass" aria-label="Tabs">
+<a class="tab" href="phone-today.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"></path></svg>Today</a>
+<a class="tab" href="path.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 21c0-5 12-5 12-10S9 7 9 3"></path></svg>Path</a>
+<a class="tab on" href="phone-reading.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path></svg>Reading</a>
+<a class="tab" href="tally.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6"></path></svg>Tally</a>
+<a class="tab" href="phone-hillside.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 19l7-10 4 5 3-3 6 8z"></path></svg>Hillside</a>
+</nav>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

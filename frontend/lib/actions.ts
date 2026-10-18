@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { backendFetch, intelligenceFetch } from "./api";
+import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "./api";
+import { getSessionToken } from "./auth/session";
 import type { ReadingNoteAssessment } from "./types";
 
 function optionalNumber(value: FormDataEntryValue | null): number | null {
@@ -137,4 +138,19 @@ export async function submitReadingNote(formData: FormData): Promise<void> {
 
   revalidatePath("/reading");
   revalidatePath("/tally");
+}
+
+// The hillside should never enroll anyone who hasn't explicitly agreed (see
+// docs/backend.md's hillside_opt_in decision), so this only ever runs for a signed-in session
+// — the Hillside page itself doesn't render the toggle at all when there's no session token.
+export async function setHillsideOptIn(formData: FormData): Promise<void> {
+  const token = await getSessionToken();
+  if (!token) return;
+
+  await authenticatedBackendFetch("/api/users/me/hillside-opt-in", token, {
+    method: "PUT",
+    body: JSON.stringify({ optIn: formData.get("optIn") === "true" }),
+  });
+
+  revalidatePath("/hillside");
 }

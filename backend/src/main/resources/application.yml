@@ -12,3 +12,8 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+auth:
+  # No default: a missing secret should fail the app at startup, not run with a guessable
+  # one. See docs/backend.md's decisions log.
+  jwt-secret: ${AUTH_JWT_SECRET}

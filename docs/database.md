@@ -9,8 +9,10 @@ schedule. Shared by both services.
 
 Built via two Flyway migrations. Four Phase 1 tables:
 
-- `goals(id, name unique, description, created_at)`, seeded with the three tracked goals
-  (`cmu-masters-application`, `target-roles`, `ai-engineer-evidence`) in `V2__seed_goals.sql`.
+- `goals(id, name, description, user_id nullable, created_at)`, seeded with the three tracked
+  goals (`cmu-masters-application`, `target-roles`, `ai-engineer-evidence`) in
+  `V2__seed_goals.sql` (`user_id` added in Phase 8's `V16__goal_user_scoping.sql`, see below;
+  unique on `(user_id, name)`, not `name` alone).
 - `routine_items(id, name, description, created_at)`
 - `learning_topics(id, name, goal_id references goals, created_at)`
 - `daily_logs(id, log_date, routine_item_id references routine_items nullable,
@@ -114,10 +116,43 @@ eighth value, `reader-notes`, for a log `ReadingNoteService` writes when a note'
 carries `measured_minutes` — a written reflection has no duration to report, same reasoning
 `GitHubSyncService`'s commit-count logs already apply.
 
+Phase 8 built via `V14__users.sql`: `users(id, email unique, password_hash, github_id unique,
+display_name, created_at)`, a check constraint requires at least one of `password_hash`/
+`github_id`. See `backend.md`'s decisions log for the three accounts/auth decisions this
+table is built on.
+
+Phase 8 also built via `V15__user_scoped_data.sql`: `routine_items` and `daily_logs` each
+gain a nullable `user_id` (indexed), referencing `users`. `NULL` means legacy/unowned — every
+row written before this phase, and everything every Phase 6 sync service writes, stays
+exactly that way. `books`, `reading_notes`, `measurements`, and the rest still have no
+`user_id` at all. See `backend.md`'s decisions log for why these tables first, and why
+nullable/optional rather than enforced.
+
+Phase 8's hillside (`GET /api/hillside`, see `backend.md`) added no new table: it's computed
+fresh from `daily_logs`/`routine_items`/`users` on every call, nothing is stored or cached.
+
+Phase 8 also built via `V17__hillside_opt_in.sql`: `users` gains `hillside_opt_in` (boolean,
+not null, default `false`). The hillside now only counts a user's logs once they've opted in
+(`PUT /api/users/me/hillside-opt-in`, see `backend.md`) — defaulting to `false` means no
+existing user is silently enrolled by this migration, even if they already have non-private
+routine items.
+
+Phase 8 also built via `V16__goal_user_scoping.sql`: `goals` gains a nullable `user_id`
+(indexed), referencing `users`. `NULL` still means the three seeded goals, shared and visible
+to everyone, exactly as before. The old global `UNIQUE(name)` constraint
+(`goals_name_key`) is replaced by `UNIQUE(user_id, name)` (`goals_user_id_name_unique`):
+two different users, or a user and the seeded data, can now share a goal name, but one user
+can't have two goals of the same name. This also makes `POST /api/goals` possible for the
+first time (see `backend.md`); goals are no longer only created through migrations.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `users.hillside_opt_in` defaults `false`, not `true` | The hillside previously treated every user with a non-private daily log as a participant with no consent step at all; defaulting the new flag to off is the only choice consistent with calling this a real opt-in, not a relabeled version of the same behaviour |
+| 2026-10-17 | `goals.user_id` is nullable, `NULL` keeps meaning the three shared seeded goals | Same reasoning as `routine_items`/`daily_logs`'s `user_id`: adding a creation API shouldn't change what every existing reader of `GET /api/goals` already sees |
+| 2026-10-17 | `goals`'s unique constraint moves from `name` alone to `(user_id, name)` | Once goals can be created per user, two different users (or a user and the seed data) needing the same goal name (e.g. "learn X") is normal, not a collision; uniqueness should scope to the owner, not the whole table |
+| 2026-10-17 | `users` is a new table, groundwork only — no existing table gets a `user_id` yet | Phase 8's accounts/auth architecture is now agreed with the user (see `backend.md`'s decisions log), but scoping every existing table to a user is separate, much larger work than proving accounts can exist; this slice is deliberately narrow |
 | 2026-10-17 | `measurements` is unique on `(source, metric, measurement_date)`, not on an external id from the source | Different sources don't all provide a stable external id for a day's total (WakaTime's daily summary isn't a discrete record the way a GitHub commit sha is); keying on the day itself and upserting works the same way for every source, and matches that a day's total can legitimately change between two syncs of the same day |
 | 2026-10-17 | `hub_sync_processed_files` is keyed by `content_sha`, not `repo_path` | A file's git blob sha stays the same across a rename; a path-keyed table would treat the renamed file as new and log it again. See `hub-sync.md`'s decisions log |
 | 2026-10-16 | `routine_items.category`, `hillside_field` have no default, `source` defaults `MANUAL`, `private` defaults `true` | A category or hillside field can't be guessed for existing rows, so they stay nullable until someone assigns one through Flock; `source` and `private` have an honest single-user default (manually tended, not yet shared) that every existing row already matches |
@@ -129,7 +164,7 @@ carries `measured_minutes` — a written reflection has no duration to report, s
 | 2026-09-18 | Exactly-one-target enforced both in the DailyLog entity's factory methods and as a DB check constraint | The entity API can't construct an invalid instance, but the DB constraint guards against any future write path (e.g. a hub-sync script) that bypasses it |
 | 2026-09-18 | DailyLog gets a source field (manual vs hub-sync, later schedule) | Keeps provenance visible; completions from different origins shouldn't be indistinguishable in the data |
 | 2026-09-18 | Four Phase 1 tables: routine_items, learning_topics, daily_logs, goals | Matches the Phase 1 requirement exactly, no speculative tables for Phase 2 or 3 logic |
-| 2026-09-18 | No user table, no auth | Single user, personal tool, see PROJECT.md; revisit only if this needs to be shared |
+| 2026-09-18 | No user table, no auth | Single user, personal tool, see PROJECT.md; revisit only if this needs to be shared. **Revisited 2026-10-17**: Phase 8's hillside needs this; `users` now exists, but nothing else references it yet — see the 2026-10-17 entry above |
 | 2026-09-18 | No edit history or versioning on daily_logs | Adds complexity with no current justification; revisit if incorrect logs become a real recurring problem |
 | 2026-10-17 | `books` has no `chapters` table, just `current_chapter`/`total_chapters` integers | Matches `docs/design.md`'s Reading page, which needs chapter progress as a number out of a number, not a catalog; a reader's note's "chapter placed" field (Phase 7, not built yet) is an LLM's free-text guess, not a foreign key |
 | 2026-09-19 | `current_reading_log` is append-only with no status field | The current book is always just the latest row; a status field would duplicate what ordering already tells you |
@@ -137,3 +172,6 @@ carries `measured_minutes` — a written reflection has no duration to report, s
 ## Open questions
 
 - None currently open for Phase 6.
+- Phase 8: `routine_items`, `daily_logs`, and now `goals` have an optional `user_id`; how
+  existing dev data backfills to a seed user is still undecided — see `backend.md`'s open
+  questions for the full list.

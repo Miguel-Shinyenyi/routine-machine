@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Watering holes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="tokens.css">
+</head>
+<body>
+<style>
+body{margin:0}
+*{box-sizing:border-box}
+a{color:#9A5208}a:hover{color:#7A4106}
+.app{display:flex;flex-wrap:wrap;min-height:100vh;background:#F5F5F7;color:#1D1D1F;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;font-size:15px;line-height:1.47;-webkit-font-smoothing:antialiased}
+.side{flex:1 1 220px;max-width:100%;padding:20px 12px;background:rgba(255,255,255,.72);backdrop-filter:blur(20px) saturate(180%);border-right:1px solid rgba(0,0,0,.08);display:flex;flex-direction:column;gap:2px}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 10px 18px;font-weight:600;font-size:15px;color:#1D1D1F;text-decoration:none}
+.logo{width:30px;height:30px;border-radius:8px;background:#E9A23B;display:flex;align-items:center;justify-content:center;flex:none}
+.nav{display:flex;align-items:center;gap:10px;min-height:36px;padding:6px 10px;border-radius:8px;color:#1D1D1F;text-decoration:none;font-size:14px}
+.nav:hover{background:rgba(118,118,128,.12);color:#1D1D1F}
+.nav.on{background:rgba(233,162,59,.2);font-weight:600}
+.nav svg{width:18px;height:18px;flex:none;color:#9A5208}
+.nav small{margin-left:auto;color:#6E6E73;font-size:12px;font-weight:500}
+.sidefoot{margin-top:auto;padding:12px 10px;font-size:12px;color:#6E6E73}
+.main{flex:999 1 560px;min-width:0;padding:32px 40px 64px}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+.eyebrow{font-size:15px;font-weight:600;color:#9A5208;margin:0}
+h1{font-size:40px;line-height:1.08;letter-spacing:-.02em;font-weight:600;margin:4px 0 0}
+h2{font-size:20px;line-height:1.2;font-weight:600;letter-spacing:-.01em;margin:0}
+.sub{font-size:17px;color:#6E6E73;margin:8px 0 0;max-width:62ch}
+.muted{color:#6E6E73}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.src{background:#fff;border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:8px}
+.src .top{display:flex;align-items:center;gap:10px}
+.mark{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;flex:none}
+.src h3{margin:0;font-size:16px;font-weight:600}
+.src p{margin:0;font-size:14px;color:#6E6E73}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:980px;padding:2px 9px;font-size:12px;font-weight:600;background:rgba(118,118,128,.12);color:#1D1D1F;white-space:nowrap;align-self:flex-start}
+.chip.ok{background:#E3F5E7;color:#1B7332}
+.chip.tint{background:#FBF0DC;color:#9A5208}
+.chip.priv{background:#EEF3F7;color:#2F5A72}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:6px 14px;border-radius:980px;border:0;background:#E9A23B;color:#1D1D1F;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;align-self:flex-start;margin-top:auto}
+.btn.gray{background:rgba(118,118,128,.12);color:#9A5208}
+.list{background:#fff;border-radius:14px;overflow:hidden;min-width:860px}
+.trow{display:grid;grid-template-columns:minmax(120px,.9fr) minmax(200px,1.6fr) minmax(150px,1.1fr) minmax(150px,1.1fr) minmax(100px,.8fr);gap:14px;align-items:center;min-height:56px;padding:9px 16px;border-top:1px solid #E5E5EA;font-size:14px}
+.trow.first{border-top:0}
+.trow.head{min-height:34px;font-size:12px;font-weight:500;color:#6E6E73;background:#FAFAFC}
+.trow b{font-weight:600}
+.card{background:#fff;border-radius:18px;padding:20px}
+</style>
+<div class="app">
+<nav class="side" aria-label="Routine Machine">
+<a class="brand" href="today.html"><span class="logo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1D1D1F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M14 21V8a4 4 0 0 0-8 0"></path></svg></span>Routine Machine</a>
+<a class="nav" href="today.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"></path></svg>Today<small>3 of 9</small></a>
+<a class="nav" href="path.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 21c0-5 12-5 12-10S9 7 9 3"></path></svg>Path</a>
+<a class="nav" href="flock.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M7 16a3 3 0 0 1 0-6 4 4 0 0 1 7.5-1.5A3.5 3.5 0 0 1 17 16z"></path><path d="M9 16v3M14 16v3"></path></svg>Flock</a>
+<a class="nav" href="tally.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6"></path></svg>Tally</a>
+<a class="nav" href="reading.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path></svg>Reading</a>
+<a class="nav" href="hillside.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 19l7-10 4 5 3-3 6 8z"></path></svg>Hillside</a>
+<a class="nav on" href="watering-holes.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"></path></svg>Watering holes<small>5 on</small></a>
+<div class="sidefoot">The Shepherd has kept watch with you for 47 days.</div>
+</nav>
+
+<main class="main">
+<div class="wrap">
+<div>
+<p class="eyebrow">Watering holes</p>
+<h1>Where the records come from.</h1>
+<p class="sub">The flock drinks from the tools you already use. Whatever a tool can see, you never have to type. Whatever it can't, you tap once.</p>
+</div>
+
+<section aria-labelledby="conn">
+<h2 id="conn" style="font-size: 17px; margin: 0 4px 10px;">Connected and waiting</h2>
+<div class="grid">
+<div class="src"><div class="top"><span class="mark" style="background: #1D1D1F;">U</span><h3>UMWAYI hub</h3></div><span class="chip ok">Connected · checked 6:41</span><p>New files in journal/entries and articles/, and your "Current book:" line. Public repo, no token stored.</p><span class="chip">Journaling, Writing, Reading</span></div>
+<div class="src"><div class="top"><span class="mark" style="background: #0066CC;">W</span><h3>WakaTime</h3></div><span class="chip ok">Connected · 3 projects</span><p>Coding time per project. routine-machine counts as deep work; Global Link+ repos as paid work.</p><span class="chip">Deep work, Paid work</span></div>
+<div class="src"><div class="top"><span class="mark" style="background: #2F5A72;">A</span><h3>ActivityWatch</h3></div><span class="chip ok">Connected · on this computer</span><p>Focused time by app and site, with away-from-keyboard removed. Runs locally; only daily totals leave your machine.</p><span class="chip">Learning, Deep work</span></div>
+<div class="src"><div class="top"><span class="mark" style="background: #6E6E73;">G</span><h3>GitHub</h3></div><span class="chip ok">Connected</span><p>Commits as a backup signal when WakaTime misses a session. Never ranked on its own.</p><span class="chip">Deep work</span></div>
+<div class="src"><div class="top"><span class="mark" style="background: #9A5208;">R</span><h3>Reader's notes</h3></div><span class="chip ok">Built in</span><p>Your notes, read by the Shepherd to place you in the book and check they are yours.</p><span class="chip">Reading</span></div>
+</div>
+</section>
+
+<section aria-labelledby="more">
+<h2 id="more" style="font-size: 17px; margin: 0 4px 10px;">Not connected yet</h2>
+<div class="grid">
+<div class="src"><div class="top"><span class="mark" style="background: #1B7332;">H</span><h3>Health Connect</h3></div><span class="chip tint">Needs the phone companion</span><p>Workouts, steps, active minutes and sleep from your Android phone or watch. Health data lives on the phone, so a small companion app sends daily totals.</p><a class="btn" href="watering-holes.html">Set up on phone</a></div>
+<div class="src"><div class="top"><span class="mark" style="background: #1B7332;">A</span><h3>Apple Health</h3></div><span class="chip tint">Needs the phone companion</span><p>The same, for iPhone and Apple Watch, through HealthKit on the device.</p><a class="btn gray" href="watering-holes.html">Set up on iPhone</a></div>
+<div class="src"><div class="top"><span class="mark" style="background: #C93400;">S</span><h3>Strava</h3></div><span class="chip">Optional</span><p>Skate sessions, walks and rides with distance. Useful for skating, which phones often miss.</p><a class="btn gray" href="watering-holes.html">Connect</a></div>
+<div class="src"><div class="top"><span class="mark" style="background: #3A3A3C;">R</span><h3>RescueTime</h3></div><span class="chip">Optional</span><p>Productive versus distracting time by category. Overlaps ActivityWatch; pick one to avoid counting twice.</p><a class="btn gray" href="watering-holes.html">Connect</a></div>
+<div class="src"><div class="top"><span class="mark" style="background: #6E6E73;">K</span><h3>E-reader progress</h3></div><span class="chip">Later</span><p>KOReader or Readwise position as a cross-check on where your notes place you. Notes stay the source of truth.</p><a class="btn gray" href="watering-holes.html">Learn more</a></div>
+</div>
+</section>
+
+<section aria-labelledby="how">
+<h2 id="how" style="font-size: 17px; margin: 0 4px 10px;">How each activity is counted</h2>
+<div style="overflow-x: auto; border-radius: 14px;"><div class="list">
+<div class="trow head first"><span>Activity</span><span>A day counts when</span><span>Main source</span><span>Backup</span><span>Hillside</span></div>
+<div class="trow"><b>Reading</b><span>A note in your own words names an idea from the pages</span><span>Reader's notes</span><span>E-reader position</span><span class="chip">Reading</span></div>
+<div class="trow"><b>Learning</b><span>25+ focused minutes on the topic, plus a two-line note</span><span>ActivityWatch</span><span>Tapped with the note</span><span class="chip">Learning</span></div>
+<div class="trow"><b>Movement</b><span>30 active minutes, or a logged workout</span><span>Health Connect / Apple Health</span><span>Strava</span><span class="chip">Movement</span></div>
+<div class="trow"><b>Deep work</b><span>60 focused minutes on your own project</span><span>WakaTime</span><span>ActivityWatch, GitHub</span><span class="chip">Deep work</span></div>
+<div class="trow"><b>Sleep</b><span>In bed within 30 minutes of your bedtime</span><span>Phone or watch</span><span>Tapped next morning</span><span class="chip">Sleep</span></div>
+<div class="trow"><b>Journaling, writing</b><span>A new or changed file in the hub</span><span>UMWAYI hub</span><span>None needed</span><span class="chip">Writing</span></div>
+<div class="trow"><b>Paid work</b><span>Time on work repos, about 3 hours</span><span>WakaTime</span><span>ActivityWatch</span><span class="chip priv">Private</span></div>
+<div class="trow"><b>Cooking, cleaning, shower</b><span>One tap</span><span>You</span><span>Optional photo</span><span class="chip priv">Private</span></div>
+<div class="trow"><b>Mum check-in</b><span>One tap after the call</span><span>You</span><span>Call log, if you allow it</span><span class="chip priv">Private</span></div>
+<div class="trow"><b>Finances</b><span>A weekly entry: in, out, saved</span><span>You</span><span>[Bank or M-Pesa export, to decide]</span><span class="chip priv">Private</span></div>
+</div></div>
+</section>
+
+<div class="card">
+<h2 style="font-size: 17px;">Still to work out together.</h2>
+<ul style="margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; color: #3A3A3C;">
+<li>Whether a tapped routine should ever reach the hillside, or stay private for good.</li>
+<li>Finances: a manual weekly entry, or an import from an M-Pesa or bank statement.</li>
+<li>Skating: whether phone motion data is enough, or Strava is needed.</li>
+<li>Learning: whether ActivityWatch should match by site and app, or by a timer you start.</li>
+</ul>
+</div>
+</div>
+</main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

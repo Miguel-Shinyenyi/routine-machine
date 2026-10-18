@@ -6,5 +6,5 @@ import java.time.LocalDate;
 
 public record DailyLogRequest(
         @NotNull LocalDate logDate, Long routineItemId, Long learningTopicId, String source,
-        Integer measuredMinutes) {
+        Integer measuredMinutes, Long userId) {
 }

@@ -30,6 +30,7 @@ export interface RoutineItem {
   isPrivate: boolean;
   goalId: number | null;
   goalName: string | null;
+  userId: number | null;
   createdAt: string;
 }
 
@@ -180,4 +181,27 @@ export interface ReadingNoteAssessment {
   ideasConnected: string[];
   quotedPhrases: string[];
   questionBack: string;
+}
+
+export interface HillsideNeighbor {
+  rank: number;
+  pseudonym: string;
+  daysShownUp: number;
+  isYou: boolean;
+}
+
+export interface Hillside {
+  totalParticipants: number;
+  histogram: number[];
+  yourDaysShownUp: number | null;
+  yourRank: number | null;
+  band: string | null;
+  neighbors: HillsideNeighbor[];
+}
+
+export interface CurrentUser {
+  id: number;
+  email: string;
+  displayName: string | null;
+  hillsideOptIn: boolean;
 }

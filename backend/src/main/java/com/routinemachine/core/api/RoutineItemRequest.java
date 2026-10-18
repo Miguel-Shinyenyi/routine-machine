@@ -13,7 +13,8 @@ public record RoutineItemRequest(
         RoutineItemSource source,
         HillsideField hillsideField,
         Boolean isPrivate,
-        Long goalId) {
+        Long goalId,
+        Long userId) {
 
     public boolean privateOrDefault() {
         return isPrivate == null || isPrivate;

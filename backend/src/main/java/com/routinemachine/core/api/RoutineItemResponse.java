@@ -18,6 +18,7 @@ public record RoutineItemResponse(
         boolean isPrivate,
         Long goalId,
         String goalName,
+        Long userId,
         OffsetDateTime createdAt) {
 
     public static RoutineItemResponse from(RoutineItem item) {
@@ -32,6 +33,7 @@ public record RoutineItemResponse(
                 item.isPrivate(),
                 item.getGoal() == null ? null : item.getGoal().getId(),
                 item.getGoal() == null ? null : item.getGoal().getName(),
+                item.getUser() == null ? null : item.getUser().getId(),
                 item.getCreatedAt());
     }
 }

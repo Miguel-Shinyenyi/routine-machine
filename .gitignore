@@ -22,3 +22,9 @@ __pycache__/
 
 ### Secrets ###
 infra/.env
+
+### Design reference comparison output (generated) ###
+docs/design-reference/compare/
+
+### Local-machine Docker Compose overrides (not shared) ###
+infra/docker-compose.override.yml

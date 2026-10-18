@@ -81,7 +81,48 @@ creates a `daily_log` for the `READER_NOTES` routine item; a note below the thre
 with no assessment at all, does not; posting two qualifying notes the same day creates only
 one `daily_log` (the idempotency case, tested before the "no matching routine item" case,
 matching the project's own "test the double-count case first" instruction); no `READER_NOTES`
-routine item means no log but the note still saves. 130 backend tests, all passing.
+routine item means no log but the note still saves.
+`AuthServiceTest` (`@DataJpaTest`, `TaskServiceTest`-style direct instantiation) covers
+registration (hashed password, duplicate-email rejection), login (right password, wrong
+password, unknown email, GitHub-only account with no password), and `findOrCreateFromGithub`
+(new account, idempotent repeat login, linking to an existing password account by email).
+`AuthControllerApiIntegrationTest` covers the HTTP layer (register-then-login in one method,
+duplicate email, a too-short password, `github-login` with and without the correct internal
+token). `UserControllerApiIntegrationTest` is the one test in the suite that builds a real
+signed JWT (via `nimbus-jose-jwt`, already on the classpath through the resource-server
+starter) with the same shared secret every test context uses, rather than mocking Spring
+Security's authentication context — proof the actual signature verification wiring works,
+not just the authorization rule around it; also covers a missing token and one signed with
+the wrong secret.
+`UserScopedDataApiIntegrationTest` covers the optional `userId` scoping added to routine
+items and daily logs: two registered users each get their own routine item and daily log,
+and listing with `?userId=` returns only that user's own rows, not the other's; a third case
+confirms an unknown `userId` on create fails. This is additive scoping, not a full auth test
+suite — see `backend.md`'s decisions log for why.
+`HillsidePseudonymTest` covers the pseudonym scheme as a pure function: deterministic for the
+same id within the same season, different for different ids, matches the "Adjective Noun 1234"
+shape exactly with no digits or words leaking in from anywhere else, and two new cases for
+rotation — the same id gets a different pseudonym once a 90-day season boundary has passed,
+and stays the same pseudonym for dates still inside the same season. `HillsideServiceTest` (`@DataJpaTest`) covers
+the real aggregation against real rows: a user with fewer qualifying days ranks behind one
+with more; a private routine item's logs never reach the hillside at all (zero participants);
+omitting `asUserId` returns the histogram with no personal band; the "general" field only
+counts a day once 3+ distinct routines were tended, not just one; and (added for the
+frontend's rank-number display) a rival who outranks you gets `rank: 1` while you get `rank:
+2`, the row's real 1-indexed position in the full ranked list, not its position within the
+returned neighbours slice.
+`HillsideApiIntegrationTest` covers the HTTP layer.
+`GoalApiIntegrationTest` covers `POST /api/goals` (Phase 8's goal user-scoping): creating a
+goal for a registered user and returning its `userId`, creating one with no `userId` and
+getting `null` back, 400 on a missing name and on an unknown `userId`, 400 on a second goal
+with the same name for the same user (the new `(user_id, name)` uniqueness), and that
+`?userId=` on the list endpoint isolates one user's goals from another's.
+`HillsideServiceTest` gained a case proving a user who hasn't opted in never reaches the
+hillside even with a qualifying public log; its other cases' `saveUser` helper now opts the
+user in, since that's the real precondition for participating, not an incidental default.
+`UserControllerApiIntegrationTest` covers `PUT /api/users/me/hillside-opt-in`: opting in,
+opting out, and that the endpoint 401s with no token, same as `GET /api/users/me`. 171 backend
+tests, all passing (169 plus 2 new `HillsidePseudonymTest` rotation cases).
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
@@ -99,13 +140,37 @@ error (502). One of these was also verified against the real Anthropic API durin
 testing (see the decisions log): a real key reached the real endpoint with the correct
 request shape and got a real account-billing error back, which the 502 handling (added after
 finding the unhandled-exception bug this surfaced) now reports cleanly instead of as an
-opaque 500. 44 tests, all passing.
+opaque 500. `test_suggestion_ignores_goals_and_logs_owned_by_a_hillside_demo_user` proves the
+`_unowned()` filter works: a goal/log pair with `userId` set must not change `/suggestion`'s
+`lastLoggedOn`, a case chosen because it would silently pick the wrong (more recent) date if
+the filter were removed, not just return extra rows.
+`test_since_start_windows_from_the_earliest_log_not_a_fixed_calendar_window` and
+`test_since_start_with_no_logs_at_all_windows_from_today` cover `compute_tally`'s
+`since_start` option: a deliberately tiny `window_days` is passed alongside `since_start=True`
+to prove it's ignored once set, and the no-logs case confirms the window still has a sane
+(single-day) fallback rather than exploding. 47 tests, all passing.
 
-Frontend: Vitest, but only for `lib/schedule.ts`'s pure logic (which templates still need a
-task, and computing a date's weekday independent of server timezone) — 5 tests, unchanged by
-Phase 5's redesign, Phase 6's watering holes page, or Phase 7's Reading page, since none added
-new pure logic to the frontend (`submitReadingNote` is a sequence of two external calls, not
-a pure function worth isolating and unit-testing on its own). Page components are verified by
+Frontend: Vitest, for pure logic only — `lib/schedule.ts` (which templates still need a task,
+a date's weekday independent of server timezone), `lib/formatDate.ts` and `lib/weekDates.ts`
+(Phase 8's design-fidelity pass: an eyebrow date, and a week's Monday/seven dates, both
+UTC-based for the same server-timezone-independence reason `schedule.ts` already established),
+`lib/markQuotes.ts` (splitting a note's text around its quoted phrases for inline `<mark>`
+rendering), `lib/tallyInsights.ts` (`steepDayInsight`/`learningInsight`, the real
+computations behind Tally's "Steep days"/"Learning and the rest" headlines: which weekday a
+user's skip-heavy days cluster on, and whether learning-day routine completions are higher,
+lower, or tied against other days), and `lib/auth/jwt.ts` (`signSessionToken`/
+`verifySessionToken`: a round trip, expiry just past and just before the cutoff, a token
+signed with the wrong secret, a tampered payload, and garbage input) — 29 tests total.
+`submitReadingNote` stays untested as a unit, since it's
+a sequence of two external calls, not a pure function worth isolating. Page components are
+verified by running the app and clicking through the views and the full materialize → start
+→ done flow in a browser instead, matching settlement-engine's frontend, which has no
+automated test framework at all (see decisions log). `npm run lint` and `npm run build`
+(strict TypeScript) also run as part of finishing a phase. Reading's full flow (create a
+book, submit a note, see it rendered back), Path's week navigation, Flock's routine-item
+rows, Tally's grouped notches, and the hillside's field/window switching and real computed
+band were all verified live via Docker Compose against real seeded data, not just the
+automated suite. Reading's live check included a real call through to
 running the app and clicking through the views and the full materialize → start → done flow
 in a browser instead, matching settlement-engine's frontend, which has no automated test
 framework at all (see decisions log). `npm run lint` and `npm run build` (strict TypeScript)
@@ -119,6 +184,8 @@ recorded, now confirmed end to end through the browser too.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-17 | `UserControllerApiIntegrationTest` builds a real signed JWT with `nimbus-jose-jwt` instead of using Spring Security's test mock-authentication support | Spring Security's `SecurityMockMvcRequestPostProcessors.jwt()` injects an authenticated principal directly, bypassing real token parsing and signature verification entirely; that's the right tool for testing authorization rules, but this phase needed at least one test proving the actual HS256 verification against the real shared secret works, since that's the part a hand-wired `JwtDecoder` bean could get subtly wrong |
+| 2026-10-17 | Adding Spring Security surfaced a real bug, caught by running the full suite, not by a new test written in advance | A single `SecurityFilterChain` with `oauth2ResourceServer().jwt()` broke five unrelated, already-passing tests (`MeasurementIngestControllerTest`'s and `AuthControllerApiIntegrationTest`'s own `Authorization: Bearer` checks) by intercepting their app-level tokens as failed JWTs. Running `./mvnw clean test` immediately after wiring in a new cross-cutting concern like security is exactly the kind of check that catches this before it reaches a report |
 | 2026-10-17 | `assess_reading_note`'s automated tests fake Anthropic's API via `respx`, but it was also manually verified against the real API | Same offline/repeatable reasoning as every other faked external call in this project, but this one happened to have a real `ANTHROPIC_API_KEY` available in the session environment, so the real integration was checked too, not left purely theoretical. It surfaced a real bug (an unhandled `httpx.HTTPStatusError` producing an opaque 500), fixed and covered by a new test before moving on |
 | 2026-10-17 | `BookApiIntegrationTest` covers creating two books, confirming the current one is the latest and the list is newest-first, as one test method rather than several | Splitting it across methods would hit the same shared-Postgres-per-class ordering risk the measurement ingest tests already found; `rejectsABlankTitle` is a separate method since it writes nothing and isn't order-sensitive |
 | 2026-10-17 | `BookApiNoBooksYetTest` is its own test class, not a method in `BookApiIntegrationTest` | Its own class gets its own fresh Postgres container, so the 404-when-nothing-logged-yet case isn't order-dependent on what `BookApiIntegrationTest`'s other tests already wrote |
@@ -139,6 +206,9 @@ recorded, now confirmed end to end through the browser too.
 | 2026-09-18 | Integration tests use Testcontainers Postgres, not H2 or mocks | Flyway migrations and the daily_logs check constraints are Postgres-specific; a lighter substitute wouldn't actually test them, matching settlement-engine's approach |
 | 2026-09-18 | Suggestion logic is unit-tested as a pure function, HTTP layer tested separately with respx | Keeps the rule's test cases fast and readable, and isolates HTTP mocking to the one test that needs it |
 | 2026-09-18 | TDD required for both services from the first line of code | Stated non-negotiable in PROJECT.md's rules section, not left to convention |
+| 2026-10-18 | `lib/auth/jwt.ts` is unit-tested with Vitest, not covered only by the live browser login check | It's a pure function (sign/verify) with real edge cases — expiry boundary, wrong secret, tampered payload, garbage input — exactly the kind of logic `schedule.ts`'s other pure functions already get fast, deterministic tests for, separate from the slower end-to-end browser verification of the full login flow |
+| 2026-10-18 | Password login's register → login → logout round trip (plus the wrong-password error path) was verified live in a real browser against a rebuilt Docker Compose stack, not just unit tests | `lib/auth/jwt.ts`'s tests cover the token logic in isolation but not the Server Actions, the cookie actually being set/cleared, or the redirect targets; a live click-through is the only check that exercises the whole path end to end |
+| 2026-10-18 | Hillside's real-session wiring and opt-in toggle were verified live (signed-in user sees "Join the hillside", clicking it flips to "Leave the hillside" and the band card's messaging updates, clicking again reverts, signed out reverts to the demo-mode `?asUserId=` message), no new automated test for this frontend wiring | It's a thin Server Action (`setHillsideOptIn`) plus conditional JSX already covered structurally by the backend's own `PUT /api/users/me/hillside-opt-in` tests; a live click-through proves the frontend calls it correctly and `revalidatePath` actually refreshes the page, which a unit test of the action alone wouldn't catch |
 
 ## Open questions
 

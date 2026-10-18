@@ -1,0 +1,55 @@
+/* Routine Machine design tokens (docs/design.md). The reference pages write these values as
+   literal hex so each page reads on its own; the app should use these variables instead.
+   Dark values are specified but were not drawn on the canvas. */
+
+:root {
+  --rm-canvas: #F5F5F7;
+  --rm-surface: #FFFFFF;
+  --rm-surface-2: #F5F5F7;
+  --rm-ink: #1D1D1F;
+  --rm-muted: #6E6E73;
+  --rm-hairline: #E5E5EA;
+  --rm-field-edge: #D2D2D7;
+  --rm-fill: rgba(118, 118, 128, 0.12);
+  --rm-tint: #E9A23B;
+  --rm-tint-text: #9A5208;
+  --rm-tint-fill: #FBF0DC;
+  --rm-tended: #1B7332;
+  --rm-tended-fill: #E3F5E7;
+  --rm-private: #2F5A72;
+  --rm-private-fill: #EEF3F7;
+  --rm-glass: rgba(255, 255, 255, 0.72);
+  --rm-glass-edge: rgba(255, 255, 255, 0.8);
+  --rm-goal-ai: #C27A12;
+  --rm-goal-roles: #0066CC;
+  --rm-goal-cmu: #1B7332;
+
+  --rm-radius-card: 18px;
+  --rm-radius-list: 14px;
+  --rm-radius-tile: 12px;
+  --rm-radius-capsule: 980px;
+  --rm-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --rm-press: 150ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --rm-canvas: #000000;
+    --rm-surface: #1C1C1E;
+    --rm-surface-2: #2C2C2E;
+    --rm-ink: #F5F5F7;
+    --rm-muted: #A1A1A6;
+    --rm-hairline: #38383A;
+    --rm-field-edge: #48484A;
+    --rm-fill: rgba(118, 118, 128, 0.24);
+    --rm-tint: #F0AE4E;
+    --rm-tint-text: #F0AE4E;
+    --rm-tint-fill: #2A2215;
+    --rm-tended: #30D158;
+    --rm-tended-fill: #16301C;
+    --rm-private: #8EC5E8;
+    --rm-private-fill: #12232E;
+    --rm-glass: rgba(29, 29, 31, 0.72);
+    --rm-glass-edge: rgba(255, 255, 255, 0.12);
+  }
+}

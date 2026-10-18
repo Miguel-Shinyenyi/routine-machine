@@ -4,9 +4,11 @@ import com.routinemachine.core.domain.DailyLog;
 import com.routinemachine.core.domain.DailyLogSource;
 import com.routinemachine.core.domain.LearningTopic;
 import com.routinemachine.core.domain.RoutineItem;
+import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.DailyLogRepository;
 import com.routinemachine.core.repository.LearningTopicRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
+import com.routinemachine.core.repository.UserRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,19 +30,31 @@ public class DailyLogController {
     private final DailyLogRepository dailyLogRepository;
     private final RoutineItemRepository routineItemRepository;
     private final LearningTopicRepository learningTopicRepository;
+    private final UserRepository userRepository;
 
     public DailyLogController(
             DailyLogRepository dailyLogRepository,
             RoutineItemRepository routineItemRepository,
-            LearningTopicRepository learningTopicRepository) {
+            LearningTopicRepository learningTopicRepository,
+            UserRepository userRepository) {
         this.dailyLogRepository = dailyLogRepository;
         this.routineItemRepository = routineItemRepository;
         this.learningTopicRepository = learningTopicRepository;
+        this.userRepository = userRepository;
     }
 
+    // userId is optional and additive, same as RoutineItemController's (Phase 8 groundwork,
+    // see docs/backend.md): combines with date when both are given.
     @GetMapping
-    public List<DailyLogResponse> list(@RequestParam Optional<LocalDate> date) {
-        List<DailyLog> logs = date.map(dailyLogRepository::findByLogDate).orElseGet(dailyLogRepository::findAll);
+    public List<DailyLogResponse> list(@RequestParam Optional<LocalDate> date, @RequestParam Optional<Long> userId) {
+        List<DailyLog> logs;
+        if (userId.isPresent() && date.isPresent()) {
+            logs = dailyLogRepository.findByUserIdAndLogDate(userId.get(), date.get());
+        } else if (userId.isPresent()) {
+            logs = dailyLogRepository.findByUserId(userId.get());
+        } else {
+            logs = date.map(dailyLogRepository::findByLogDate).orElseGet(dailyLogRepository::findAll);
+        }
         return logs.stream().map(DailyLogResponse::from).toList();
     }
 
@@ -63,6 +77,11 @@ public class DailyLogController {
                 : DailyLog.forLearningTopic(
                         request.logDate(), findLearningTopic(request.learningTopicId()), source,
                         request.measuredMinutes());
+
+        if (request.userId() != null) {
+            log.assignUser(userRepository.findById(request.userId())
+                    .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId())));
+        }
 
         return DailyLogResponse.from(dailyLogRepository.save(log));
     }
