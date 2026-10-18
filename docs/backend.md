@@ -380,8 +380,9 @@ personal band/rank/neighbours.
   design reference uses ("Near the front" / "In the middle" / "Walking at the back, and still
   walking").
 - `HillsidePseudonym.forUserId` derives a two-word-plus-number pseudonym deterministically
-  from the user id alone — never the email or display name — so the same person gets the same
-  pseudonym every call without storing one. No rotation yet (see open questions).
+  from the user id and the current "season" (a 90-day block of the epoch, folded into the
+  hash input) — never the email or display name — so the same person gets the same pseudonym
+  for roughly a quarter, then automatically a different one, with nothing stored anywhere.
 - "Walking near you" is three ranked entries above and below, clamped at the edges of the
   list, not a fixed seven; `isYou` marks exactly one row when `asUserId` matches. Each
   `NeighborRow` also carries `rank`, its 1-indexed position in the *full* ranked list (not
@@ -400,6 +401,7 @@ personal band/rank/neighbours.
 | 2026-10-17 | Band/rank/histogram are computed fresh on every request, nothing is cached or stored | The dataset is small (seeded test data, not a real userbase) and the computation is cheap; a stored leaderboard would need its own invalidation logic for no benefit yet |
 | 2026-10-17 | `HillsideService.GENERAL_THRESHOLD` duplicates `tally.py`'s `TALLY_STICK_THRESHOLD` rather than sharing it | Backend (Java) and intelligence-service (Python) are separate codebases with no shared constants module; duplicating one named, documented constant is simpler than building cross-language constant sharing for a single number. Both must be kept in sync by hand if the threshold ever changes |
 | 2026-10-17 | Pseudonyms are derived from the user id alone, with no stored mapping and no rotation | Keeps the privacy property simple to reason about (nothing new to leak, nothing new to store) at the cost of pseudonyms never changing on their own; real rotation is future work, tracked in the open questions |
+| 2026-10-18 | Pseudonym rotation folds a "season" number (days-since-epoch ÷ 90, from the same `today` already threaded through `HillsideService.compute`) into the pseudonym hash, instead of storing a pseudonym plus a rotated-at timestamp | The open question noted a stored, explicitly-rotated pseudonym needs real design work and breaks the "no stored mapping" property. Folding the season into the existing deterministic hash gets real rotation (a different pseudonym roughly every 90 days, "change every season" per the design reference) with no new column, no migration, and no rotation job to run — the hash input changing on its own as time passes is the entire mechanism |
 | 2026-10-17 | The hillside compares users within one shared deployment, not separate single-user instances reporting in | Asked the user rather than guessing, since this is a far bigger change (every table eventually needs a `user_id`) than the alternative (a lightweight opt-in reporting endpoint). Confirmed before writing any code, per PROJECT.md's explicit gate on this phase |
 | 2026-10-17 | Both password and GitHub OAuth login are supported, not just one | Asked the user directly; they wanted both rather than picking one |
 | 2026-10-17 | Next.js owns the login session; this backend only verifies a signed token Next.js attaches to its own server-side calls | Asked the user rather than guessing, since it determines whether this backend ever renders a login page or handles an OAuth redirect (it won't) and keeps today's "frontend does all the fetching server-side" architecture intact, just adding identity to those calls |
@@ -479,15 +481,16 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
   `POST /api/books` only, or need their own `PATCH` for updating progress on an existing book
   without re-creating it, isn't decided; no caller needs it yet.
 - `goals` now has a `user_id` and a creation API (see above); no other table is scoped yet.
-- `hillside_opt_in` now gates participation (see above), but nothing in the frontend exposes
-  the toggle yet — only the API exists. Until a UI calls `PUT /api/users/me/hillside-opt-in`,
-  every real user defaults to opted-out and the hillside only has demo data to show.
-- Pseudonym rotation ("change every season," per the design reference) isn't designed. The
-  current scheme can't rotate without breaking its "no stored mapping" property; a rotating
-  scheme would need to store something, which is a real design decision, not an oversight.
-- `asUserId` on `/api/hillside` (and `userId` on the two scoped endpoints) needs to be
-  replaced by a real identity once the Next.js session exists; nothing currently stops any
-  caller from passing any user id and seeing that person's band.
+- `hillside_opt_in` now has a real frontend toggle (`/hillside`'s "Join the hillside"/"Leave
+  the hillside" link, a Server Action calling `PUT /api/users/me/hillside-opt-in` — see
+  `frontend.md`). Still true: a real user defaults to opted-out until they use it.
+- Pseudonym rotation is now live (season folded into the hash — see the decisions log above),
+  not just an open question.
+- `asUserId` on `/api/hillside` is now overridden by the real session when one exists (the
+  frontend ignores the query param entirely once a user is signed in — see `frontend.md`);
+  `userId` on the two scoped endpoints (`routine_items`, `daily_logs`) is still a plain,
+  unauthenticated param nothing in the frontend writes through yet, since neither endpoint has
+  a creation flow in the UI that would need it.
 - The Next.js side of this (next-auth wiring, the GitHub OAuth app registration and its real
   client id/secret, the login UI itself, and actually minting the signed token this backend
   verifies) is not built. `GET /api/users/me` was only tested against a hand-built token in

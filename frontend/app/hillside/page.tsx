@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { backendFetch } from "@/lib/api";
-import type { Hillside } from "@/lib/types";
+import { authenticatedBackendFetch, backendFetch } from "@/lib/api";
+import { setHillsideOptIn } from "@/lib/actions";
+import { getSessionToken } from "@/lib/auth/session";
+import type { CurrentUser, Hillside } from "@/lib/types";
 
 const FIELDS: { value: string | null; label: string }[] = [
   { value: null, label: "All fields" },
@@ -30,8 +32,18 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
   const field = typeof rawField === "string" ? rawField : null;
   const rawWindow = searchParams.windowDays;
   const windowDays = rawWindow === "28" ? 28 : 7;
+
+  const sessionToken = await getSessionToken();
+  const me = sessionToken
+    ? await authenticatedBackendFetch<CurrentUser>("/api/users/me", sessionToken).catch(() => null)
+    : null;
+
+  // A real session replaces the old demo-mode ?asUserId= param entirely once one exists —
+  // nobody should be able to see another person's band just by editing a query string. The
+  // param still works signed out, so the page stays checkable without an account.
   const rawAsUserId = searchParams.asUserId;
-  const asUserId = typeof rawAsUserId === "string" ? rawAsUserId : undefined;
+  const demoAsUserId = typeof rawAsUserId === "string" ? rawAsUserId : undefined;
+  const asUserId = me ? String(me.id) : demoAsUserId;
 
   const hillside = await backendFetch<Hillside>(`/api/hillside?${buildQuery(field, windowDays, asUserId)}`);
   const maxHistogram = Math.max(1, ...hillside.histogram);
@@ -46,12 +58,20 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
             Ranked by how many days people show up, never by who did the most. A 20-minute walk
             and a marathon count as the same day.
           </p>
+          {me && (
+            <form action={setHillsideOptIn} className="mt-2">
+              <input type="hidden" name="optIn" value={me.hillsideOptIn ? "false" : "true"} />
+              <button type="submit" className="text-[13px] font-medium text-tint-text hover:underline">
+                {me.hillsideOptIn ? "Leave the hillside" : "Join the hillside"}
+              </button>
+            </form>
+          )}
         </div>
         <div className="inline-flex gap-0.5 rounded-[9px] p-0.5" style={{ background: "var(--fill)" }}>
           {[7, 28].map((w) => (
             <Link
               key={w}
-              href={buildHref(field, w, asUserId)}
+              href={buildHref(field, w, demoAsUserId)}
               aria-pressed={windowDays === w}
               className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink"
               style={windowDays === w ? { background: "var(--surface)", fontWeight: 600, boxShadow: "0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04)" } : undefined}
@@ -66,7 +86,7 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
         {FIELDS.map((f) => (
           <Link
             key={f.label}
-            href={buildHref(f.value, windowDays, asUserId)}
+            href={buildHref(f.value, windowDays, demoAsUserId)}
             aria-pressed={field === f.value}
             className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink"
             style={field === f.value ? { background: "var(--surface)", fontWeight: 600, boxShadow: "0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04)" } : undefined}
@@ -91,6 +111,22 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
                 You showed up on {hillside.yourDaysShownUp} of {windowDays} days.
               </p>
             </>
+          ) : me && !me.hillsideOptIn ? (
+            <>
+              <h2 className="text-[20px] font-semibold">You haven&rsquo;t joined the hillside.</h2>
+              <p className="text-[15px] text-muted">
+                {hillside.totalParticipants} people show up here. Join above to see where
+                you&rsquo;d stand &mdash; your own private routines stay out either way.
+              </p>
+            </>
+          ) : me ? (
+            <>
+              <h2 className="text-[20px] font-semibold">Not in this field yet.</h2>
+              <p className="text-[15px] text-muted">
+                {hillside.totalParticipants} people show up here. Tend a routine in this field
+                to see where you&rsquo;d stand.
+              </p>
+            </>
           ) : (
             <>
               <h2 className="text-[20px] font-semibold">Not in this field yet.</h2>
@@ -99,8 +135,11 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
                 to see where you&rsquo;d stand.
               </p>
               <p className="mt-1.5 text-[13px] text-muted">
-                Demo mode: no login yet, so pass <code>?asUserId=</code> in the URL to see a
-                specific person&rsquo;s band.
+                <Link href="/login" className="text-tint-text hover:underline">
+                  Sign in
+                </Link>{" "}
+                to see your own band, or pass <code>?asUserId=</code> in the URL to preview a
+                specific person&rsquo;s.
               </p>
             </>
           )}

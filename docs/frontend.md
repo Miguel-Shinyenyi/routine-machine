@@ -49,9 +49,11 @@ deliberate deviation rather than an oversight.
 - **Hillside** (`/hillside`, new in Phase 8): field and window segmented controls (Link-based,
   server-rendered, not client state — see the decisions log), a band card, a histogram of
   participants by days shown up, a "walking near you" list of pseudonymous neighbours, and the
-  "why this hillside is calm" rules card. Reads `GET /api/hillside`; `asUserId` is a demo-mode
-  query param until the Next.js session exists (see `backend.md`'s open questions) — omitted,
-  the page still shows the real distribution, just no personal band.
+  "why this hillside is calm" rules card. Reads `GET /api/hillside`; a signed-in session now
+  supplies the real `asUserId` automatically (the `?asUserId=` query param is ignored once a
+  session exists, and only still works as a demo-mode preview when signed out — see the
+  decisions log). A signed-in user also sees a real "Join the hillside"/"Leave the hillside"
+  toggle calling `PUT /api/users/me/hillside-opt-in`.
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
@@ -172,6 +174,10 @@ departure from precedent.
 | 2026-10-18 | `/login` and `/register` render nested inside the global `Shell` (sidebar still visible), not a separate unauthenticated layout | Every page in this app already works without login (demo mode); there's no logged-out-only section to carve out, and the reference has no login UI to match either, so these two pages are styled from the app's own `.page-title`/`.card`/`.field`/`.btn-fill` tokens for consistency rather than a new visual language |
 | 2026-10-18 | Shell's sidebar footer shows the real signed-in email + a "Sign out" button when a session exists, or a "Sign in" link otherwise | `RootLayout`'s `fetchShellContext()` now also reads the session cookie and calls `GET /api/users/me` (caught, not hard-failed — an expired or tampered cookie degrades to "not signed in" exactly like no cookie at all) |
 | 2026-10-18 | Live-verified register → login → logout round trip, plus the wrong-password error path, in a real browser against the rebuilt Docker stack | `resize_window`'s unreliability (noted below) doesn't affect desktop flows; this was a correctness check of the actual session cookie / redirect behaviour, not a visual one. Confirms `/register` creates a session and redirects to `/today`, "Sign out" clears it and redirects to `/login`, `/login` with correct credentials signs back in, and wrong credentials show "That email or password doesn't match an account." inline without creating a session |
+| 2026-10-18 | Hillside's `asUserId` is now derived from the real session when one exists, completely replacing the `?asUserId=` query param for a signed-in user, rather than the session merely being an additional option alongside it | Letting a signed-in user's own URL-editable `?asUserId=` override their real session would mean a logged-in person could still browse to see any other user's band just by changing the query string — the thing the demo-mode param was always flagged as not safe for (see `backend.md`'s decisions log). The param still works exactly as before for a signed-out visitor, so the page stays checkable without an account |
+| 2026-10-18 | Hillside's opt-in toggle (`setHillsideOptIn` in `lib/actions.ts`) is a single Server Action taking a hidden `optIn` field, not two separate join/leave actions | The button already knows the current state (`me.hillsideOptIn`) to decide its own label and the value of the hidden field; a single action handling both directions needs no branching on the caller's side, matching the backend's own single `PUT .../hillside-opt-in` endpoint shape |
+| 2026-10-18 | The opt-in toggle and its band-card messaging only render when a session exists (`me !== null`) | Opting in with no real identity makes no sense — there would be no user id for the backend to flip the flag on. Signed out, the page keeps its older demo-mode copy pointing at `?asUserId=` and a "Sign in" link instead |
+| 2026-10-18 | Pseudonym rotation needed no frontend change at all | The rotation is entirely a backend hashing detail (`HillsidePseudonym.forUserId` now folds in the current season) — the frontend already just renders whatever pseudonym string the API returns, so there was nothing here to update |
 | 2026-10-17 | Added `--field-edge`/`--glass-edge` tokens and a shared `.field` input style to `globals.css` | The design reference's `tokens.css` defines both; this app's tokens were missing them, so every form input was using `--hairline` for its border instead of the dedicated, slightly darker field-edge colour the reference specifies |
 | 2026-10-17 | `TaskCard`'s done check button is now solid-filled (`--tended-ink`) with a white check icon, not a pale `--tended-fill` background | Matches the design reference exactly; found during the comparison, not an arbitrary restyle |
 | 2026-10-17 | The hillside's field/window controls are `Link`s with `aria-pressed`, not client state + fetch | Matches this app's existing all-server-rendering pattern (Today's day navigation works the same way); no new client-side data-fetching pattern needed for one page, and the URL stays shareable/bookmarkable per state |
@@ -237,14 +243,12 @@ departure from precedent.
 - Flock and Watering holes aren't reachable from the phone tab bar, matching the design
   reference's own nav list, but the reference's "they open from Tally on phone" cross-link
   isn't built — there's currently no way to reach them at all on a 390px phone.
-- `PUT /api/users/me/hillside-opt-in` exists (see `backend.md`), but nothing in this frontend
-  calls it yet — there is no settings page or toggle UI. Hillside's own `asUserId` is still a
-  plain, unauthenticated query param, not wired to the real session that now exists
-  (`lib/auth/session.ts`) — the page is only as trustworthy as that backend groundwork, not
-  more. Pseudonym rotation also isn't designed yet.
 - GitHub/Google sign-in is deferred (user's explicit instruction when password login was
   built); `AUTH_INTERNAL_TOKEN` exists in `backend.md`/`.env.example` for a future
   `POST /api/auth/github-login` but nothing in this frontend calls it yet.
+- There's still no settings page as such — the hillside opt-in toggle lives directly on
+  `/hillside` itself (a one-line link, not a dedicated settings view), which is fine for the
+  one toggle that exists today but won't scale if more account-level preferences show up.
 - There's no way yet to edit a book's `currentChapter`/`totalChapters` after creating it
   (`POST /api/books` only creates), matching the open question already recorded in
   `backend.md`. The Reading page shows chapter progress if set at creation, nothing more.

@@ -107,7 +107,7 @@ public class HillsideService {
         for (int i = from; i <= to; i++) {
             Map.Entry<Long, Integer> entry = ranked.get(i);
             neighbors.add(new NeighborRow(
-                    i + 1, HillsidePseudonym.forUserId(entry.getKey()), entry.getValue(),
+                    i + 1, HillsidePseudonym.forUserId(entry.getKey(), today), entry.getValue(),
                     entry.getKey().equals(asUserId)));
         }
 

@@ -100,8 +100,10 @@ and listing with `?userId=` returns only that user's own rows, not the other's; 
 confirms an unknown `userId` on create fails. This is additive scoping, not a full auth test
 suite — see `backend.md`'s decisions log for why.
 `HillsidePseudonymTest` covers the pseudonym scheme as a pure function: deterministic for the
-same id, different for different ids, and matches the "Adjective Noun 1234" shape exactly, no
-digits or words leaking in from anywhere else. `HillsideServiceTest` (`@DataJpaTest`) covers
+same id within the same season, different for different ids, matches the "Adjective Noun 1234"
+shape exactly with no digits or words leaking in from anywhere else, and two new cases for
+rotation — the same id gets a different pseudonym once a 90-day season boundary has passed,
+and stays the same pseudonym for dates still inside the same season. `HillsideServiceTest` (`@DataJpaTest`) covers
 the real aggregation against real rows: a user with fewer qualifying days ranks behind one
 with more; a private routine item's logs never reach the hillside at all (zero participants);
 omitting `asUserId` returns the histogram with no personal band; the "general" field only
@@ -119,8 +121,8 @@ with the same name for the same user (the new `(user_id, name)` uniqueness), and
 hillside even with a qualifying public log; its other cases' `saveUser` helper now opts the
 user in, since that's the real precondition for participating, not an incidental default.
 `UserControllerApiIntegrationTest` covers `PUT /api/users/me/hillside-opt-in`: opting in,
-opting out, and that the endpoint 401s with no token, same as `GET /api/users/me`. 169 backend
-tests, all passing.
+opting out, and that the endpoint 401s with no token, same as `GET /api/users/me`. 171 backend
+tests, all passing (169 plus 2 new `HillsidePseudonymTest` rotation cases).
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
@@ -206,6 +208,7 @@ recorded, now confirmed end to end through the browser too.
 | 2026-09-18 | TDD required for both services from the first line of code | Stated non-negotiable in PROJECT.md's rules section, not left to convention |
 | 2026-10-18 | `lib/auth/jwt.ts` is unit-tested with Vitest, not covered only by the live browser login check | It's a pure function (sign/verify) with real edge cases — expiry boundary, wrong secret, tampered payload, garbage input — exactly the kind of logic `schedule.ts`'s other pure functions already get fast, deterministic tests for, separate from the slower end-to-end browser verification of the full login flow |
 | 2026-10-18 | Password login's register → login → logout round trip (plus the wrong-password error path) was verified live in a real browser against a rebuilt Docker Compose stack, not just unit tests | `lib/auth/jwt.ts`'s tests cover the token logic in isolation but not the Server Actions, the cookie actually being set/cleared, or the redirect targets; a live click-through is the only check that exercises the whole path end to end |
+| 2026-10-18 | Hillside's real-session wiring and opt-in toggle were verified live (signed-in user sees "Join the hillside", clicking it flips to "Leave the hillside" and the band card's messaging updates, clicking again reverts, signed out reverts to the demo-mode `?asUserId=` message), no new automated test for this frontend wiring | It's a thin Server Action (`setHillsideOptIn`) plus conditional JSX already covered structurally by the backend's own `PUT /api/users/me/hillside-opt-in` tests; a live click-through proves the frontend calls it correctly and `revalidatePath` actually refreshes the page, which a unit test of the action alone wouldn't catch |
 
 ## Open questions
 
