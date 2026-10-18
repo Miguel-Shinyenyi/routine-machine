@@ -5,6 +5,9 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from analogy import Analogy, AnalogyParseError, ANALOGY_SYSTEM_PROMPT
+from analogy import build_user_message as build_analogy_user_message
+from analogy import parse_analogy_response
 from assess_note import AssessmentParseError, build_user_message, parse_assessment_response, ASSESSMENT_SYSTEM_PROMPT
 from patterns import compute_patterns
 from suggestion import NoTopicsAvailableError, choose_suggestion
@@ -110,6 +113,25 @@ class ReadingNoteAssessmentResponse(BaseModel):
     ideasConnected: list[str]
     quotedPhrases: list[str]
     questionBack: str
+
+
+class AnalogyRequest(BaseModel):
+    topic: str
+    interest: str
+
+
+class AnalogyResponse(BaseModel):
+    topic: str
+    interest: str
+    analogy: str
+    definition: str
+    label: str = "analogy"
+
+
+# Phase 10: cached per (topic, interest) so the same pairing is never billed or waited on
+# twice — see docs/product-direction.md's Profile section. Process-lifetime only, no backend
+# storage: an analogy is reproducible from its inputs alone, so nothing is lost on restart.
+_ANALOGY_CACHE: dict[tuple[str, str], Analogy] = {}
 
 
 @app.get("/health")
@@ -256,4 +278,56 @@ def assess_reading_note(request: ReadingNoteAssessmentRequest):
         ideasConnected=result.ideas_connected,
         quotedPhrases=result.quoted_phrases,
         questionBack=result.question_back,
+    )
+
+
+@app.post("/analogy", response_model=AnalogyResponse)
+def explain_with_analogy(request: AnalogyRequest):
+    cache_key = (request.topic.strip().lower(), request.interest.strip().lower())
+    cached = _ANALOGY_CACHE.get(cache_key)
+    if cached is not None:
+        return AnalogyResponse(
+            topic=request.topic, interest=request.interest,
+            analogy=cached.analogy, definition=cached.definition,
+        )
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not set, analogies are unavailable")
+
+    user_message = build_analogy_user_message(request.topic, request.interest)
+
+    with httpx.Client(base_url=ANTHROPIC_BASE_URL, timeout=30.0) as client:
+        response = client.post(
+            "/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": ANTHROPIC_MODEL,
+                "max_tokens": 512,
+                "system": ANALOGY_SYSTEM_PROMPT,
+                "messages": [{"role": "user", "content": user_message}],
+            },
+        )
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Anthropic API request failed: {response.status_code} {response.text}",
+        ) from exc
+    raw_text = "".join(block["text"] for block in response.json()["content"] if block["type"] == "text")
+
+    try:
+        result = parse_analogy_response(raw_text)
+    except AnalogyParseError as exc:
+        raise HTTPException(status_code=502, detail=f"could not parse the analogy: {exc}") from exc
+
+    _ANALOGY_CACHE[cache_key] = result
+
+    return AnalogyResponse(
+        topic=request.topic, interest=request.interest,
+        analogy=result.analogy, definition=result.definition,
     )

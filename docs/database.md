@@ -169,10 +169,19 @@ Phase 9 also built via `V19__evidence_to_credit_pipeline.sql`, three new tables:
   concurrent inserts produce one row" — see `backend.md`'s decisions log and
   `EvidenceCreditService`.
 
+Phase 10 built via `V21__profile.sql`: `users` gains `interests`/`thinkers`/
+`learning_preferences` (each a JSON array in a TEXT column via `StringListConverter`, same
+pattern `reading_notes.ideas_connected`/`quoted_phrases` already use), `currency`
+(`varchar(8)`), `day_end_hour` (`integer`, not null, default `0`, DB check constraint `BETWEEN
+0 AND 23`), and `analogies_enabled` (boolean, not null, default `true`). `day_end_hour` feeds
+`EvidenceCreditService`'s local-date rule (see `backend.md`); the rest is read and written
+only through `GET`/`PUT /api/users/me/profile`, never by anything hillside- or cohort-facing.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-18 | `day_end_hour` is `INTEGER`, not `SMALLINT`, even though it only ever holds 0-23 | Hibernate maps a Java `int` field to `INTEGER` by default and validates the schema matches at startup; `SMALLINT` (the first version of this migration) failed that check immediately (`Schema-validation: wrong column type encountered`). Caught by `./mvnw test` before this ever reached a report — a real case of a plausible-looking micro-optimisation (`SMALLINT` saves 2 bytes a row nobody will ever notice) breaking the actual running system |
 | 2026-10-17 | `users.hillside_opt_in` defaults `false`, not `true` | The hillside previously treated every user with a non-private daily log as a participant with no consent step at all; defaulting the new flag to off is the only choice consistent with calling this a real opt-in, not a relabeled version of the same behaviour |
 | 2026-10-17 | `goals.user_id` is nullable, `NULL` keeps meaning the three shared seeded goals | Same reasoning as `routine_items`/`daily_logs`'s `user_id`: adding a creation API shouldn't change what every existing reader of `GET /api/goals` already sees |
 | 2026-10-17 | `goals`'s unique constraint moves from `name` alone to `(user_id, name)` | Once goals can be created per user, two different users (or a user and the seed data) needing the same goal name (e.g. "learn X") is normal, not a collision; uniqueness should scope to the owner, not the whole table |

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Optional;
 
 // Phase 9: the evidence-to-credit pipeline from docs/product-direction.md (ingest, validate,
@@ -47,8 +48,13 @@ public class EvidenceCreditService {
 
         // The day is decided in the user's configured time zone, not UTC — see
         // docs/product-direction.md's "Time" section. Stored once, here, so a later zone
-        // change never silently rewrites which day a past credit landed on.
-        LocalDate localDate = occurredAt.atZone(ZoneId.of(user.getTimeZone())).toLocalDate();
+        // change never silently rewrites which day a past credit landed on. dayEndHour (Phase
+        // 10's Profile field, default 0) shifts anything before that hour onto the previous
+        // calendar day, so late study still counts for "today" rather than tomorrow.
+        ZonedDateTime zoned = occurredAt.atZone(ZoneId.of(user.getTimeZone()));
+        LocalDate localDate = zoned.getHour() < user.getDayEndHour()
+                ? zoned.toLocalDate().minusDays(1)
+                : zoned.toLocalDate();
 
         Optional<ScoringRule> rule = scoringRuleRepository.findFirstByGoalIdOrderByVersionDesc(goal.getId());
         Qualification qualification = qualify(source, minutes, rule);

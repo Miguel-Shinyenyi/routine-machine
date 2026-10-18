@@ -230,3 +230,69 @@ def test_assess_reading_note_returns_502_when_the_anthropic_api_request_fails(mo
     })
 
     assert response.status_code == 502
+
+
+@respx.mock
+def test_analogy_calls_claude_and_returns_the_analogy_and_definition(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    respx.post(f"{ANTHROPIC_BASE_URL}/v1/messages").mock(
+        return_value=httpx.Response(200, json={
+            "content": [{"type": "text", "text": json.dumps({
+                "analogy": "A goal counts once, however many replays.",
+                "definition": "A key that makes a repeated request idempotent.",
+            })}],
+        })
+    )
+
+    response = client.post("/analogy", json={"topic": "idempotency keys", "interest": "football"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["analogy"] == "A goal counts once, however many replays."
+    assert body["definition"] == "A key that makes a repeated request idempotent."
+    assert body["label"] == "analogy"
+    assert body["topic"] == "idempotency keys"
+    assert body["interest"] == "football"
+
+
+@respx.mock
+def test_analogy_is_cached_per_topic_and_interest_and_claude_is_called_only_once(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    route = respx.post(f"{ANTHROPIC_BASE_URL}/v1/messages").mock(
+        return_value=httpx.Response(200, json={
+            "content": [{"type": "text", "text": json.dumps({
+                "analogy": "x", "definition": "y",
+            })}],
+        })
+    )
+
+    first = client.post("/analogy", json={"topic": "a cached topic", "interest": "chess"})
+    second = client.post("/analogy", json={"topic": "a cached topic", "interest": "chess"})
+    # Case-insensitive, whitespace-trimmed: the same pairing however it's typed next time.
+    third = client.post("/analogy", json={"topic": "  A Cached Topic  ", "interest": "Chess"})
+
+    assert first.status_code == second.status_code == third.status_code == 200
+    assert second.json()["analogy"] == "x"
+    assert route.call_count == 1
+
+
+def test_analogy_returns_503_when_no_api_key_is_configured(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    response = client.post("/analogy", json={"topic": "a topic with no key configured", "interest": "music"})
+
+    assert response.status_code == 503
+
+
+@respx.mock
+def test_analogy_returns_502_when_claude_responds_with_unparseable_content(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    respx.post(f"{ANTHROPIC_BASE_URL}/v1/messages").mock(
+        return_value=httpx.Response(200, json={
+            "content": [{"type": "text", "text": "I can't help with that."}],
+        })
+    )
+
+    response = client.post("/analogy", json={"topic": "an unparseable topic", "interest": "cooking"})
+
+    assert response.status_code == 502

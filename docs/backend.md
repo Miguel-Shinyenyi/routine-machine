@@ -438,10 +438,38 @@ lists every event in the window whatever its status, newest first, for the "How 
 were counted" table. "Question a credit" just stamps `questioned_at`, matching the explicit
 "simple form that records the request" scope — no review workflow yet.
 
+**Phase 10: profile data built.** `users` gains (migration V21) `interests`/`thinkers`/
+`learning_preferences` (JSON arrays in a TEXT column via `StringListConverter`, same pattern
+`reading_notes` already uses), `currency` (varchar(8)), `day_end_hour` (0-23, DB check
+constraint, default 0), and `analogies_enabled` (default true). `User.updateProfile(...)` is a
+single partial-update method — each parameter only changes the field if non-null, so
+`PUT /api/users/me/profile` can update just one field without the caller resending everything.
+New endpoints `GET`/`PUT /api/users/me/profile`, JWT-protected via the same `/api/users/**`
+chain `GET /api/users/me` already uses, deliberately **not** folded into `UserResponse`/
+`GET /api/users/me` itself — see the decisions log on why this is its own response type.
+
+`day_end_hour` now feeds `EvidenceCreditService`'s local-date rule directly: an evidence event
+whose local hour (in the user's `time_zone`) is before `dayEndHour` is credited to the
+*previous* calendar day, not the day it was actually logged on — so a 1am study session with a
+3am day-end hour still counts as "today." Defaults to 0 (midnight), which is mathematically a
+no-op (`hour < 0` is never true), so every existing Phase 9 test and every user who hasn't set
+this is completely unaffected.
+
+Privacy is enforced structurally, not just by convention: `HillsideV2Response`/
+`EvidenceEventResponse`/`NeighborCreditRowResponse` have no path to a `User`'s profile fields
+at all — they're built from `HillsideV2Result`/`NeighborCreditRow`/`EvidenceEvent`, none of
+which carry profile data. `HillsideV2ApiIntegrationTest.profileDataNeverAppearsInTheHillsideResponse`
+proves this against the real serialized JSON, not just by reasoning about the types, per
+`docs/product-direction.md`'s explicit "write a test that proves it" instruction.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-18 | Profile is its own `GET`/`PUT /api/users/me/profile` response type, not added to `UserResponse`/`GET /api/users/me` | `GET /api/users/me` is already called from several places that have no reason to ever see profile data (the sidebar's "signed in as," Hillside's session check); keeping it lean means there's no response path that could ever leak interests/thinkers/currency by accident just because something reused the "get the current user" call. The privacy test (`profileDataNeverAppearsInTheHillsideResponse`) is stronger for having two genuinely separate response shapes to prove apart, not one shape with fields that happen to be omitted sometimes |
+| 2026-10-18 | `User.updateProfile(...)` takes every field as nullable and only applies the ones that aren't null, rather than requiring the full profile on every `PUT` | Matches this project's existing partial-update precedent (`HillsideOptInRequest` aside, most PATCH/PUT endpoints here update one concern at a time); a Profile form with many independent fields (interests, thinkers, currency, time zone, day-end hour, the analogies switch) shouldn't need to resend fields the user isn't currently touching |
+| 2026-10-18 | `day_end_hour` defaults to 0, which is a mathematical no-op in `EvidenceCreditService`'s `hour < dayEndHour` check | Every existing Phase 9 test, and every real user until they visit Profile and change it, needs to see exactly the same local-date behavior as before this column existed — an hour comparison that can never be true at the default value guarantees that without a separate "is this feature on" flag |
+| 2026-10-18 | `scoring_rules`, `interests`, `thinkers`, and `learning_preferences` all reuse `StringListConverter` (JSON array in a TEXT column) rather than join tables | None of these are queried into — a profile is always read back whole, never filtered by "users who like football" — so a join table would add schema and query complexity for a capability nothing in this app needs yet. Same reasoning `reading_notes.ideas_connected`/`quoted_phrases` already established |
 | 2026-10-18 | Phase 9: one implicit "cohort" (every `hillside_opt_in = true` user) backs both the "cohort" and "open" scopes, rather than building minimal cohort groundwork ahead of Phase 12 | Asked the user directly, since `organisations`/`cohorts` are explicitly Phase 12 work and `CLAUDE.md`'s "build only the current phase" rule applies; this keeps Phase 9's schema stable (no `cohort_id` to retrofit later) while still shipping the full credit pipeline and real UI, including the scope segmented control, now |
 | 2026-10-18 | Phase 9: `users.time_zone` added now (migration V18), ahead of Phase 10's full Profile page | Asked the user directly, since Phase 9's own test list requires "a credit decided on Nairobi time near midnight lands on the right local date," which needs *some* per-user time zone to exist first; one column is the same narrow-groundwork pattern `V14__users.sql` used for accounts ahead of full auth, not later-phase logic |
 | 2026-10-18 | `EvidenceCreditService.ingest` is not itself `@Transactional` across its dedupe-lookup/save/award sequence | Each step's own safety comes from the database, not from Java-level transaction boundaries: the dedupe lookup is a fast-path check backed by `evidence_events`' `UNIQUE` constraint (with a caught `DataIntegrityViolationException` fallback), and the credit award is a native `ON CONFLICT DO NOTHING` upsert. Wrapping the whole method in one transaction would add nothing these two constraints don't already guarantee, and would hold a transaction open longer than necessary |
@@ -518,6 +546,10 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 
 ## Open questions
 
+- No endpoint deletes a profile's data or exports it (the design reference shows "Export my
+  data"/"Delete my account" buttons; not built — out of this phase's explicit scope).
+- Nothing yet calls `PUT /api/users/me/profile` except the frontend's own Profile page; no
+  other feature (e.g. the granary, Phase 11) reads profile fields yet.
 - Phase 9's "cohort-scoped by default" hillside isn't real yet — `/api/hillside/v2`'s
   "cohort" and "open" scopes both resolve to the same opted-in population, since
   `organisations`/`cohorts` don't exist until Phase 12. The decisions log records this as a

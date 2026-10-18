@@ -43,6 +43,24 @@ public class UserController {
         return UserResponse.from(userRepository.save(user));
     }
 
+    // Phase 10: interests, thinkers, learning preferences, currency, time zone, day-end hour,
+    // and the analogies switch — see docs/product-direction.md's Profile section. Its own
+    // endpoint, not folded into GET/PUT .../me, so nothing cohort- or admin-facing can ever
+    // read this data just by calling the same endpoint something else already calls.
+    @GetMapping("/me/profile")
+    public ProfileResponse profile(@AuthenticationPrincipal Jwt jwt) {
+        return ProfileResponse.from(findUser(jwt));
+    }
+
+    @PutMapping("/me/profile")
+    public ProfileResponse updateProfile(@AuthenticationPrincipal Jwt jwt, @RequestBody ProfileRequest request) {
+        User user = findUser(jwt);
+        user.updateProfile(
+                request.interests(), request.thinkers(), request.learningPreferences(), request.currency(),
+                request.dayEndHour(), request.timeZone(), request.analogiesEnabled());
+        return ProfileResponse.from(userRepository.save(user));
+    }
+
     private UserResponse currentUser(Jwt jwt) {
         return UserResponse.from(findUser(jwt));
     }

@@ -2,8 +2,9 @@ import Link from "next/link";
 import { materializeDay } from "@/lib/materialize";
 import { todayIsoDate } from "@/lib/schedule";
 import { formatEyebrowDate } from "@/lib/formatDate";
-import { backendFetch, intelligenceFetch } from "@/lib/api";
-import type { Goal, Patterns, RoutineItem, Suggestion, Tally } from "@/lib/types";
+import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
+import { getSessionToken } from "@/lib/auth/session";
+import type { AnalogyResponse, Goal, Patterns, Profile, RoutineItem, Suggestion, Tally } from "@/lib/types";
 import { TaskCard } from "@/components/TaskCard";
 
 // Inline placeholder, same role as docs/design-reference/README.md's "Not in the reference":
@@ -33,6 +34,11 @@ export default async function TodayPage(props: PageProps<"/today">) {
   const rawDate = searchParams.date;
   const date = typeof rawDate === "string" ? rawDate : todayIsoDate();
 
+  const sessionToken = await getSessionToken();
+  const profile = sessionToken
+    ? await authenticatedBackendFetch<Profile>("/api/users/me/profile", sessionToken).catch(() => null)
+    : null;
+
   const [tasks, routineItems, goals, suggestion, tally, patterns] = await Promise.all([
     materializeDay(date),
     backendFetch<RoutineItem[]>("/api/routine-items"),
@@ -41,6 +47,18 @@ export default async function TodayPage(props: PageProps<"/today">) {
     intelligenceFetch<Tally>("/tally").catch(() => null),
     intelligenceFetch<Patterns>("/patterns").catch(() => null),
   ]);
+
+  // Phase 10: explained through the first interest the user picked on their Profile page,
+  // only when they've left the switch on and a topic actually exists to explain — see
+  // docs/product-direction.md's Profile section.
+  const analogyInterest = profile?.analogiesEnabled ? profile.interests?.[0] : undefined;
+  const analogy =
+    analogyInterest && suggestion
+      ? await intelligenceFetch<AnalogyResponse>("/analogy", {
+          method: "POST",
+          body: JSON.stringify({ topic: suggestion.topic.name, interest: analogyInterest }),
+        }).catch(() => null)
+      : null;
 
   const routineItemById = new Map(routineItems.map((item) => [item.id, item]));
   const doneCount = tasks.filter((t) => t.status === "DONE").length;
@@ -166,6 +184,21 @@ export default async function TodayPage(props: PageProps<"/today">) {
                 <span className="chip chip-tint self-start">The staff</span>
                 <h2 className="text-[17px] font-semibold">{suggestion.topic.name}</h2>
                 <p className="text-[14px] text-muted">{suggestion.reason}</p>
+                {analogy && (
+                  <div className="rounded-[14px] p-3 text-[14px] leading-relaxed" style={{ background: "var(--fill)" }}>
+                    <p className="m-0">
+                      <strong className="font-semibold">{analogy.analogy}</strong>
+                    </p>
+                    <p className="mt-1.5 text-[13px] text-muted">{analogy.definition}</p>
+                    <p className="mt-1.5 text-[11px] text-muted">
+                      An analogy through {analogy.interest}, not the full truth — see{" "}
+                      <Link href="/profile" className="text-tint-text hover:underline">
+                        Profile
+                      </Link>{" "}
+                      to turn it off.
+                    </p>
+                  </div>
+                )}
                 <div className="mt-1 flex flex-wrap gap-2">
                   {/* Matches the reference's own pair of buttons, which it never wires to a
                       click handler either (app.js only handles Today's checks and Hillside's

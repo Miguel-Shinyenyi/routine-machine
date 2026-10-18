@@ -138,16 +138,33 @@ export function Shell({
         <div className="mt-auto flex flex-col gap-2 pt-4">
           {watchedFor && <p className="px-2.5 text-[12px] text-muted">{watchedFor}</p>}
           {userEmail ? (
-            <div className="flex items-center justify-between gap-2 px-2.5">
-              <span className="truncate text-[12px] text-muted" title={userEmail}>
-                {userEmail}
-              </span>
-              <form action={logoutAction}>
-                <button type="submit" className="text-[12px] font-medium text-tint-text hover:underline">
-                  Sign out
-                </button>
-              </form>
-            </div>
+            <>
+              <Link
+                href="/profile"
+                aria-current={pathname === "/profile" ? "page" : undefined}
+                className="flex min-h-9 items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[14px] text-ink hover:bg-fill"
+                style={pathname === "/profile" ? { background: "rgba(233,162,59,.2)", fontWeight: 600 } : undefined}
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                  style={{ background: "#6b4226" }}
+                >
+                  {userEmail.charAt(0).toUpperCase()}
+                </span>
+                Profile
+              </Link>
+              <div className="flex items-center justify-between gap-2 px-2.5">
+                <span className="truncate text-[12px] text-muted" title={userEmail}>
+                  {userEmail}
+                </span>
+                <form action={logoutAction}>
+                  <button type="submit" className="text-[12px] font-medium text-tint-text hover:underline">
+                    Sign out
+                  </button>
+                </form>
+              </div>
+            </>
           ) : (
             <Link href="/login" className="px-2.5 text-[12px] font-medium text-tint-text hover:underline">
               Sign in

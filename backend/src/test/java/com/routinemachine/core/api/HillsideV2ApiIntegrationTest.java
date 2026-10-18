@@ -74,4 +74,40 @@ class HillsideV2ApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.yourScore").doesNotExist());
     }
+
+    // Phase 10's explicit privacy requirement (docs/product-direction.md's Profile section:
+    // "it never reaches the hillside, and your programme never sees it"). A distinctive
+    // profile value is set, then the raw hillside v2 response body is checked for it directly
+    // — not just that HillsideV2Response's fields don't name it (true by construction), but
+    // that the actual JSON sent over the wire never contains it, however the response is built.
+    @Test
+    void profileDataNeverAppearsInTheHillsideResponse() throws Exception {
+        User user = userRepository.save(new User("v2-privacy@example.com", "irrelevant-hash", null, null));
+        user.optIntoHillside();
+        user.updateProfile(
+                java.util.List.of("a-very-private-interest-marker-xyz"), java.util.List.of("a-private-thinker-marker"),
+                java.util.List.of("a-private-learning-pref-marker"), "PRIVMARK", null, null, null);
+        userRepository.save(user);
+        Goal goal = goalRepository.save(new Goal("v2-privacy-goal", null));
+
+        EvidenceCreditService service =
+                new EvidenceCreditService(evidenceEventRepository, dailyCreditRepository, scoringRuleRepository);
+        // A different season window from this class's other tests (both hardcode 2026-10-12)
+        // — this class's tests share one Postgres instance per class with no per-method
+        // rollback, so a shared window would make totalParticipants order-dependent.
+        LocalDate day = LocalDate.of(2026, 9, 7);
+        service.ingest(user, goal, DailyLogSource.MANUAL, "v2-privacy-evt", day.atStartOfDay(ZoneOffset.UTC).toInstant(), null);
+
+        String body = mockMvc.perform(get("/api/hillside/v2")
+                        .param("seasonStart", "2026-09-07")
+                        .param("asUserId", user.getId().toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        org.assertj.core.api.Assertions.assertThat(body)
+                .doesNotContain("a-very-private-interest-marker-xyz")
+                .doesNotContain("a-private-thinker-marker")
+                .doesNotContain("a-private-learning-pref-marker")
+                .doesNotContain("PRIVMARK");
+    }
 }
