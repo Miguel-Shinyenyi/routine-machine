@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { authenticatedBackendFetch } from "@/lib/api";
 import { updateProfile } from "@/lib/actions";
+import { logoutAction } from "@/lib/auth/actions";
 import { getSessionToken } from "@/lib/auth/session";
 import type { CurrentUser, Profile } from "@/lib/types";
 
@@ -33,13 +34,20 @@ export default async function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <p className="text-[15px] font-semibold text-tint-text">Profile</p>
-        <h1 className="page-title">Who the Shepherd walks with.</h1>
-        <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
-          What you share here changes how things are explained to you. It never reaches the
-          hillside, and your programme never sees it.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[15px] font-semibold text-tint-text">Profile</p>
+          <h1 className="page-title">Who the Shepherd walks with.</h1>
+          <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
+            What you share here changes how things are explained to you. It never reaches the
+            hillside, and your programme never sees it.
+          </p>
+        </div>
+        <form action={logoutAction}>
+          <button type="submit" className="text-[14px] font-medium text-tint-text hover:underline">
+            Sign out
+          </button>
+        </form>
       </div>
 
       <form action={updateProfile} className="flex flex-col gap-6">
