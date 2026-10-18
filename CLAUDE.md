@@ -34,3 +34,14 @@ hub-sync reads encrypted journal content only through the unlock flow documented
 ## Run and check
 
 `./mvnw test` in `backend/` needs Docker for Testcontainers. `pytest` in `intelligence-service/`. `npm run lint`, `npm test` and `npm run build` in `frontend/`. Commands and ports are in `PROJECT.md`.
+
+## Understanding first, and the 59 concerns
+
+These rules come from the UMWAYI hub (`docs/understanding-first.md` and `docs/engineering-concerns.md`). They apply to every task here.
+
+- State the goal in one sentence before any work, in the other person's words. After the work, check the output against that sentence.
+- Stay close behind AI output. Do not accept code you cannot explain. Review each change before the next one starts.
+- Solve the problem as stated. Do not draft, follow up or audit before you are asked.
+- Name the failure mode when you notice it: Forming, Dislodging, Assumption, Location, Achievement, Progression, Interruption, Mislead. Apply its remedy.
+- When there is so much to do that nothing moves, pick the smallest next piece and finish it.
+- Keep a concerns record in the design doc: one row per concept (1 to 59), answered applies, not applicable or deferred, with a reason and evidence. Add it when asked for an audit, and at the start of any new project.
