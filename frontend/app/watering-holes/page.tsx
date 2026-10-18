@@ -79,18 +79,34 @@ export default async function WateringHolesPage() {
         </p>
       </div>
 
-      {connected.length > 0 && (
-        <section aria-labelledby="conn">
-          <h2 id="conn" className="mb-2.5 px-1 text-[17px] font-semibold">
-            Connected and waiting
-          </h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {connected.map((status) => (
-              <SourceCard key={status.source} status={status} />
-            ))}
+      <section aria-labelledby="conn">
+        <h2 id="conn" className="mb-2.5 px-1 text-[17px] font-semibold">
+          Connected and waiting
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Reader's notes has no on/off state in /api/watering-holes — it's not an external
+              sync to enable, it's this app's own reading-notes feature, always on. */}
+          <div className="card flex flex-col gap-2 p-4">
+            <div className="flex items-center gap-2.5">
+              <span
+                aria-hidden="true"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] text-[14px] font-bold text-white"
+                style={{ background: "#9a5208" }}
+              >
+                R
+              </span>
+              <h3 className="text-[16px] font-semibold">Reader&rsquo;s notes</h3>
+            </div>
+            <span className="chip chip-tended self-start">Built in</span>
+            <p className="text-[14px] text-muted">
+              Your notes, read by the Shepherd to place you in the book and check they are yours.
+            </p>
           </div>
-        </section>
-      )}
+          {connected.map((status) => (
+            <SourceCard key={status.source} status={status} />
+          ))}
+        </div>
+      </section>
 
       {notConnected.length > 0 && (
         <section aria-labelledby="more">
@@ -141,6 +157,16 @@ export default async function WateringHolesPage() {
           Flock and it appears here.
         </p>
       </section>
+
+      <div className="card p-4">
+        <h2 className="text-[17px] font-semibold">Still to work out together.</h2>
+        <ul className="mt-2.5 flex flex-col gap-1.5 pl-5 text-[15px]" style={{ listStyleType: "disc" }}>
+          <li>Whether to opt into the hillside yet &mdash; the setting exists, but there&rsquo;s no page to turn it on from.</li>
+          <li>Whether a tapped routine should ever reach the hillside, or stay private for good.</li>
+          <li>Pseudonym rotation: the hillside name you&rsquo;re given today is permanent, not seasonal yet.</li>
+          <li>Path doesn&rsquo;t show how long a tended task actually took, only its target duration.</li>
+        </ul>
+      </div>
     </div>
   );
 }

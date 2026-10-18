@@ -23,6 +23,16 @@ function chapterProgress(book: Book): string | null {
   return `Chapter ${book.currentChapter} of ${book.totalChapters}`;
 }
 
+// chapterPlaced is a free-text guess from the intelligence service's assessment (e.g.
+// "Chapter 7, The Habit Stacking"), not a structured field — the earlier-notes chip needs a
+// short "Ch. N" tag like the design reference, so this extracts just the chapter number when
+// the text starts with one, and falls back to the full text rather than guessing further.
+function shortChapterLabel(chapterPlaced: string | null): string {
+  if (chapterPlaced === null) return "Unplaced";
+  const match = chapterPlaced.match(/^chapter\s+(\d+)/i);
+  return match ? `Ch. ${match[1]}` : chapterPlaced;
+}
+
 function noteStatusLabel(note: ReadingNote): string {
   if (note.ownWordsPercentage === null) return "not assessed";
   if (note.ownWordsPercentage >= OWN_WORDS_THRESHOLD) return `${note.ownWordsPercentage}% own words`;
@@ -179,7 +189,7 @@ export default async function ReadingPage() {
                       key={note.id}
                       className={`flex items-center gap-3 px-4 py-2.5 ${i === 0 ? "" : "border-t hairline"}`}
                     >
-                      <span className="chip">{note.chapterPlaced ?? "Unplaced"}</span>
+                      <span className="chip">{shortChapterLabel(note.chapterPlaced)}</span>
                       <div className="min-w-0">
                         <strong className="block truncate text-[14px] font-semibold">{note.noteText}</strong>
                         <span className="text-[12px] text-muted">
@@ -192,7 +202,7 @@ export default async function ReadingPage() {
               </div>
             )}
 
-            <div className="card">
+            <div className="card p-4">
               <h2 className="text-[17px] font-semibold">How a note is read.</h2>
               <ol className="mt-2 flex flex-col gap-1.5 pl-5 text-[14px] text-muted" style={{ listStyleType: "decimal" }}>
                 <li>Your note is sent to an assessment that places where you are in the book.</li>
@@ -202,7 +212,7 @@ export default async function ReadingPage() {
               </ol>
             </div>
 
-            <div className="card">
+            <div className="card p-4">
               <h2 className="text-[17px] font-semibold">Your notes stay yours.</h2>
               <p className="mt-1.5 text-[14px] text-muted">
                 The hillside sees only that a note counted and how far through the book you are.

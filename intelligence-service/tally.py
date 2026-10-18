@@ -56,13 +56,20 @@ def _daterange(start: date, end: date):
 
 def compute_tally(
         routine_items: list[dict], learning_topics: list[dict], daily_logs: list[dict],
-        today: date, window_days: int = 28) -> Tally:
+        today: date, window_days: int = 28, since_start: bool = False) -> Tally:
     goal_id_by_routine_item = {
         item["id"]: item["goalId"] for item in routine_items if item.get("goalId") is not None
     }
     goal_id_by_topic = {topic["id"]: topic["goalId"] for topic in learning_topics}
 
-    window_start = today - timedelta(days=window_days - 1)
+    # "Since the start" (docs/design.md's Tally toggle) means since the earliest real record,
+    # not a fixed calendar window — a flat large window_days would make the tally stick render
+    # one notch per day back to a date nothing ever happened, most of them meaningless.
+    if since_start:
+        log_dates = [_parse_log_date(entry["logDate"]) for entry in daily_logs]
+        window_start = min(log_dates) if log_dates else today
+    else:
+        window_start = today - timedelta(days=window_days - 1)
 
     routines_tended_by_date: dict[date, set[int]] = defaultdict(set)
     logged_dates_by_item: dict[int, set[date]] = defaultdict(set)

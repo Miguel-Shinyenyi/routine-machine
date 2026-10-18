@@ -1,26 +1,22 @@
-import "./viz-tokens.css";
 import type { TopicRoutineCorrelation } from "@/lib/types";
 
-// Form: a single comparison of two headline numbers -> a stat-tile pair, not a chart
-// (references/choosing-a-form.md: "a handful of headline numbers -> KPI row of stat tiles").
+// Not in the design reference (this comparison predates the Phase 5 shepherd redesign), so
+// it's styled to match this app's own card/stat-tile tokens rather than left on the separate
+// dataviz-skill palette it was originally built with, which didn't match anything else here.
 export function CorrelationStatTiles({ correlation }: { correlation: TopicRoutineCorrelation }) {
   return (
-    <div className="viz-root grid grid-cols-2 gap-4" style={{ background: "var(--surface)" }}>
-      <div className="rounded border p-3" style={{ borderColor: "var(--gridline)" }}>
-        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="card p-4">
+        <p className="text-[13px] text-muted">
           Avg. routine completions on days with a learning-topic log ({correlation.daysWithTopicLog} days)
         </p>
-        <p className="mt-1 text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
-          {correlation.avgRoutineCompletionsOnTopicLogDays.toFixed(1)}
-        </p>
+        <p className="text-[28px] font-semibold">{correlation.avgRoutineCompletionsOnTopicLogDays.toFixed(1)}</p>
       </div>
-      <div className="rounded border p-3" style={{ borderColor: "var(--gridline)" }}>
-        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+      <div className="card p-4">
+        <p className="text-[13px] text-muted">
           Avg. routine completions on other days ({correlation.daysWithoutTopicLog} days)
         </p>
-        <p className="mt-1 text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
-          {correlation.avgRoutineCompletionsOnOtherDays.toFixed(1)}
-        </p>
+        <p className="text-[28px] font-semibold">{correlation.avgRoutineCompletionsOnOtherDays.toFixed(1)}</p>
       </div>
     </div>
   );

@@ -186,13 +186,15 @@ def patterns():
 
 
 @app.get("/tally", response_model=TallyResponse)
-def tally(windowDays: int = 28):
+def tally(windowDays: int = 28, sinceStart: bool = False):
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
         routine_items = _unowned(client.get("/api/routine-items").raise_for_status().json())
         learning_topics = client.get("/api/learning-topics").raise_for_status().json()
         logs = _unowned(client.get("/api/daily-logs").raise_for_status().json())
 
-    result = compute_tally(routine_items, learning_topics, logs, today=date.today(), window_days=windowDays)
+    result = compute_tally(
+        routine_items, learning_topics, logs, today=date.today(), window_days=windowDays,
+        since_start=sinceStart)
 
     return TallyResponse(
         daysShownUp=[DayShownUpView(date=d.date, shownUp=d.shown_up) for d in result.days_shown_up],

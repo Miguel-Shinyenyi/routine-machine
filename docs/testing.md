@@ -138,7 +138,12 @@ finding the unhandled-exception bug this surfaced) now reports cleanly instead o
 opaque 500. `test_suggestion_ignores_goals_and_logs_owned_by_a_hillside_demo_user` proves the
 `_unowned()` filter works: a goal/log pair with `userId` set must not change `/suggestion`'s
 `lastLoggedOn`, a case chosen because it would silently pick the wrong (more recent) date if
-the filter were removed, not just return extra rows. 45 tests, all passing.
+the filter were removed, not just return extra rows.
+`test_since_start_windows_from_the_earliest_log_not_a_fixed_calendar_window` and
+`test_since_start_with_no_logs_at_all_windows_from_today` cover `compute_tally`'s
+`since_start` option: a deliberately tiny `window_days` is passed alongside `since_start=True`
+to prove it's ignored once set, and the no-logs case confirms the window still has a sane
+(single-day) fallback rather than exploding. 47 tests, all passing.
 
 Frontend: Vitest, for pure logic only — `lib/schedule.ts` (which templates still need a task,
 a date's weekday independent of server timezone), `lib/formatDate.ts` and `lib/weekDates.ts`

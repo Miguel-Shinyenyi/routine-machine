@@ -64,11 +64,13 @@ export function Shell({
   doneCount,
   totalCount,
   daysShownUp,
+  routineCount,
 }: {
   children: React.ReactNode;
   doneCount: number | null;
   totalCount: number | null;
   daysShownUp: number | null;
+  routineCount: number | null;
 }) {
   const pathname = usePathname();
   const watchedFor =
@@ -109,6 +111,9 @@ export function Shell({
                 <small className="ml-auto text-[12px] font-medium text-muted">
                   {doneCount} of {totalCount}
                 </small>
+              )}
+              {link.href === "/flock" && routineCount !== null && (
+                <small className="ml-auto text-[12px] font-medium text-muted">{routineCount}</small>
               )}
             </Link>
           );

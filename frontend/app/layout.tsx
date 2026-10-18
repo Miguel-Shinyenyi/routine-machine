@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Shell } from "@/components/Shell";
 import { backendFetch, intelligenceFetch } from "@/lib/api";
 import { todayIsoDate } from "@/lib/schedule";
-import type { Tally, Task } from "@/lib/types";
+import type { RoutineItem, Tally, Task } from "@/lib/types";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,15 +28,24 @@ const SET_THEME_BEFORE_PAINT = `
 // never materializeDay, which can create tasks as a side effect unsuitable for every page load.
 // Both calls are caught, not awaited into a hard failure: the sidebar still renders, just
 // without that one piece of context, if either service is briefly unreachable.
-async function fetchShellContext(): Promise<{ doneCount: number | null; totalCount: number | null; daysShownUp: number | null }> {
-  const [tasks, tally] = await Promise.all([
+async function fetchShellContext(): Promise<{
+  doneCount: number | null;
+  totalCount: number | null;
+  daysShownUp: number | null;
+  routineCount: number | null;
+}> {
+  const [tasks, tally, routineItems] = await Promise.all([
     backendFetch<Task[]>(`/api/tasks?date=${todayIsoDate()}`).catch(() => null),
     intelligenceFetch<Tally>("/tally").catch(() => null),
+    backendFetch<RoutineItem[]>("/api/routine-items").catch(() => null),
   ]);
   return {
     doneCount: tasks ? tasks.filter((t) => t.status === "DONE").length : null,
     totalCount: tasks ? tasks.length : null,
     daysShownUp: tally ? tally.daysShownUpCount : null,
+    // Same unowned filter Flock itself applies — the sidebar badge should match the page it
+    // links to, not include Phase 8's hillside demo users' own items.
+    routineCount: routineItems ? routineItems.filter((item) => item.userId == null).length : null,
   };
 }
 

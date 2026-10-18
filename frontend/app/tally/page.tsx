@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { ApiError, backendFetch, intelligenceFetch } from "@/lib/api";
-import type { CurrentReading, Goal, Patterns, Tally } from "@/lib/types";
+import type { Book, Goal, Patterns, Tally } from "@/lib/types";
 import { GoalHoursChart } from "@/components/charts/GoalHoursChart";
 import { CorrelationStatTiles } from "@/components/charts/CorrelationStatTiles";
 
@@ -15,21 +16,28 @@ function meterLabel(ratio: number): { label: string; color: string } {
   return { label: "Wandering", color: "var(--muted)" };
 }
 
-async function fetchCurrentReading(): Promise<CurrentReading | null> {
+async function fetchCurrentBook(): Promise<Book | null> {
   try {
-    return await backendFetch<CurrentReading>("/api/current-reading");
+    return await backendFetch<Book>("/api/books/current");
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null;
     throw error;
   }
 }
 
-export default async function TallyPage() {
-  const [tally, patterns, goals, currentReading] = await Promise.all([
-    intelligenceFetch<Tally>("/tally"),
+export default async function TallyPage(props: PageProps<"/tally">) {
+  const searchParams = await props.searchParams;
+  // "4 weeks" is the default (matches /tally's own default windowDays=28); "Since the start"
+  // asks for a window wide enough to include every day ever logged, same trick Path's own
+  // week navigation uses of encoding state in the URL rather than client component state.
+  const sinceStart = searchParams.window === "all";
+  const windowDays = sinceStart ? 3650 : 28;
+
+  const [tally, patterns, goals, book] = await Promise.all([
+    intelligenceFetch<Tally>(`/tally?windowDays=${windowDays}&sinceStart=${sinceStart}`),
     intelligenceFetch<Patterns>("/patterns"),
     backendFetch<Goal[]>("/api/goals"),
-    fetchCurrentReading(),
+    fetchCurrentBook(),
   ]);
 
   const latestWeekStartByGoal = new Map<number, string>();
@@ -52,13 +60,33 @@ export default async function TallyPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        {sinceDate && <p className="text-[15px] font-semibold text-tint-text">Since {sinceDate}</p>}
-        <h1 className="page-title">The tally.</h1>
-        <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
-          A shepherd cut one notch for every sheep that came home. Each notch here is a day you
-          showed up. Small days count the same as big ones.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-5">
+        <div className="min-w-0 flex-1 basis-[420px]">
+          {sinceDate && <p className="text-[15px] font-semibold text-tint-text">Since {sinceDate}</p>}
+          <h1 className="page-title">The tally.</h1>
+          <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
+            A shepherd cut one notch for every sheep that came home. Each notch here is a day you
+            showed up. Small days count the same as big ones.
+          </p>
+        </div>
+        <div className="inline-flex gap-0.5 rounded-[9px] p-0.5" style={{ background: "var(--fill)" }}>
+          <Link
+            href="/tally"
+            aria-pressed={!sinceStart}
+            className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium"
+            style={!sinceStart ? { background: "var(--surface)", fontWeight: 600 } : undefined}
+          >
+            4 weeks
+          </Link>
+          <Link
+            href="/tally?window=all"
+            aria-pressed={sinceStart}
+            className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium"
+            style={sinceStart ? { background: "var(--surface)", fontWeight: 600 } : undefined}
+          >
+            Since the start
+          </Link>
+        </div>
       </div>
 
       <section className="card p-4">
@@ -98,21 +126,21 @@ export default async function TallyPage() {
       </section>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="tile p-4">
+        <div className="card p-4">
           <p className="text-[13px] text-muted">Days shown up</p>
-          <p className="text-[28px] font-semibold">{tally.daysShownUpCount}</p>
+          <p className="text-[28px] font-semibold">
+            {tally.daysShownUpCount} <small className="text-[17px] font-medium text-muted">of {tally.daysShownUp.length}</small>
+          </p>
         </div>
-        <div className="tile p-4">
+        <div className="card p-4">
           <p className="text-[13px] text-muted">Hours toward goals</p>
           <p className="text-[28px] font-semibold">{totalHours.toFixed(1)}</p>
         </div>
-        <div className="tile p-4">
+        <div className="card p-4">
           <p className="text-[13px] text-muted">Reading progress</p>
-          <p className="text-[15px] text-muted">
-            {currentReading ? currentReading.title : "Not tracked yet"}
-          </p>
+          <p className="text-[15px] text-muted">{book ? book.title : "Not tracked yet"}</p>
         </div>
-        <div className="tile p-4">
+        <div className="card p-4">
           <p className="text-[13px] text-muted">Learning notes</p>
           <p className="text-[15px] text-muted">Not tracked yet (Phase 7)</p>
         </div>
