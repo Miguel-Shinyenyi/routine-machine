@@ -59,6 +59,7 @@ export default async function TodayPage(props: PageProps<"/today">) {
     }
   }
 
+  const maxGoalHours = Math.max(1, ...Array.from(latestHoursByGoal.values()));
   const lastWandered = patterns?.skipHeavyDays.at(-1);
 
   return (
@@ -122,27 +123,48 @@ export default async function TodayPage(props: PageProps<"/today">) {
 
         <div className="flex flex-col gap-4">
           <div className="card p-4">
-            <h2 className="section-title mb-3">Closer than yesterday.</h2>
+            <h2 className="section-title">Closer than yesterday.</h2>
+            <p className="mb-3 mt-1.5 text-[14px] text-muted">
+              Hours given to each green pasture since you started.
+            </p>
             {latestHoursByGoal.size === 0 && <p className="text-[13px] text-muted">No hours logged yet.</p>}
-            <ul className="flex flex-col gap-2 text-[13px]">
-              {Array.from(latestHoursByGoal.entries()).map(([goalId, hours]) => (
-                <li key={goalId} className="flex justify-between">
-                  <span>{goalById.get(goalId) ?? `Goal ${goalId}`}</span>
-                  <span className="text-tint-text">{hours.toFixed(1)}h</span>
-                </li>
-              ))}
-            </ul>
+            <div className="flex flex-col gap-3">
+              {Array.from(latestHoursByGoal.entries()).map(([goalId, hours], i) => {
+                // No real per-goal target exists to measure a bar against, so each bar is
+                // sized relative to the goal with the most hours here, not a fabricated cap.
+                const width = Math.round((hours / maxGoalHours) * 100);
+                return (
+                  <div key={goalId} className={i === 0 ? "" : "border-t hairline pt-3"}>
+                    <div className="flex items-baseline justify-between text-[14px]">
+                      <strong className="font-semibold">{goalById.get(goalId) ?? `Goal ${goalId}`}</strong>
+                      <span>{hours.toFixed(1)} h</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--fill)" }}>
+                      <div className="h-full rounded-full" style={{ width: `${width}%`, background: "var(--tint)" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {latestHoursByGoal.size > 0 && (
+              <Link href="/tally" className="mt-2.5 inline-block text-[15px] text-tint-text">
+                Open the tally &rsaquo;
+              </Link>
+            )}
           </div>
 
-          <div className="card p-4">
-            <h2 className="section-title mb-2">The staff</h2>
+          <div className="card flex flex-col gap-2 p-4">
             {suggestion ? (
               <>
-                <p className="text-[15px]">{suggestion.topic.name}</p>
-                <p className="mt-1 text-[13px] text-muted">{suggestion.reason}</p>
+                <span className="chip chip-tint self-start">The staff</span>
+                <h2 className="text-[17px] font-semibold">{suggestion.topic.name}</h2>
+                <p className="text-[14px] text-muted">{suggestion.reason}</p>
               </>
             ) : (
-              <p className="text-[13px] text-muted">No learning topics to suggest yet.</p>
+              <>
+                <h2 className="section-title">The staff</h2>
+                <p className="text-[13px] text-muted">No learning topics to suggest yet.</p>
+              </>
             )}
           </div>
 

@@ -149,6 +149,13 @@ export default async function FlockPage() {
           </div>
         )}
         {routineItems.length === 0 && <p className="text-[13px] text-muted">None yet</p>}
+        <div className="card p-4">
+          <h2 className="text-[17px] font-semibold">Private stays private.</h2>
+          <p className="mt-1.5 text-[14px] text-muted">
+            Routines marked Private are counted in your tally and never leave it. Only the
+            fields you choose reach the hillside, and only as a pseudonym.
+          </p>
+        </div>
         <div id="add-routine">
           <NewRoutineItemForm goals={goals} />
         </div>

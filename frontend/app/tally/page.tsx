@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ApiError, backendFetch, intelligenceFetch } from "@/lib/api";
+import { todayIsoDate } from "@/lib/schedule";
 import type { Book, Goal, Patterns, Tally } from "@/lib/types";
 import { GoalHoursChart } from "@/components/charts/GoalHoursChart";
 import { CorrelationStatTiles } from "@/components/charts/CorrelationStatTiles";
@@ -7,8 +8,6 @@ import { CorrelationStatTiles } from "@/components/charts/CorrelationStatTiles";
 // A day on the tally stick counts as "shown up" once this many routines were tended.
 // Mirrors intelligence-service's TALLY_STICK_THRESHOLD; see docs/intelligence-service.md.
 const TALLY_STICK_THRESHOLD = 3;
-
-const STILL_WATERS_DAYS = new Set([0, 6]); // Sunday, Saturday (Date#getUTCDay())
 
 function meterLabel(ratio: number): { label: string; color: string } {
   if (ratio >= 0.8) return { label: "Steady", color: "var(--tended-ink)" };
@@ -99,24 +98,24 @@ export default async function TallyPage(props: PageProps<"/tally">) {
           </span>
         </div>
         <div
-          className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5"
+          className="mt-3.5 flex flex-wrap items-end gap-x-[18px] gap-y-3.5"
           role="img"
           aria-label={`Tally stick: ${tally.daysShownUpCount} days shown up out of ${tally.daysShownUp.length}`}
         >
           {notchGroups.map((group, gi) => (
-            <div key={gi} className="flex gap-1">
+            <div key={gi} className="flex items-end gap-[5px]">
               {group.map((day) => {
-                const weekday = new Date(`${day.date}T00:00:00Z`).getUTCDay();
-                const stillWaters = STILL_WATERS_DAYS.has(weekday);
+                const isToday = day.date === todayIsoDate();
                 return (
                   <span
                     key={day.date}
                     title={day.date}
-                    className="h-4 w-2 rounded-full"
-                    style={{
-                      background: day.shownUp ? "var(--tint)" : "var(--fill)",
-                      border: stillWaters && !day.shownUp ? "1px dashed var(--private-ink)" : "none",
-                    }}
+                    className="h-[38px] w-[5px] rounded-[3px]"
+                    style={
+                      day.shownUp
+                        ? { background: isToday ? "var(--tint)" : "var(--ink)" }
+                        : { background: "transparent", border: "1.5px dashed rgba(118,118,128,.5)" }
+                    }
                   />
                 );
               })}

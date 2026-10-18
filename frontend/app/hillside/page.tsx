@@ -184,34 +184,55 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
           )}
         </section>
 
-        <aside className="card min-w-0 flex-[1_1_300px]" aria-labelledby="rules">
+        <aside className="card min-w-0 flex-[1_1_300px] p-5" aria-labelledby="rules">
           <h2 id="rules" className="mb-2 text-[17px] font-semibold">
             Why this hillside is calm.
           </h2>
           <div className="flex flex-col gap-2.5 text-[14px]">
-            <div>
-              <b className="block font-semibold">Days, not volume.</b>
-              <span className="text-muted">
-                Each day has a cap. Bingeing a whole book on Sunday counts as one day.
+            <div className="flex gap-2.5">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="mt-0.5 shrink-0 text-muted">
+                <path d="M5 5v14M9 5v14M13 5v14M17 5v14" />
+              </svg>
+              <span>
+                <b className="block font-semibold">Days, not volume.</b>
+                <span className="text-muted">
+                  Each day has a cap. Bingeing a whole book on Sunday counts as one day.
+                </span>
               </span>
             </div>
-            <div className="border-t hairline pt-2.5">
-              <b className="block font-semibold">No names, no faces.</b>
-              <span className="text-muted">
-                Pseudonyms are derived from an id, never a name or email. No followers, no
-                profiles, no messages.
+            <div className="flex gap-2.5 border-t hairline pt-2.5">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="mt-0.5 shrink-0 text-muted">
+                <circle cx="12" cy="9" r="4" />
+                <path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
+              </svg>
+              <span>
+                <b className="block font-semibold">No names, no faces.</b>
+                <span className="text-muted">
+                  Pseudonyms are derived from an id, never a name or email. No followers, no
+                  profiles, no messages.
+                </span>
               </span>
             </div>
-            <div className="border-t hairline pt-2.5">
-              <b className="block font-semibold">Only what a source can confirm.</b>
-              <span className="text-muted">
-                Health data, WakaTime, ActivityWatch, counted reader&rsquo;s notes. Taps never
-                reach the hillside.
+            <div className="flex gap-2.5 border-t hairline pt-2.5">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="mt-0.5 shrink-0 text-muted">
+                <path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z" />
+              </svg>
+              <span>
+                <b className="block font-semibold">Only what a source can confirm.</b>
+                <span className="text-muted">
+                  Health data, WakaTime, ActivityWatch, counted reader&rsquo;s notes. Taps never
+                  reach the hillside.
+                </span>
               </span>
             </div>
-            <div className="border-t hairline pt-2.5">
-              <b className="block font-semibold">You choose the fields.</b>
-              <span className="text-muted">Private routines stay out, always.</span>
+            <div className="flex gap-2.5 border-t hairline pt-2.5">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true" className="mt-0.5 shrink-0 text-muted">
+                <path d="M3 12h18M12 3v18" />
+              </svg>
+              <span>
+                <b className="block font-semibold">You choose the fields.</b>
+                <span className="text-muted">Private routines stay out, always.</span>
+              </span>
             </div>
           </div>
         </aside>
