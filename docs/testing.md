@@ -178,8 +178,10 @@ computations behind Tally's "Steep days"/"Learning and the rest" headlines: whic
 user's skip-heavy days cluster on, and whether learning-day routine completions are higher,
 lower, or tied against other days), and `lib/auth/jwt.ts` (`signSessionToken`/
 `verifySessionToken`: a round trip, expiry just past and just before the cutoff, a token
-signed with the wrong secret, a tampered payload, and garbage input) — 29 tests total.
-`submitReadingNote` stays untested as a unit, since it's
+signed with the wrong secret, a tampered payload, and garbage input) — 29 tests total (Phase 9
+added no new pure-logic module: `seasonNumber` and `evidenceDescription` in `/hillside`'s page
+are small presentational helpers, same tier as the already-untested `formatDay` in the same
+file, not isolated business logic). `submitReadingNote` stays untested as a unit, since it's
 a sequence of two external calls, not a pure function worth isolating. Page components are
 verified by running the app and clicking through the views and the full materialize → start
 → done flow in a browser instead, matching settlement-engine's frontend, which has no
@@ -196,7 +198,14 @@ also run as part of finishing a phase. Reading's full flow (create a book, submi
 it rendered back) was verified live via Docker Compose, including a real call through to the
 Anthropic API (which failed on account billing, caught and shown as "wasn't assessed," not a
 page crash) — the same real-API verification the intelligence service's own tests already
-recorded, now confirmed end to end through the browser too.
+recorded, now confirmed end to end through the browser too. Phase 9's hillside v2 was verified
+live via Docker Compose against real evidence events posted through `POST /api/evidence-events`:
+the band/returns/neighbours cards, the goal filter, the show/hide switch (both directions),
+and questioning a credit (confirmed it persists across a reload) all checked in a browser, plus
+`docs/design-reference/compare.mjs` run against `/hillside` and `/hillside` @390 — the
+comparison surfaced three real structural gaps (no season number, the hide control was a text
+link instead of the reference's toggle switch, the ledger was missing its Evidence/Credit
+columns), fixed and re-compared before reporting.
 
 ## Decisions log
 

@@ -46,14 +46,19 @@ deliberate deviation rather than an oversight.
   one question back — or a plain "wasn't assessed" message), an earlier-notes list, and the
   "How a note is read" / "Your notes stay yours" explanatory cards, per `docs/design.md`'s
   layout for this page.
-- **Hillside** (`/hillside`, new in Phase 8): field and window segmented controls (Link-based,
-  server-rendered, not client state — see the decisions log), a band card, a histogram of
-  participants by days shown up, a "walking near you" list of pseudonymous neighbours, and the
-  "why this hillside is calm" rules card. Reads `GET /api/hillside`; a signed-in session now
-  supplies the real `asUserId` automatically (the `?asUserId=` query param is ignored once a
-  session exists, and only still works as a demo-mode preview when signed out — see the
-  decisions log). A signed-in user also sees a real "Join the hillside"/"Leave the hillside"
-  toggle calling `PUT /api/users/me/hillside-opt-in`.
+- **Hillside** (`/hillside`, Phase 8, rebuilt for Phase 9's credit-based v2): scope (cohort/
+  open — both the same opted-in population today, see `backend.md`'s decisions log) and goal
+  segmented controls (the goal list is each signed-in user's own real goals, not the design
+  reference's fictional category names — same "real data" precedent as everywhere else),
+  a real toggle-switch "Show the hillside" control (`.switch`, copied from the reference's own
+  CSS), a band card (score/days/goal count), a "Returns" card (a cohort-wide count of people
+  who came back after a gap this season, never a per-person rank), a "walking near you" list
+  with per-row credit dots, the "why this hillside is calm" rules card, and — for a signed-in
+  user — the full credit ledger ("How your credits were counted": day, goal, evidence, status,
+  credit, why, and a "Question this" link per row). Reads `GET /api/hillside/v2`,
+  `GET /api/goals?userId=`, and `GET /api/evidence-events`; a signed-in session supplies the
+  real `asUserId` automatically (the `?asUserId=` query param is ignored once a session
+  exists, and only still works as a demo-mode preview when signed out).
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
@@ -170,6 +175,12 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-18 | Phase 9: `/hillside` rebuilt entirely for the credit-based hillside v2, replacing Phase 8's days-shown-up version in place (same route, same file) | The design reference's `hillside.html` fully replaces the old layout — season/band/returns/ledger are a different feature, not an addition alongside the old one. Phase 8's backend `GET /api/hillside`, `HillsideService`, and their tests are deliberately left in place, just no longer called from this page — see `backend.md`'s open questions for the cleanup this leaves open |
+| 2026-10-18 | The goal segmented control lists each signed-in user's own real goals (`GET /api/goals?userId=`), not the reference's fixed "Coding/Reading/Learning/Writing/Movement" category buttons | Same precedent as every other page in this app showing real data instead of the reference's sample copy; this app's real goals are milestone-style (`cmu-masters-application`), not activity categories, so inventing fixed category buttons would misrepresent what a credit is actually for here |
+| 2026-10-18 | The hide/show control is a real `.switch` (role="switch", `aria-checked`), not a text link | The design reference shows this as a prominent toggle, not a link; copied `.switch`'s CSS from the reference's own `phone-hillside.html` stylesheet almost verbatim — its on-state green already matched this app's existing `--tended-ink` token exactly, so no new colour was needed. Still a plain `<form>`-submitted `<button type="submit">`, no client JS, same server-rendered pattern every other toggle in this app uses |
+| 2026-10-18 | "Season N" in the eyebrow is computed from a fixed arbitrary epoch Monday (whole weeks since 2026-01-05), not a stored season number | Purely cosmetic, matching the reference's own "Season 42" flavour text; a real stored season counter would need its own table and migration for a number nothing else in the product depends on |
+| 2026-10-18 | The band card shows "On the hillside you are {pseudonym}" (reading it off the `neighbors` row where `isYou` is true), not a separate backend field for "your own pseudonym" | The pseudonym is already in the response, in the one row that's always yours when you have a score; adding a redundant top-level field to `HillsideV2Response` would duplicate data the client can already read off the list it's already fetching |
+| 2026-10-18 | The ledger's "Question this" is a link per row, not the reference's single page-level "Question a credit ›" link | The backend's `question` endpoint operates on one specific evidence event id; a single generic link wouldn't know which credit to question. Matching the reference's exact single-link placement would mean building a picker UI for no real gain — a per-row link is simpler and unambiguous, logged here as a deliberate functional divergence per `design-reference/README.md`'s own instruction to record one |
 | 2026-10-18 | `Shell` returns a bare, chrome-free `<main>` for `/login` and `/register`, instead of these two pages rendering inside the normal sidebar/phone-tab-bar layout | User flagged the nav as still visible on both pages. Every link in that nav leads to data scoped to an account that may not exist yet, and on phone the floating tab bar would sit over a two-field form for no reason; `Shell` already reads `usePathname()` for active-link state, so the same hook decides whether to render any chrome at all, with no new route-group or layout file needed |
 | 2026-10-18 | Real password login built (`/login`, `/register`, `lib/auth/jwt.ts`, `lib/auth/session.ts`, `lib/auth/actions.ts`), GitHub/Google sign-in left pending | User asked for password login first, OAuth deferred explicitly. `jwt.ts` mints/verifies the same HS256 `{sub, exp}` shape the backend's `NimbusJwtDecoder.withSecretKey` already expects (proven in `UserControllerApiIntegrationTest`), using Node's built-in `crypto` rather than a new dependency (no next-auth) — `AUTH_JWT_SECRET` must stay identical between `backend` and `frontend` in `docker-compose.yml`. The session is an httpOnly cookie set via Server Actions (`loginAction`/`registerAction`/`logoutAction`), not client-side token storage |
 | 2026-10-18 | `/login` and `/register` render nested inside the global `Shell` (sidebar still visible), not a separate unauthenticated layout | Every page in this app already works without login (demo mode); there's no logged-out-only section to carve out, and the reference has no login UI to match either, so these two pages are styled from the app's own `.page-title`/`.card`/`.field`/`.btn-fill` tokens for consistency rather than a new visual language |
@@ -237,6 +248,18 @@ departure from precedent.
 
 ## Open questions
 
+- The phone tab bar still lists Today/Path/Reading/Tally/Hillside, not the updated design
+  reference's Today/Reading/Granary/Tally/Hillside (Path moved off, opening from Today
+  instead). Not changed this phase: Granary doesn't exist yet (Phase 11), and the "Path opens
+  from Today" cross-link isn't built either — same kind of gap already open for Flock/Watering
+  holes below. Revisit once Granary exists.
+- The hillside's ledger only ever shows events ingested through `POST /api/evidence-events`
+  directly (e.g. via `curl` for this phase's own live verification) — nothing in the frontend
+  calls that endpoint yet from a real user action (Today's checks, Reading's notes, Watering
+  holes' syncs all still only write to `daily_logs`, the Phase 1-8 pipeline). Wiring real
+  app actions to also emit evidence events is follow-on work, not built this phase.
+- No admin UI exists for authoring a `scoring_rules` row for a goal (see `backend.md`'s open
+  questions); every real evidence event in this app currently qualifies by presence alone.
 - Tally's "learning notes" stat tile still says "Not tracked yet" rather than a real number.
 - Path's day blocks don't show a tended task's actual duration, only its target from the
   schedule template; joining in each day's `DailyLog.measuredMinutes` would need a second

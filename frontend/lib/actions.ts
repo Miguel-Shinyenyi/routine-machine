@@ -154,3 +154,11 @@ export async function setHillsideOptIn(formData: FormData): Promise<void> {
 
   revalidatePath("/hillside");
 }
+
+// "Question a credit" — records the request, nothing more (see
+// docs/product-direction.md's Hillside v2 transparency bullet).
+export async function questionCredit(formData: FormData): Promise<void> {
+  const eventId = formData.get("eventId");
+  await backendFetch(`/api/evidence-events/${eventId}/question`, { method: "PATCH" });
+  revalidatePath("/hillside");
+}

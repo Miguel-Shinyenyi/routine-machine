@@ -224,3 +224,35 @@ body {
   background: var(--tint-fill);
   color: var(--tint-text);
 }
+
+/* Phase 9: the hillside's "show/hide" switch, copied from the design reference's own
+   .switch rule (docs/design-reference/pages/phone-hillside.html). --tended-ink already
+   matches its on-state green (#1b7332) exactly, so no new token was needed. */
+.switch {
+  position: relative;
+  width: 51px;
+  height: 31px;
+  flex: none;
+  border-radius: 980px;
+  border: 0;
+  background: var(--fill);
+  padding: 0;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+}
+.switch[aria-checked="true"] {
+  background: var(--tended-ink);
+}
+.switch[aria-checked="true"]::after {
+  transform: translateX(20px);
+}
