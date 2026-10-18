@@ -41,6 +41,12 @@ public class User {
     @Column(name = "hillside_opt_in", nullable = false)
     private boolean hillsideOptIn = false;
 
+    // Phase 9 groundwork (see V18__user_time_zone.sql): an IANA zone id ("Africa/Nairobi"),
+    // defaulting to UTC. Decides which calendar day a credit lands on — see
+    // EvidenceCreditService. Phase 10's Profile page is where a user actually sets this.
+    @Column(name = "time_zone", nullable = false)
+    private String timeZone = "UTC";
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private OffsetDateTime createdAt;
@@ -72,6 +78,14 @@ public class User {
 
     public boolean isHillsideOptIn() {
         return hillsideOptIn;
+    }
+
+    public String getTimeZone() {
+        return timeZone;
+    }
+
+    public void changeTimeZone(String timeZone) {
+        this.timeZone = Objects.requireNonNull(timeZone, "timeZone must not be null");
     }
 
     public Long getId() {

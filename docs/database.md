@@ -145,6 +145,30 @@ two different users, or a user and the seeded data, can now share a goal name, b
 can't have two goals of the same name. This also makes `POST /api/goals` possible for the
 first time (see `backend.md`); goals are no longer only created through migrations.
 
+Phase 9 built via `V18__user_time_zone.sql`: `users` gains `time_zone` (varchar, not null,
+default `'UTC'`) — an IANA zone id. Groundwork for the evidence-to-credit pipeline's local-date
+rule (see `backend.md`), not the full Profile page (Phase 10).
+
+Phase 9 also built via `V19__evidence_to_credit_pipeline.sql`, three new tables:
+
+- `scoring_rules(id, version, goal_id references goals, min_minutes nullable, description,
+  published_on, created_at)`, unique on `(version, goal_id)`. A versioned, published rule for
+  what counts as qualifying evidence for one goal. Not every goal has a row — see
+  `backend.md`'s decisions log for the presence-based fallback this enables.
+- `evidence_events(id, user_id references users, goal_id references goals, source, source_event_id,
+  occurred_at, local_date, minutes nullable, status, scoring_rule_version, reason,
+  questioned_at nullable, created_at)`, unique on `(user_id, source, source_event_id)` (the
+  dedupe key), a check constraint restricts `status` to `ACCEPTED`/`REJECTED`/`PENDING`/
+  `SELF_REPORTED`. Every ingested piece of evidence, whatever the outcome — the credit ledger
+  reads straight from this table.
+- `daily_credits(id, user_id references users, goal_id references goals, local_date, credits,
+  evidence_event_id references evidence_events, created_at)`, unique on
+  `(user_id, goal_id, local_date)`. One row per (user, goal, day) that actually earned a
+  credit; the unique constraint plus an `ON CONFLICT DO NOTHING` upsert (not application-level
+  check-then-insert) is the entire mechanism behind "one credit per goal per day" and "two
+  concurrent inserts produce one row" — see `backend.md`'s decisions log and
+  `EvidenceCreditService`.
+
 ## Decisions log
 
 | Date | Decision | Reason |
@@ -168,6 +192,10 @@ first time (see `backend.md`); goals are no longer only created through migratio
 | 2026-09-18 | No edit history or versioning on daily_logs | Adds complexity with no current justification; revisit if incorrect logs become a real recurring problem |
 | 2026-10-17 | `books` has no `chapters` table, just `current_chapter`/`total_chapters` integers | Matches `docs/design.md`'s Reading page, which needs chapter progress as a number out of a number, not a catalog; a reader's note's "chapter placed" field (Phase 7, not built yet) is an LLM's free-text guess, not a foreign key |
 | 2026-09-19 | `current_reading_log` is append-only with no status field | The current book is always just the latest row; a status field would duplicate what ordering already tells you |
+| 2026-10-18 | `daily_credits.goal_id` is a FK to the existing `goals` table, not a new taxonomy | `docs/product-direction.md`'s pipeline spec says "goal" throughout without introducing a new entity name, and this app already has a `goals` concept (user milestones like "cmu-masters-application"); reusing it is the minimal, consistent-with-existing-schema reading, even though the design reference's own sample ledger uses category-style names ("Coding", "Reading") that don't match this app's real goal names — those are the reference's own sample-data flavour, same as every other number on those pages per `design-reference/README.md`'s own "never the numbers" rule |
+| 2026-10-18 | `scoring_rules` has no row for this app's three real seeded goals | They're milestone-style goals (a CMU application, target roles), not minute-trackable daily categories, so a `min_minutes` threshold doesn't mean anything for them; `EvidenceCreditService` falls back to presence-based acceptance when no rule exists, so every real evidence event in this app currently qualifies by presence alone. A goal that should have a real minute threshold needs a `scoring_rules` row written directly for now — no admin UI for authoring one yet |
+| 2026-10-18 | `daily_credits` is upserted with raw `ON CONFLICT DO NOTHING`, not a `@Modifying` JPQL query or check-then-insert in Java | The database's own `UNIQUE(user_id, goal_id, local_date)` constraint is the only thing that can actually guarantee "two concurrent inserts produce one row" under real concurrency; JPQL has no portable upsert syntax, and a Java-level check-then-insert has an inherent race window between the check and the write |
+| 2026-10-18 | `evidence_events.questioned_at` is a single nullable timestamp, not a separate `credit_questions` table | "Question a credit" is explicitly "a simple form that records the request," not a review workflow with its own state machine (see `docs/product-direction.md`); one column records that it happened and when, which is all a transparency signal needs to be right now |
 
 ## Open questions
 

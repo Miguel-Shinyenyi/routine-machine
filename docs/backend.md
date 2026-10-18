@@ -389,10 +389,63 @@ personal band/rank/neighbours.
   its position within this slice of neighbours) — the design reference shows a rank number
   per row, which this field exists to support.
 
+**Phase 9: the evidence-to-credit pipeline built, `EvidenceCreditService`.** Implements
+`docs/product-direction.md`'s pipeline (ingest, validate, normalise, deduplicate, qualify;
+aggregate/publish live in `HillsideV2Service`). `ingest(user, goal, source, sourceEventId,
+occurredAt, minutes)`:
+
+- **Dedupe** (step 4): looks up `(userId, source, sourceEventId)` first; an exact repeat
+  returns the existing `EvidenceEvent` untouched. A true race on the exact same event is still
+  safe — `evidence_events`' own `UNIQUE(user_id, source, source_event_id)` constraint catches
+  it, and a caught `DataIntegrityViolationException` falls back to re-reading the winner's row
+  rather than failing the request.
+- **Local date**: computed once, at ingest time, from `occurredAt` (UTC) and the user's
+  `time_zone` (migration V18) — stored on the event, never recomputed later, so a user
+  changing time zone doesn't silently rewrite which day a past credit landed on.
+- **Qualify**: `MANUAL` source is always `SELF_REPORTED` (self-reports count, but stay
+  labelled). Otherwise looks up the goal's newest `ScoringRule`; no rule means presence-based
+  `ACCEPTED` (see `database.md`'s decisions log on why this app's real goals mostly hit this
+  path); a rule with `minMinutes == null` means presence-based `ACCEPTED` too; a rule with a
+  minute threshold and no `minutes` on the event means `PENDING` (data not confirmed yet, e.g.
+  a sync still catching up); at or above the threshold is `ACCEPTED`, below is `REJECTED`
+  ("still in your tally" — rejected evidence is kept, not discarded, so the ledger can show
+  why).
+- **Aggregate**: an `ACCEPTED`/`SELF_REPORTED` event upserts into `daily_credits` via
+  `DailyCreditRepository.awardCreditIfAbsent`, a native `INSERT ... ON CONFLICT
+  (user_id, goal_id, local_date) DO NOTHING`. This is the entire concurrency-safety mechanism
+  for "one credit per qualifying goal per day, extra evidence never multiplies it, two
+  concurrent inserts produce one row" — the database's own constraint decides, not an
+  application-level check-then-insert that a race could slip past.
+
+**Season aggregation built, `HillsideV2Service`.** `seasonScore(userId, start, end, goalId)`
+sums each day's `daily_credits` (`goalId == null` means every goal) capped at
+`DAILY_CREDIT_CAP = 3` *before* summing — a day with 4 qualifying goals still only contributes
+3, and a missed day contributes 0, never a penalty. `countReturns` finds every credited day in
+the window whose immediately preceding calendar day (looking past the window's own edge) had
+no credit, excluding a user's very first-ever credited day anywhere (a start, not a comeback).
+`compute(goalId, seasonStart, seasonEnd, asUserId)` ranks every `hillside_opt_in = true` user
+with a nonzero season score (ties broken by user id), returns your rank/score/band/goal count,
+three-above-three-below neighbours (reusing `HillsidePseudonym`, now keyed off the season's
+own start date for its "season" input), and `cohortReturns` — the count of opted-in users with
+at least one return this window, shown as a cohort total per the design, never a per-person
+rank.
+
+**The hillside v2 API built: `GET /api/hillside/v2`, `POST`/`GET /api/evidence-events`,
+`PATCH /api/evidence-events/{id}/question`.** `seasonStart` defaults to the most recent Monday
+in UTC when omitted (a stand-in for "the cohort's time zone," see the decisions log); `seasonEnd`
+is always `seasonStart + 6 days`. The ledger (`GET /api/evidence-events?userId=&seasonStart=&seasonEnd=`)
+lists every event in the window whatever its status, newest first, for the "How your credits
+were counted" table. "Question a credit" just stamps `questioned_at`, matching the explicit
+"simple form that records the request" scope — no review workflow yet.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-18 | Phase 9: one implicit "cohort" (every `hillside_opt_in = true` user) backs both the "cohort" and "open" scopes, rather than building minimal cohort groundwork ahead of Phase 12 | Asked the user directly, since `organisations`/`cohorts` are explicitly Phase 12 work and `CLAUDE.md`'s "build only the current phase" rule applies; this keeps Phase 9's schema stable (no `cohort_id` to retrofit later) while still shipping the full credit pipeline and real UI, including the scope segmented control, now |
+| 2026-10-18 | Phase 9: `users.time_zone` added now (migration V18), ahead of Phase 10's full Profile page | Asked the user directly, since Phase 9's own test list requires "a credit decided on Nairobi time near midnight lands on the right local date," which needs *some* per-user time zone to exist first; one column is the same narrow-groundwork pattern `V14__users.sql` used for accounts ahead of full auth, not later-phase logic |
+| 2026-10-18 | `EvidenceCreditService.ingest` is not itself `@Transactional` across its dedupe-lookup/save/award sequence | Each step's own safety comes from the database, not from Java-level transaction boundaries: the dedupe lookup is a fast-path check backed by `evidence_events`' `UNIQUE` constraint (with a caught `DataIntegrityViolationException` fallback), and the credit award is a native `ON CONFLICT DO NOTHING` upsert. Wrapping the whole method in one transaction would add nothing these two constraints don't already guarantee, and would hold a transaction open longer than necessary |
+| 2026-10-18 | `HillsideV2Service.compute` iterates every opted-in user and recomputes each one's season score, rather than one aggregate SQL query | Matches `HillsideService` v1's existing precedent (see the 2026-10-17 "computed fresh on every request" entry below) — the dataset is small, and a clear, testable Java loop beats a harder-to-verify aggregate query for the same reason v1 chose it |
 | 2026-10-18 | `NeighborRow` gained `rank` (the row's 1-indexed position in the full ranked list) | The frontend's hillside page had no way to show a rank number per "walking near you" row, which the design reference does; computed once in `HillsideService.compute` from the loop index already used to build the slice, not a second pass |
 | 2026-10-17 | Only `routine_items` and `daily_logs` get an optional `user_id`, not every table | These two drive "days shown up," the one signal needed to demo real multi-user data; scoping every table (`goals` especially, which has no creation API at all today) is separate, much larger work that doesn't change what this slice needs to prove |
 | 2026-10-17 | User scoping is an optional `userId` query param/field, not required authentication | Full auth enforcement needs the Next.js session side (not built) and would break the existing single-user frontend and every Phase 6 sync service immediately, since none of them have a user to pass yet. Optional scoping is additive: omit it, nothing changes; pass it, the new per-user data is isolated and testable |
@@ -465,6 +518,20 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 
 ## Open questions
 
+- Phase 9's "cohort-scoped by default" hillside isn't real yet — `/api/hillside/v2`'s
+  "cohort" and "open" scopes both resolve to the same opted-in population, since
+  `organisations`/`cohorts` don't exist until Phase 12. The decisions log records this as a
+  deliberate choice, asked and confirmed, not an oversight — Phase 12 should be able to add
+  real cohort filtering without changing `daily_credits`' schema.
+- `seasonStart`'s UTC-Monday default is a stand-in for "the cohort's time zone" (the design's
+  own phrase); with no cohort entity yet, there's no cohort-level time zone to use. Revisit
+  once Phase 12 gives a cohort its own zone.
+- `scoring_rules` has no authoring UI or endpoint; rows exist only if written directly (see
+  `database.md`'s decisions log). A goal that should have a real minute threshold has no way
+  to get one through the product yet.
+- `GoalRepository` has no way to list only goals with `daily_credits` activity, so the
+  frontend's hillside goal filter currently lists every one of a user's own goals, including
+  ones with no evidence at all this season — a minor UX gap, not a correctness one.
 - Whether `HubJournalReader` should hold the full journal-decrypting key at all, versus a
   least-privilege alternative that needs no key. Tracked in `hub-sync.md`'s open questions,
   to revisit before Stage 3.

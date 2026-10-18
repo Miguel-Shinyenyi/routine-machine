@@ -121,8 +121,26 @@ with the same name for the same user (the new `(user_id, name)` uniqueness), and
 hillside even with a qualifying public log; its other cases' `saveUser` helper now opts the
 user in, since that's the real precondition for participating, not an incidental default.
 `UserControllerApiIntegrationTest` covers `PUT /api/users/me/hillside-opt-in`: opting in,
-opting out, and that the endpoint 401s with no token, same as `GET /api/users/me`. 171 backend
-tests, all passing (169 plus 2 new `HillsidePseudonymTest` rotation cases).
+opting out, and that the endpoint 401s with no token, same as `GET /api/users/me`.
+`EvidenceCreditServiceTest` (`@DataJpaTest`) covers the evidence-to-credit pipeline's own
+test list from `docs/product-direction.md`: a duplicate event earns no second credit; two
+concurrent inserts for the same user/goal/day produce one row (a dedicated test, real raw-JDBC
+concurrency against two separate connections — see the decisions log for why `@DataJpaTest`'s
+default per-test transaction had to be disabled for this one case); a missed day subtracts
+nothing; the daily cap (3) holds across four qualifying goals in one day; a credit decided on
+Nairobi time near midnight lands on the correct local date; evidence below/at/above a minute
+threshold is rejected/accepted; manual evidence is self-reported and still earns credit; a
+goal with no scoring rule falls back to presence-based acceptance; evidence with no minutes
+against a minute-based rule is pending. `HillsideV2ServiceTest` and `HillsideV2ComputeTest`
+cover season-score aggregation and ranking: a return is counted only after a gap and never on
+a user's first-ever credited day; ranking by season score; a non-opted-in user is never a
+participant; filtering by goal only scores that goal's credits; cohort-wide returns count
+every participant with at least one comeback, not just yours. `EvidenceEventApiIntegrationTest`
+and `HillsideV2ApiIntegrationTest` cover the HTTP layer: ingest creates an accepted event with
+no rule present, an unknown user 400s, the ledger lists every event in a window whatever its
+status, questioning a credit records the request, and `/api/hillside/v2` returns a real
+band/rank for an explicit season and no personal band for a user with no credits yet. 193
+backend tests, all passing (171 plus 22 new for Phase 9).
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
@@ -184,6 +202,9 @@ recorded, now confirmed end to end through the browser too.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-18 | `twoConcurrentInsertsForTheSameUserGoalAndDayProduceOneRow` disables `@DataJpaTest`'s default per-test transaction (`@Transactional(propagation = NOT_SUPPORTED)`) and uses two raw JDBC connections from the test's own `DataSource` bean | `@DataJpaTest` wraps each test method in one transaction, rolled back at the end — the setup rows (user, goal, evidence events) would stay uncommitted and invisible to two separate connections racing against them, which would make this "concurrency" test pass or fail for the wrong reason (a foreign-key violation on invisible rows, not a real test of the `daily_credits` unique-constraint race). Disabling the wrapper makes setup commit for real, so the two threads' raw `INSERT ... ON CONFLICT DO NOTHING` statements are a genuine concurrent-commit test against Postgres |
+| 2026-10-18 | That same test surfaces each racing thread's exception via `Future.get()` instead of a bare `pool.submit(Runnable)` | First version of this test passed when it shouldn't have: a foreign-key violation inside the thread was silently swallowed (no `.get()` call to surface it), so the assertion saw 0 rows and failed for an unrelated reason before this was caught and fixed. A test that can pass for the wrong reason is worse than no test; `Future.get()` makes a racing thread's exception fail the test loudly |
+| 2026-10-18 | `EvidenceEventApiIntegrationTest`/`HillsideV2ApiIntegrationTest` don't build a signed JWT the way `UserControllerApiIntegrationTest` does | The new endpoints (`/api/evidence-events`, `/api/hillside/v2`) aren't behind the JWT-protected `/api/users/**` filter chain (see `SecurityConfig`) — same `permitAll` pattern `/api/hillside` v1 already uses, so there's no auth layer for these tests to exercise |
 | 2026-10-17 | `UserControllerApiIntegrationTest` builds a real signed JWT with `nimbus-jose-jwt` instead of using Spring Security's test mock-authentication support | Spring Security's `SecurityMockMvcRequestPostProcessors.jwt()` injects an authenticated principal directly, bypassing real token parsing and signature verification entirely; that's the right tool for testing authorization rules, but this phase needed at least one test proving the actual HS256 verification against the real shared secret works, since that's the part a hand-wired `JwtDecoder` bean could get subtly wrong |
 | 2026-10-17 | Adding Spring Security surfaced a real bug, caught by running the full suite, not by a new test written in advance | A single `SecurityFilterChain` with `oauth2ResourceServer().jwt()` broke five unrelated, already-passing tests (`MeasurementIngestControllerTest`'s and `AuthControllerApiIntegrationTest`'s own `Authorization: Bearer` checks) by intercepting their app-level tokens as failed JWTs. Running `./mvnw clean test` immediately after wiring in a new cross-cutting concern like security is exactly the kind of check that catches this before it reaches a report |
 | 2026-10-17 | `assess_reading_note`'s automated tests fake Anthropic's API via `respx`, but it was also manually verified against the real API | Same offline/repeatable reasoning as every other faked external call in this project, but this one happened to have a real `ANTHROPIC_API_KEY` available in the session environment, so the real integration was checked too, not left purely theoretical. It surfaced a real bug (an unhandled `httpx.HTTPStatusError` producing an opaque 500), fixed and covered by a new test before moving on |
