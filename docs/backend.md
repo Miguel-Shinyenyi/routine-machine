@@ -491,11 +491,14 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
   `userId` on the two scoped endpoints (`routine_items`, `daily_logs`) is still a plain,
   unauthenticated param nothing in the frontend writes through yet, since neither endpoint has
   a creation flow in the UI that would need it.
-- The Next.js side of this (next-auth wiring, the GitHub OAuth app registration and its real
-  client id/secret, the login UI itself, and actually minting the signed token this backend
-  verifies) is not built. `GET /api/users/me` was only tested against a hand-built token in
-  this session, the same real-signed-token technique Next.js will need to replicate — it
-  hasn't been proven against a token Next.js itself produced.
-- Whether JWTs should carry an expiry Next.js is expected to refresh, and what refreshing
-  looks like across the frontend/backend boundary, isn't decided; the test token used a short
-  fixed expiry but nothing enforces or exercises refresh behavior yet.
+- The Next.js side of password login is now built and live-verified (`/login`, `/register`,
+  `lib/auth/jwt.ts`/`session.ts` — see `frontend.md`): `GET /api/users/me` has been proven
+  against a real token Next.js itself minted and signed, not just the hand-built token
+  `UserControllerApiIntegrationTest` uses. The GitHub OAuth side (next-auth or equivalent
+  wiring, the GitHub OAuth app registration and its real client id/secret, the login UI's
+  GitHub button) is still not built — explicitly deferred, not an oversight.
+- Sessions last a fixed 7 days (`SESSION_TTL_SECONDS` in `frontend/lib/auth/jwt.ts`) with no
+  refresh — a user who stays logged in past that is just signed out, same as the cookie never
+  existing. Whether JWTs should carry a shorter expiry Next.js actively refreshes, and what
+  that refresh looks like across the frontend/backend boundary, isn't decided; nothing
+  exercises refresh behavior yet, since nothing refreshes.
