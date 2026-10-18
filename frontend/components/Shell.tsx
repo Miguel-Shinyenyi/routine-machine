@@ -65,12 +65,14 @@ export function Shell({
   totalCount,
   daysShownUp,
   routineCount,
+  connectedCount,
 }: {
   children: React.ReactNode;
   doneCount: number | null;
   totalCount: number | null;
   daysShownUp: number | null;
   routineCount: number | null;
+  connectedCount: number | null;
 }) {
   const pathname = usePathname();
   const watchedFor =
@@ -114,6 +116,9 @@ export function Shell({
               )}
               {link.href === "/flock" && routineCount !== null && (
                 <small className="ml-auto text-[12px] font-medium text-muted">{routineCount}</small>
+              )}
+              {link.href === "/watering-holes" && connectedCount !== null && (
+                <small className="ml-auto text-[12px] font-medium text-muted">{connectedCount} on</small>
               )}
             </Link>
           );

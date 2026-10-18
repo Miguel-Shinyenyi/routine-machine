@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Shell } from "@/components/Shell";
 import { backendFetch, intelligenceFetch } from "@/lib/api";
 import { todayIsoDate } from "@/lib/schedule";
-import type { RoutineItem, Tally, Task } from "@/lib/types";
+import type { RoutineItem, Tally, Task, WateringHoleStatus } from "@/lib/types";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -33,11 +33,13 @@ async function fetchShellContext(): Promise<{
   totalCount: number | null;
   daysShownUp: number | null;
   routineCount: number | null;
+  connectedCount: number | null;
 }> {
-  const [tasks, tally, routineItems] = await Promise.all([
+  const [tasks, tally, routineItems, wateringHoles] = await Promise.all([
     backendFetch<Task[]>(`/api/tasks?date=${todayIsoDate()}`).catch(() => null),
     intelligenceFetch<Tally>("/tally").catch(() => null),
     backendFetch<RoutineItem[]>("/api/routine-items").catch(() => null),
+    backendFetch<WateringHoleStatus[]>("/api/watering-holes").catch(() => null),
   ]);
   return {
     doneCount: tasks ? tasks.filter((t) => t.status === "DONE").length : null,
@@ -46,6 +48,9 @@ async function fetchShellContext(): Promise<{
     // Same unowned filter Flock itself applies — the sidebar badge should match the page it
     // links to, not include Phase 8's hillside demo users' own items.
     routineCount: routineItems ? routineItems.filter((item) => item.userId == null).length : null,
+    // Reader's notes is always-on but isn't in /api/watering-holes (it's not a toggleable
+    // external sync) — +1 matches Watering holes' own page, which always shows it connected.
+    connectedCount: wateringHoles ? wateringHoles.filter((s) => s.enabled).length + 1 : null,
   };
 }
 

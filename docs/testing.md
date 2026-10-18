@@ -152,8 +152,11 @@ Frontend: Vitest, for pure logic only — `lib/schedule.ts` (which templates sti
 a date's weekday independent of server timezone), `lib/formatDate.ts` and `lib/weekDates.ts`
 (Phase 8's design-fidelity pass: an eyebrow date, and a week's Monday/seven dates, both
 UTC-based for the same server-timezone-independence reason `schedule.ts` already established),
-and `lib/markQuotes.ts` (splitting a note's text around its quoted phrases for inline
-`<mark>` rendering) — 17 tests total. `submitReadingNote` stays untested as a unit, since it's
+`lib/markQuotes.ts` (splitting a note's text around its quoted phrases for inline `<mark>`
+rendering), and `lib/tallyInsights.ts` (`steepDayInsight`/`learningInsight`, the real
+computations behind Tally's "Steep days"/"Learning and the rest" headlines: which weekday a
+user's skip-heavy days cluster on, and whether learning-day routine completions are higher,
+lower, or tied against other days) — 23 tests total. `submitReadingNote` stays untested as a unit, since it's
 a sequence of two external calls, not a pure function worth isolating. Page components are
 verified by running the app and clicking through the views and the full materialize → start
 → done flow in a browser instead, matching settlement-engine's frontend, which has no

@@ -256,7 +256,10 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
               </svg>
               <span>
                 <b className="block font-semibold">You choose the fields.</b>
-                <span className="text-muted">Private routines stay out, always.</span>
+                <span className="text-muted">
+                  Private routines stay out. Leave the hillside any time and your rows go with
+                  you.
+                </span>
               </span>
             </div>
           </div>

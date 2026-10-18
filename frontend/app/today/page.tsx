@@ -98,15 +98,17 @@ export default async function TodayPage(props: PageProps<"/today">) {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-        <div>
-          <div className="card mb-4 p-4">
-            <div className="mb-1 flex items-center justify-between text-[13px] text-muted">
-              <span>Tended today</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="h-2 w-full overflow-hidden rounded-[4px]" style={{ background: "#e8e8ed" }}>
-              <div className="h-full rounded-[4px]" style={{ width: `${progress}%`, background: "var(--tint)" }} />
-            </div>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 className="text-[20px] font-semibold">Your flock today</h2>
+            {tasks.length > 0 && (
+              <span className="text-[14px] text-muted">
+                {doneCount} of {tasks.length} tended &middot; in the order you walk them
+              </span>
+            )}
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-[4px]" style={{ background: "#e8e8ed" }}>
+            <div className="h-full rounded-[4px]" style={{ width: `${progress}%`, background: "var(--tint)" }} />
           </div>
 
           <div className="card p-2">
@@ -119,6 +121,11 @@ export default async function TodayPage(props: PageProps<"/today">) {
               />
             ))}
           </div>
+          {tasks.length > 0 && (
+            <p className="px-0.5 text-[13px] text-muted">
+              Rows with a source chip fill themselves in. You only tap the ones nothing can see.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-4">
@@ -159,6 +166,23 @@ export default async function TodayPage(props: PageProps<"/today">) {
                 <span className="chip chip-tint self-start">The staff</span>
                 <h2 className="text-[17px] font-semibold">{suggestion.topic.name}</h2>
                 <p className="text-[14px] text-muted">{suggestion.reason}</p>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {/* Matches the reference's own pair of buttons, which it never wires to a
+                      click handler either (app.js only handles Today's checks and Hillside's
+                      switches) — there's no dedicated "learning session" page in this app to
+                      send "Start learning" to, and no "pick a different topic" endpoint for
+                      "Another topic" to call, so both stay visual-only like the reference. */}
+                  <button type="button" className="btn-fill rounded-full px-4 py-2 text-[14px] font-semibold">
+                    Start learning
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full px-4 py-2 text-[14px] font-semibold"
+                    style={{ background: "var(--fill)", color: "var(--tint-text)" }}
+                  >
+                    Another topic
+                  </button>
+                </div>
               </>
             ) : (
               <>

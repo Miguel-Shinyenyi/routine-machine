@@ -149,6 +149,11 @@ export default async function PathPage(props: PageProps<"/path">) {
                   <strong className="text-[15px] font-semibold text-ink">{DAY_ABBREV[day]}</strong>
                   <span>{dayOfMonth(date)}</span>
                 </div>
+                {stillWaters && (
+                  <p className="px-0.5 -mt-1 mb-0.5 text-[12px] font-semibold" style={{ color: "var(--private-ink)" }}>
+                    Still waters
+                  </p>
+                )}
                 {dayTemplates.length === 0 && <p className="text-[13px] text-muted">Nothing scheduled</p>}
                 {dayTemplates.map((template) => {
                   const matchingTask = dayTasks.find((t) => t.scheduleTemplateId === template.id);
