@@ -5,55 +5,25 @@
 <title>The hillside</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="tokens.css">
-</head>
-<body>
+<link rel="stylesheet" href="base.css">
 <style>
-body{margin:0}
-*{box-sizing:border-box}
-a{color:#9A5208}a:hover{color:#7A4106}
-.app{display:flex;flex-wrap:wrap;min-height:100vh;background:#F5F5F7;color:#1D1D1F;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;font-size:15px;line-height:1.47;-webkit-font-smoothing:antialiased}
-.side{flex:1 1 220px;max-width:100%;padding:20px 12px;background:rgba(255,255,255,.72);backdrop-filter:blur(20px) saturate(180%);border-right:1px solid rgba(0,0,0,.08);display:flex;flex-direction:column;gap:2px}
-.brand{display:flex;align-items:center;gap:10px;padding:6px 10px 18px;font-weight:600;font-size:15px;color:#1D1D1F;text-decoration:none}
-.logo{width:30px;height:30px;border-radius:8px;background:#E9A23B;display:flex;align-items:center;justify-content:center;flex:none}
-.nav{display:flex;align-items:center;gap:10px;min-height:36px;padding:6px 10px;border-radius:8px;color:#1D1D1F;text-decoration:none;font-size:14px}
-.nav:hover{background:rgba(118,118,128,.12);color:#1D1D1F}
-.nav.on{background:rgba(233,162,59,.2);font-weight:600}
-.nav svg{width:18px;height:18px;flex:none;color:#9A5208}
-.nav small{margin-left:auto;color:#6E6E73;font-size:12px;font-weight:500}
-.sidefoot{margin-top:auto;padding:12px 10px;font-size:12px;color:#6E6E73}
-.main{flex:999 1 560px;min-width:0;padding:32px 40px 64px}
-.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
-.eyebrow{font-size:15px;font-weight:600;color:#9A5208;margin:0}
-h1{font-size:40px;line-height:1.08;letter-spacing:-.02em;font-weight:600;margin:4px 0 0}
-h2{font-size:20px;line-height:1.2;font-weight:600;letter-spacing:-.01em;margin:0}
-.sub{font-size:17px;color:#6E6E73;margin:8px 0 0;max-width:62ch}
-.muted{color:#6E6E73}
-.card{background:#fff;border-radius:18px;padding:20px}
-.seg{display:inline-flex;flex-wrap:wrap;gap:2px;padding:2px;border-radius:9px;background:rgba(118,118,128,.12);max-width:100%}
-.seg button{border:0;background:transparent;border-radius:7px;min-height:32px;padding:5px 14px;font-family:inherit;font-size:13px;font-weight:500;color:#1D1D1F;cursor:pointer}
-.seg button.on{background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.12),0 3px 1px rgba(0,0,0,.04);font-weight:600}
-.list{background:#fff;border-radius:14px;overflow:hidden}
-.lrow{display:grid;grid-template-columns:44px minmax(150px,1.3fr) minmax(130px,1fr) minmax(140px,1.3fr);gap:12px;align-items:center;min-height:56px;padding:8px 16px;border-top:1px solid #E5E5EA;font-size:14px}
+.lrow{display:grid;grid-template-columns:40px minmax(150px,1.3fr) minmax(130px,1fr) minmax(140px,1.2fr);gap:12px;align-items:center;min-height:56px;padding:8px 16px;border-top:1px solid #E5E5EA;font-size:14px}
 .lrow.first{border-top:0}
 .lrow.you{background:#FBF0DC}
-.rank{font-size:15px;font-weight:600;color:#6E6E73;font-variant-numeric:tabular-nums}
+.rank{font-weight:600;color:#6E6E73;font-variant-numeric:tabular-nums}
 .who{font-weight:600}
 .who small{display:block;font-weight:500;font-size:12px;color:#6E6E73}
 .dots{display:flex;gap:4px}
 .dots i{width:12px;height:12px;border-radius:50%;background:#E8E8ED}
 .dots i.on{background:#1D1D1F}
 .lrow.you .dots i.on{background:#9A5208}
-.hist{display:flex;align-items:flex-end;gap:10px;height:150px;padding-top:10px}
-.hcol{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
-.hbar{width:100%;border-radius:6px 6px 2px 2px;background:#D2D2D7}
-.hbar.you{background:#E9A23B}
-.hcol span{font-size:12px;color:#6E6E73}
 .rule{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid #E5E5EA;font-size:14px}
 .rule.first{border-top:0;padding-top:2px}
 .rule svg{flex:none;width:20px;height:20px;color:#9A5208;margin-top:1px}
 .rule b{font-weight:600;display:block}
-.chip{display:inline-flex;align-items:center;border-radius:980px;padding:2px 9px;font-size:12px;font-weight:600;background:rgba(118,118,128,.12);color:#1D1D1F;white-space:nowrap}
 </style>
+</head>
+<body>
 <div class="app">
 <nav class="side" aria-label="Routine Machine">
 <a class="brand" href="today.html"><span class="logo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1D1D1F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M14 21V8a4 4 0 0 0-8 0"></path></svg></span>Routine Machine</a>
@@ -62,56 +32,86 @@ h2{font-size:20px;line-height:1.2;font-weight:600;letter-spacing:-.01em;margin:0
 <a class="nav" href="flock.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M7 16a3 3 0 0 1 0-6 4 4 0 0 1 7.5-1.5A3.5 3.5 0 0 1 17 16z"></path><path d="M9 16v3M14 16v3"></path></svg>Flock</a>
 <a class="nav" href="tally.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6"></path></svg>Tally</a>
 <a class="nav" href="reading.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path></svg>Reading</a>
+<a class="nav" href="granary.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8M9 3v3L6 10v9a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-9l-3-4V3"></path><path d="M6 13h12"></path></svg>Granary</a>
 <a class="nav on" href="hillside.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 19l7-10 4 5 3-3 6 8z"></path></svg>Hillside</a>
 <a class="nav" href="watering-holes.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"></path></svg>Watering holes</a>
+<a class="nav" href="profile.html" style="margin-top: 14px;"><span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 50%; background: #6B4226; color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none;">M</span>Miguel<small>Profile</small></a>
 <div class="sidefoot">On the hillside you are Quiet Cedar 0412. Nobody here knows your name.</div>
 </nav>
 
 <main class="main">
 <div class="wrap">
 <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; justify-content: space-between;">
-<div style="flex: 1 1 420px; min-width: 0;">
-<p class="eyebrow">The hillside · anonymous</p>
-<h1>Other flocks, walking the same way.</h1>
-<p class="sub">Ranked by how many days people show up, never by who did the most. A 20-minute walk and a marathon count as the same day.</p>
+<div style="flex: 1 1 460px; min-width: 0;">
+<p class="eyebrow">The hillside · Season 42 · 12 to 18 October</p>
+<h1>Walking together, not racing.</h1>
+<p class="sub">Optional, and only with people you were invited alongside. One credit for each goal you show up for in a day, up to 3. A missed day takes nothing away, and the board starts fresh every Monday.</p>
 </div>
-<div class="seg" role="group" aria-label="Window"><button class="on" data-window="7" aria-pressed="true">Last 7 days</button><button data-window="28" aria-pressed="false">Last 28 days</button></div>
+<div style="display: flex; align-items: center; gap: 10px;"><span id="hideLbl" style="font-size: 14px;">Show the hillside</span><button class="switch" role="switch" aria-checked="true" aria-labelledby="hideLbl" data-hide-hillside></button></div>
 </div>
 
-<div class="seg" role="group" aria-label="Field">
-<div data-fields style="display: contents;"></div>
+<div data-personal-only hidden class="card" style="display: flex; flex-direction: column; gap: 6px;">
+<h2 style="font-size: 17px;">Personal progress only.</h2>
+<p class="muted" style="margin: 0; font-size: 15px;">The hillside is hidden. Your credits still count in your own tally, and nobody can see you on the board until you switch it back on.</p>
+<a href="tally.html" style="text-decoration: none;">Open your tally ›</a>
+</div>
+
+<div data-board style="display: flex; flex-direction: column; gap: 22px;">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+<div class="seg" role="group" aria-label="Which hillside"><button class="on" aria-pressed="true" data-scope="cohort">Cohort 14 · 31 walking</button><button aria-pressed="false" data-scope="open">Open hillside · 212 walking</button></div>
+<div class="seg" role="group" aria-label="Goal"><button class="on" aria-pressed="true">All goals</button><button aria-pressed="false">Coding</button><button aria-pressed="false">Reading</button><button aria-pressed="false">Learning</button><button aria-pressed="false">Writing</button><button aria-pressed="false">Movement</button></div>
 </div>
 
 <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch;">
-<section class="card" style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 6px;" aria-labelledby="band">
-<span class="muted" style="font-size: 13px;"><span data-h="label"></span> · <span data-h="window"></span></span>
-<h2 id="band" style="font-size: 28px; letter-spacing: -.02em;" data-h="band"></h2>
-<p class="muted" style="margin: 0; font-size: 15px;" data-h="rankText"></p>
-<p style="margin: 6px 0 0; font-size: 15px;" data-h="counts"></p>
-<p class="muted" style="margin: 0; font-size: 13px;" data-h="cap"></p>
+<section class="card" style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 6px;" aria-labelledby="mine">
+<span class="muted" style="font-size: 13px;" data-scope-label>Cohort 14 · this season</span>
+<h2 id="mine" style="font-size: 28px; letter-spacing: -.02em;">In the middle of the cohort.</h2>
+<p style="margin: 0; font-size: 15px;"><strong style="font-weight: 600;">11 credits</strong> from 5 days shown up, across 3 goals.</p>
+<p class="muted" style="margin: 0; font-size: 14px;">You came back once after a break this season. That's counted on its own, below.</p>
 </section>
-<section class="card" style="flex: 2 1 420px; min-width: 0;" aria-labelledby="spread">
-<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap;"><h2 id="spread" style="font-size: 17px;">How the flock spreads out</h2><span class="muted" style="font-size: 13px;">People by days shown up · you in amber</span></div>
-<div class="hist" role="img" data-hist>
-</div>
+<section class="card" style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 6px;" aria-labelledby="returns">
+<span class="chip tint" style="align-self: flex-start;">Returns</span>
+<h2 id="returns" style="font-size: 20px;">9 people came back this season.</h2>
+<p class="muted" style="margin: 0; font-size: 14px;">After a missed day or more, they checked in again. Coming back is the habit this board exists to notice. It never ranks anyone.</p>
 </section>
 </div>
 
 <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;">
 <section style="flex: 999 1 520px; min-width: 0;" aria-labelledby="near">
-<div style="display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 8px; gap: 8px; flex-wrap: wrap;"><h2 id="near" style="font-size: 17px;">Walking near you</h2><span class="muted" style="font-size: 13px;">Three ahead, three behind. There is no top-ten page.</span></div>
-<div style="overflow-x: auto; border-radius: 14px;"><div class="list" style="min-width: 560px;">
-<div data-rows style="display: contents;"></div>
+<div style="display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 8px; gap: 8px; flex-wrap: wrap;"><h2 id="near" style="font-size: 17px;">Walking near you</h2><span class="muted" style="font-size: 13px;">Three ahead, three behind. No top-ten list exists.</span></div>
+<div class="tbl"><div class="list" style="min-width: 560px;">
+<div class="lrow first"><span class="rank">12</span><span class="who">Still Brook 1187<small>Ahead by 2 credits</small></span><span class="dots" role="img" aria-label="Showed up 6 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="muted">13 credits · 6 days</span></div>
+<div class="lrow"><span class="rank">13</span><span class="who">Amber Ridge 0093<small>Ahead by 1 credit</small></span><span class="dots" role="img" aria-label="Showed up 5 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="muted">12 credits · 5 days</span></div>
+<div class="lrow"><span class="rank">14</span><span class="who">Slow Fern 7730<small>Came back on Tuesday</small></span><span class="dots" role="img" aria-label="Showed up 5 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="muted">12 credits · 5 days</span></div>
+<div class="lrow you"><span class="rank">15</span><span class="who">Quiet Cedar 0412 (you)<small>Came back on Wednesday</small></span><span class="dots" role="img" aria-label="Showed up 5 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="muted">11 credits · 5 days</span></div>
+<div class="lrow"><span class="rank">16</span><span class="who">Low Hill 2251<small>Close behind</small></span><span class="dots" role="img" aria-label="Showed up 4 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span><span class="muted">10 credits · 4 days</span></div>
+<div class="lrow"><span class="rank">17</span><span class="who">Patient Reed 5906<small>Close behind</small></span><span class="dots" role="img" aria-label="Showed up 4 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span><span class="muted">9 credits · 4 days</span></div>
+<div class="lrow"><span class="rank">18</span><span class="who">Early Juniper 3348<small>Close behind</small></span><span class="dots" role="img" aria-label="Showed up 3 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></span><span class="muted">8 credits · 3 days</span></div>
 </div></div>
 </section>
 
 <aside class="card" style="flex: 1 1 300px; min-width: 0;" aria-labelledby="rules">
 <h2 id="rules" style="font-size: 17px; margin-bottom: 8px;">Why this hillside is calm.</h2>
-<div class="rule first"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14"></path></svg><span><b>Days, not volume.</b><span class="muted">Each day has a cap. Bingeing a whole book on Sunday counts as one day.</span></span></div>
-<div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="9" r="4"></circle><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"></path></svg><span><b>No names, no faces.</b><span class="muted">Pseudonyms change every season. No followers, no profiles, no messages.</span></span></div>
-<div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"></path></svg><span><b>Only what a source can confirm.</b><span class="muted">Health data, WakaTime, ActivityWatch, counted reader's notes. Taps never reach the hillside.</span></span></div>
-<div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 12h18M12 3v18"></path></svg><span><b>You choose the fields.</b><span class="muted">Private routines stay out. Leave the hillside any time and your rows go with you.</span></span></div>
+<div class="rule first"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14"></path></svg><span><b>Showing up, not volume.</b><span class="muted">Thirty minutes on five days beats five hours on one. Hours, pages and lines of code are never ranked.</span></span></div>
+<div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"></path></svg><span><b>Seasons, not forever.</b><span class="muted">Every Monday the board starts again. Your own tally keeps everything.</span></span></div>
+<div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="9" r="4"></circle><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"></path></svg><span><b>Small, invited groups.</b><span class="muted">Your cohort by default. Pseudonyms change each season, and groups under 5 are never shown.</span></span></div>
+<div class="rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 12h18M12 3v18"></path></svg><span><b>You choose.</b><span class="muted">Hide it any time. There is no "discipline score", because a record of days is not a verdict on a person.</span></span></div>
 </aside>
+</div>
+
+<section aria-labelledby="ledger">
+<div style="display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 8px; gap: 8px; flex-wrap: wrap;"><h2 id="ledger" style="font-size: 17px;">How your credits were counted</h2><span class="muted" style="font-size: 13px;">Rules version 3, published 1 October · <a href="hillside.html" style="text-decoration: none;">Question a credit ›</a></span></div>
+<div class="tbl"><table style="min-width: 760px;">
+<thead><tr><th scope="col">Day</th><th scope="col">Goal</th><th scope="col">Evidence</th><th scope="col">Status</th><th scope="col">Credit</th><th scope="col">Why</th></tr></thead>
+<tbody>
+<tr><td style="border-top: 0;">Fri 16</td><td style="border-top: 0;">Coding</td><td style="border-top: 0;">WakaTime, 52 min</td><td style="border-top: 0;"><span class="chip ok">Accepted</span></td><td style="border-top: 0;">1</td><td class="muted" style="border-top: 0;">30 minutes or more of coding</td></tr>
+<tr><td>Fri 16</td><td>Reading</td><td>Reader's note, ch. 14</td><td><span class="chip ok">Accepted</span></td><td>1</td><td class="muted">A counted note. The words stay private.</td></tr>
+<tr><td>Fri 16</td><td>Journaling</td><td>You tapped it</td><td><span class="chip">Self-reported</span></td><td>1</td><td class="muted">Self-reports count and are labelled</td></tr>
+<tr><td>Thu 15</td><td>Coding</td><td>WakaTime, 18 min</td><td><span class="chip no">Not counted</span></td><td>0</td><td class="muted">Under 30 minutes. Still in your tally.</td></tr>
+<tr><td>Thu 15</td><td>Movement</td><td>Health Connect</td><td><span class="chip tint">Pending</span></td><td>–</td><td class="muted">Waiting for your phone to sync</td></tr>
+<tr><td>Wed 14</td><td>4 goals</td><td>Coding, reading, learning, writing</td><td><span class="chip ok">Accepted</span></td><td>3</td><td class="muted">Daily cap of 3 reached</td></tr>
+</tbody></table></div>
+</section>
 </div>
 </div>
 </main>

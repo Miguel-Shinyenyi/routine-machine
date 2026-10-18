@@ -38,46 +38,50 @@ h2{font-size:17px;font-weight:600;margin:0}
 .tab{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:56px;min-height:48px;justify-content:center;font-size:10px;font-weight:500;color:#6E6E73;text-decoration:none}
 .tab svg{width:24px;height:24px}
 .tab.on{color:#9A5208}
+.switch{position:relative;width:51px;height:31px;flex:none;border-radius:980px;border:0;background:#E9E9EB;padding:0}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.15)}
+.switch[aria-checked="true"]{background:#1B7332}
+.switch[aria-checked="true"]::after{transform:translateX(20px)}
 </style>
 <div class="ph">
 <div class="pad">
 <div>
-<p class="eyebrow">Anonymous · last 7 days</p>
+<p class="eyebrow">Cohort 14 · Season 42</p>
 <h1>The hillside</h1>
-<p class="muted" style="margin: 6px 0 0; font-size: 15px;">Ranked by days shown up. Never by who did the most.</p>
+<p class="muted" style="margin: 6px 0 0; font-size: 15px;">Optional. One credit per goal a day, up to 3. The board starts fresh every Monday.</p>
 </div>
 
-<div class="scroller"><div class="seg" role="group" aria-label="Field"><button class="on" aria-pressed="true">All fields</button><button aria-pressed="false">Reading</button><button aria-pressed="false">Movement</button><button aria-pressed="false">Deep work</button><button aria-pressed="false">Learning</button><button aria-pressed="false">Sleep</button><button aria-pressed="false">Writing</button></div></div>
+<div class="scroller"><div class="seg" role="group" aria-label="Which hillside"><button class="on" aria-pressed="true">Cohort 14 · 31</button><button aria-pressed="false">Open · 212</button></div></div>
 
 <div class="card">
 <span class="muted" style="font-size: 12px;">You are Quiet Cedar 0412</span>
-<h2 style="font-size: 24px; letter-spacing: -.02em; margin-top: 2px;">In the middle of the flock.</h2>
-<p class="muted" style="margin: 4px 0 0; font-size: 14px;">96 of 212. You showed up 5 of 7 days. A day counts at 3 routines; more does not add.</p>
+<h2 style="font-size: 24px; letter-spacing: -.02em; margin-top: 2px;">In the middle of the cohort.</h2>
+<p class="muted" style="margin: 4px 0 0; font-size: 14px;">11 credits from 5 days shown up. You came back once after a break.</p>
 </div>
+
+<div class="card" style="background: #FBF0DC;"><strong style="font-weight: 600;">9 people came back this season.</strong><p class="muted" style="margin: 4px 0 0; font-size: 14px;">Coming back is counted on its own. It never ranks anyone.</p></div>
 
 <div>
 <h2 style="margin: 0 4px 8px;">Walking near you</h2>
 <div class="list">
-<div class="row first"><span class="rk">93</span><span class="nm">Still Brook 1187<small>Ahead by a day</small></span><span class="dots" role="img" aria-label="7 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></div>
-<div class="row"><span class="rk">94</span><span class="nm">Amber Ridge 0093<small>Ahead by a day</small></span><span class="dots" role="img" aria-label="6 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
-<div class="row"><span class="rk">95</span><span class="nm">Slow Fern 7730<small>Ahead by a day</small></span><span class="dots" role="img" aria-label="6 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
-<div class="row you"><span class="rk">96</span><span class="nm">Quiet Cedar 0412 (you)<small>Steady for 6 weeks</small></span><span class="dots" role="img" aria-label="5 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
-<div class="row"><span class="rk">97</span><span class="nm">Low Hill 2251<small>Close behind</small></span><span class="dots" role="img" aria-label="5 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
-<div class="row"><span class="rk">98</span><span class="nm">Patient Reed 5906<small>Close behind</small></span><span class="dots" role="img" aria-label="5 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
-<div class="row"><span class="rk">99</span><span class="nm">Early Juniper 3348<small>Close behind</small></span><span class="dots" role="img" aria-label="4 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></div>
+<div class="row first"><span class="rk">13</span><span class="nm">Amber Ridge 0093<small>12 credits</small></span><span class="dots" role="img" aria-label="5 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+<div class="row"><span class="rk">14</span><span class="nm">Slow Fern 7730<small>12 credits</small></span><span class="dots" role="img" aria-label="5 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+<div class="row you"><span class="rk">15</span><span class="nm">Quiet Cedar 0412 (you)<small>11 credits</small></span><span class="dots" role="img" aria-label="5 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div>
+<div class="row"><span class="rk">16</span><span class="nm">Low Hill 2251<small>10 credits</small></span><span class="dots" role="img" aria-label="4 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></div>
+<div class="row"><span class="rk">17</span><span class="nm">Patient Reed 5906<small>9 credits</small></span><span class="dots" role="img" aria-label="4 of 7 days"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></div>
 </div>
 </div>
 
-<div class="glass" style="padding: 14px; font-size: 14px;">
-<strong style="font-weight: 600;">Why it's calm:</strong> <span class="muted">days, not volume; pseudonyms that change each season; only what a source confirms; private routines never shown.</span>
-</div>
+<a class="card" href="hillside.html" style="display: flex; justify-content: space-between; align-items: center; text-decoration: none; color: #1D1D1F;"><span><strong style="font-weight: 600; display: block;">How your credits were counted</strong><span class="muted" style="font-size: 13px;">6 entries this season · rules version 3</span></span><span style="color: #C7C7CC;" aria-hidden="true">›</span></a>
+
+<div class="glass" style="padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px;"><span style="font-size: 15px;" id="phHide">Show the hillside</span><button class="switch" role="switch" aria-checked="true" aria-labelledby="phHide"></button></div>
 </div>
 
 <nav class="tabbar glass" aria-label="Tabs">
-<a class="tab" href="phone-today.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"></path></svg>Today</a>
-<a class="tab" href="path.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 21c0-5 12-5 12-10S9 7 9 3"></path></svg>Path</a>
-<a class="tab" href="phone-reading.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path></svg>Reading</a>
-<a class="tab" href="tally.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6"></path></svg>Tally</a>
+<a class="tab" href="phone-today.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"></path></svg>Today</a>
+<a class="tab" href="phone-reading.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path></svg>Reading</a>
+<a class="tab" href="phone-granary.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8M9 3v3L6 10v9a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-9l-3-4V3"></path><path d="M6 13h12"></path></svg>Granary</a>
+<a class="tab" href="tally.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6"></path></svg>Tally</a>
 <a class="tab on" href="phone-hillside.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 19l7-10 4 5 3-3 6 8z"></path></svg>Hillside</a>
 </nav>
 </div>

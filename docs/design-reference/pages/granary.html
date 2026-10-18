@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The granary</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="base.css">
+<style>
+.cat{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) auto;gap:12px;align-items:center;padding:8px 0;font-size:14px}
+.cat .meter{height:10px;border-radius:5px;background:#E8E8ED;overflow:hidden}
+.cat .meter i{display:block;height:100%;border-radius:5px;background:#1D1D1F}
+.dec{display:grid;grid-template-columns:minmax(180px,2fr) 110px minmax(120px,1fr) minmax(160px,1.6fr);gap:14px;align-items:center;min-height:60px;padding:10px 16px;border-top:1px solid #E5E5EA;font-size:14px}
+.dec.first{border-top:0}
+.dec.head{min-height:34px;font-size:12px;color:#6E6E73;font-weight:500;background:#FAFAFC}
+.jar{display:flex;gap:4px;flex-wrap:wrap;margin-top:12px}
+.jar i{width:14px;height:22px;border-radius:4px;background:#E9A23B}
+.jar i.no{background:transparent;border:1.5px dashed #AEAEB2}
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="side" aria-label="Routine Machine">
+<a class="brand" href="today.html"><span class="logo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1D1D1F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M14 21V8a4 4 0 0 0-8 0"></path></svg></span>Routine Machine</a>
+<a class="nav" href="today.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"></path></svg>Today<small>3 of 9</small></a>
+<a class="nav" href="path.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 21c0-5 12-5 12-10S9 7 9 3"></path></svg>Path</a>
+<a class="nav" href="flock.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M7 16a3 3 0 0 1 0-6 4 4 0 0 1 7.5-1.5A3.5 3.5 0 0 1 17 16z"></path><path d="M9 16v3M14 16v3"></path></svg>Flock</a>
+<a class="nav" href="tally.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6"></path></svg>Tally</a>
+<a class="nav" href="reading.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path></svg>Reading</a>
+<a class="nav on" href="granary.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8M9 3v3L6 10v9a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-9l-3-4V3"></path><path d="M6 13h12"></path></svg>Granary</a>
+<a class="nav" href="hillside.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 19l7-10 4 5 3-3 6 8z"></path></svg>Hillside</a>
+<a class="nav" href="watering-holes.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"></path></svg>Watering holes</a>
+<a class="nav" href="profile.html" style="margin-top: 14px;"><span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 50%; background: #6B4226; color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none;">M</span>Miguel<small>Profile</small></a>
+<div class="sidefoot">The Shepherd has kept watch with you for 47 days.</div>
+</nav>
+
+<main class="main">
+<div class="wrap">
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; justify-content: space-between;">
+<div style="flex: 1 1 420px; min-width: 0;">
+<p class="eyebrow">The granary · October</p>
+<h1>Store a little. Decide slowly.</h1>
+<p class="sub">Hype costs money as well as time. The granary keeps your small savings visible and puts a pause between you and the next big promise.</p>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap;"><button class="btn gray">Import M-Pesa statement</button><button class="btn" data-store>Store KSh 50 today</button></div>
+</div>
+
+<div class="stats">
+<div class="stat"><div class="k">Stored this month</div><div class="v">KSh 750 <small>of 900</small></div><div class="bar" style="margin-top: 8px;"><i style="width: 83%;"></i></div><div class="h" style="margin-top: 6px;">KSh 50 a day, every day you can</div></div>
+<div class="stat"><div class="k">Days you stored something</div><div class="v">15 <small>of 18</small></div><div class="h">Missing a day takes nothing out</div></div>
+<div class="stat"><div class="k">Pauses kept</div><div class="v">3</div><div class="h">Decisions you slept on before paying</div></div>
+<div class="stat"><div class="k">Stored since you started</div><div class="v">KSh 2,350</div><div class="h">In your own money market fund, not here</div></div>
+</div>
+
+<section class="card" aria-labelledby="jar">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap;"><h2 id="jar">One grain a day.</h2><span class="muted" style="font-size: 14px;">Each mark is a day you put something aside. Dashed: you didn't, and that's fine.</span></div>
+<div class="jar" role="img" aria-label="15 of 18 days with a saving this month">
+<i></i><i></i><i></i><i class="no"></i><i></i><i></i><i></i><i></i><i></i><i class="no"></i><i></i><i></i><i></i><i></i><i class="no"></i><i></i><i></i><i></i>
+</div>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start;">
+<section style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px;" aria-labelledby="pause">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap;"><h2 id="pause">The pause.</h2><span class="muted" style="font-size: 14px;">Write it down, wait a day, look back in a month.</span></div>
+<div class="card" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
+<div><label for="what">What is it?</label><input id="what" class="field" value="A token presale a friend shared" style="margin-top: 6px;"></div>
+<div><label for="amt">How much?</label><input id="amt" class="field" value="KSh 5,000" style="margin-top: 6px;"></div>
+<div><label for="why">Why now?</label><input id="why" class="field" value="Everyone in the group says it will 10x" style="margin-top: 6px;"></div>
+<div><span style="font-size: 13px; font-weight: 600;">Where did you hear it?</span><div class="pick" role="group" aria-label="Where you heard it" style="margin-top: 6px;"><button aria-pressed="true">WhatsApp group</button><button aria-pressed="false">X / TikTok</button><button aria-pressed="false">A friend</button><button aria-pressed="false">An advert</button></div></div>
+<div style="grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;"><button class="btn">Wait 24 hours</button><button class="btn gray">I've already decided</button><span class="muted" style="font-size: 13px;">The Shepherd will ask you again tomorrow, and once more in 30 days.</span></div>
+</div>
+<div class="tbl"><div class="list" style="min-width: 640px;">
+<div class="dec head first"><span>Decision</span><span>Amount</span><span>What you did</span><span>Looking back</span></div>
+<div class="dec"><span><strong style="font-weight: 600;">Betting tips group</strong><span class="muted" style="display: block; font-size: 12px;">WhatsApp · 2 Oct</span></span><span>KSh 500 / week</span><span><span class="chip ok">Waited, declined</span></span><span class="muted">30 days on: glad. KSh 2,000 stayed in the granary.</span></div>
+<div class="dec"><span><strong style="font-weight: 600;">Second-hand laptop</strong><span class="muted" style="display: block; font-size: 12px;">Planned since August</span></span><span>KSh 48,000</span><span><span class="chip tint">Planned, bought</span></span><span class="muted">Review on 17 Nov</span></div>
+<div class="dec"><span><strong style="font-weight: 600;">AI course bundle, 80% off</strong><span class="muted" style="display: block; font-size: 12px;">Advert · 11 Oct</span></span><span>KSh 3,900</span><span><span class="chip ok">Waited, declined</span></span><span class="muted">The same topics were already on your path</span></div>
+<div class="dec"><span><strong style="font-weight: 600;">Token presale</strong><span class="muted" style="display: block; font-size: 12px;">WhatsApp · today</span></span><span>KSh 5,000</span><span><span class="chip">Waiting · 23 h left</span></span><span class="muted">We'll ask tomorrow</span></div>
+</div></div>
+</section>
+
+<aside style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 16px;" aria-label="Where the money went">
+<div class="card">
+<h2 style="font-size: 17px;">Where it went in September</h2>
+<p class="muted" style="margin: 4px 0 10px; font-size: 13px;">From your M-Pesa statement, imported 1 Oct. Only category totals are kept; the statement is deleted after import.</p>
+<div class="cat"><span>Food</span><span class="meter"><i style="width: 78%;"></i></span><span style="text-align: right;">KSh 9,400</span></div>
+<div class="cat"><span>Transport</span><span class="meter"><i style="width: 45%;"></i></span><span style="text-align: right;">KSh 5,400</span></div>
+<div class="cat"><span>Family support</span><span class="meter"><i style="width: 42%;"></i></span><span style="text-align: right;">KSh 5,000</span></div>
+<div class="cat"><span>Data and airtime</span><span class="meter"><i style="width: 20%;"></i></span><span style="text-align: right;">KSh 2,400</span></div>
+<div class="cat"><span>Learning</span><span class="meter"><i style="width: 12%;"></i></span><span style="text-align: right;">KSh 1,450</span></div>
+<div class="cat"><span>Betting</span><span class="meter"><i style="width: 0%;"></i></span><span style="text-align: right;">KSh 0</span></div>
+<div class="cat"><span>Overdraft fees</span><span class="meter"><i style="width: 3%;"></i></span><span style="text-align: right;">KSh 320</span></div>
+</div>
+<div class="card">
+<h2 style="font-size: 17px;">Where the granary drinks from</h2>
+<ul style="margin: 8px 0 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 6px;">
+<li><strong style="font-weight: 600;">M-Pesa statement</strong> <span class="muted">· the PDF from your M-Pesa app, uploaded monthly</span></li>
+<li><strong style="font-weight: 600;">Your money market fund</strong> <span class="muted">· balance typed in or read from its statement</span></li>
+<li><strong style="font-weight: 600;">Bank statement</strong> <span class="muted">· CSV export</span></li>
+<li><strong style="font-weight: 600;">A tap</strong> <span class="muted">· "I put KSh 50 aside"</span></li>
+</ul>
+</div>
+<div class="card"><span class="chip priv">Private</span><p class="muted" style="margin: 8px 0 0; font-size: 14px;">Money never reaches the hillside or your programme. Routine Machine never holds or moves your money and does not give investment advice.</p></div>
+</aside>
+</div>
+</div>
+</main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
