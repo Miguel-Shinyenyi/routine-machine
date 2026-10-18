@@ -58,10 +58,12 @@ redirect (307, in `next.config.ts`) to their renamed routes so existing links ke
 
 ## Current state
 
-Built: Next.js (App Router), TypeScript, Tailwind. No auth (matches the rest of the
-project — single user), so `lib/api.ts` is a plain server-side `fetch` wrapper against the
-backend and the intelligence service, not the bearer-token version settlement-engine's
-frontend needed.
+Built: Next.js (App Router), TypeScript, Tailwind. Most of the app still talks to the backend
+unauthenticated (single-user demo mode, or the `asUserId`/`userId` query params — see
+`backend.md`), so `lib/api.ts`'s `backendFetch` is a plain server-side `fetch` wrapper. Real
+password login now exists (`/login`, `/register` — see the decisions log and
+`lib/auth/jwt.ts`/`lib/auth/session.ts`), and `authenticatedBackendFetch` sends the session's
+own bearer token to the one endpoint that needs it so far, `GET /api/users/me`.
 
 **Design system** (`app/globals.css`): the tokens from `docs/design.md` as CSS custom
 properties (`--canvas`, `--surface`, `--tint`, etc.), redefined under
@@ -166,6 +168,10 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-18 | Real password login built (`/login`, `/register`, `lib/auth/jwt.ts`, `lib/auth/session.ts`, `lib/auth/actions.ts`), GitHub/Google sign-in left pending | User asked for password login first, OAuth deferred explicitly. `jwt.ts` mints/verifies the same HS256 `{sub, exp}` shape the backend's `NimbusJwtDecoder.withSecretKey` already expects (proven in `UserControllerApiIntegrationTest`), using Node's built-in `crypto` rather than a new dependency (no next-auth) — `AUTH_JWT_SECRET` must stay identical between `backend` and `frontend` in `docker-compose.yml`. The session is an httpOnly cookie set via Server Actions (`loginAction`/`registerAction`/`logoutAction`), not client-side token storage |
+| 2026-10-18 | `/login` and `/register` render nested inside the global `Shell` (sidebar still visible), not a separate unauthenticated layout | Every page in this app already works without login (demo mode); there's no logged-out-only section to carve out, and the reference has no login UI to match either, so these two pages are styled from the app's own `.page-title`/`.card`/`.field`/`.btn-fill` tokens for consistency rather than a new visual language |
+| 2026-10-18 | Shell's sidebar footer shows the real signed-in email + a "Sign out" button when a session exists, or a "Sign in" link otherwise | `RootLayout`'s `fetchShellContext()` now also reads the session cookie and calls `GET /api/users/me` (caught, not hard-failed — an expired or tampered cookie degrades to "not signed in" exactly like no cookie at all) |
+| 2026-10-18 | Live-verified register → login → logout round trip, plus the wrong-password error path, in a real browser against the rebuilt Docker stack | `resize_window`'s unreliability (noted below) doesn't affect desktop flows; this was a correctness check of the actual session cookie / redirect behaviour, not a visual one. Confirms `/register` creates a session and redirects to `/today`, "Sign out" clears it and redirects to `/login`, `/login` with correct credentials signs back in, and wrong credentials show "That email or password doesn't match an account." inline without creating a session |
 | 2026-10-17 | Added `--field-edge`/`--glass-edge` tokens and a shared `.field` input style to `globals.css` | The design reference's `tokens.css` defines both; this app's tokens were missing them, so every form input was using `--hairline` for its border instead of the dedicated, slightly darker field-edge colour the reference specifies |
 | 2026-10-17 | `TaskCard`'s done check button is now solid-filled (`--tended-ink`) with a white check icon, not a pale `--tended-fill` background | Matches the design reference exactly; found during the comparison, not an arbitrary restyle |
 | 2026-10-17 | The hillside's field/window controls are `Link`s with `aria-pressed`, not client state + fetch | Matches this app's existing all-server-rendering pattern (Today's day navigation works the same way); no new client-side data-fetching pattern needed for one page, and the URL stays shareable/bookmarkable per state |
@@ -232,9 +238,13 @@ departure from precedent.
   reference's own nav list, but the reference's "they open from Tally on phone" cross-link
   isn't built — there's currently no way to reach them at all on a 390px phone.
 - `PUT /api/users/me/hillside-opt-in` exists (see `backend.md`), but nothing in this frontend
-  calls it yet — there is no settings page or toggle UI. `asUserId` is still a plain,
-  unauthenticated query param; this page is only as trustworthy as that backend groundwork,
-  not more. Pseudonym rotation also isn't designed yet.
+  calls it yet — there is no settings page or toggle UI. Hillside's own `asUserId` is still a
+  plain, unauthenticated query param, not wired to the real session that now exists
+  (`lib/auth/session.ts`) — the page is only as trustworthy as that backend groundwork, not
+  more. Pseudonym rotation also isn't designed yet.
+- GitHub/Google sign-in is deferred (user's explicit instruction when password login was
+  built); `AUTH_INTERNAL_TOKEN` exists in `backend.md`/`.env.example` for a future
+  `POST /api/auth/github-login` but nothing in this frontend calls it yet.
 - There's no way yet to edit a book's `currentChapter`/`totalChapters` after creating it
   (`POST /api/books` only creates), matching the open question already recorded in
   `backend.md`. The Reading page shows chapter progress if set at creation, nothing more.

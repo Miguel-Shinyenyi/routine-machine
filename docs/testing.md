@@ -153,10 +153,13 @@ a date's weekday independent of server timezone), `lib/formatDate.ts` and `lib/w
 (Phase 8's design-fidelity pass: an eyebrow date, and a week's Monday/seven dates, both
 UTC-based for the same server-timezone-independence reason `schedule.ts` already established),
 `lib/markQuotes.ts` (splitting a note's text around its quoted phrases for inline `<mark>`
-rendering), and `lib/tallyInsights.ts` (`steepDayInsight`/`learningInsight`, the real
+rendering), `lib/tallyInsights.ts` (`steepDayInsight`/`learningInsight`, the real
 computations behind Tally's "Steep days"/"Learning and the rest" headlines: which weekday a
 user's skip-heavy days cluster on, and whether learning-day routine completions are higher,
-lower, or tied against other days) — 23 tests total. `submitReadingNote` stays untested as a unit, since it's
+lower, or tied against other days), and `lib/auth/jwt.ts` (`signSessionToken`/
+`verifySessionToken`: a round trip, expiry just past and just before the cutoff, a token
+signed with the wrong secret, a tampered payload, and garbage input) — 29 tests total.
+`submitReadingNote` stays untested as a unit, since it's
 a sequence of two external calls, not a pure function worth isolating. Page components are
 verified by running the app and clicking through the views and the full materialize → start
 → done flow in a browser instead, matching settlement-engine's frontend, which has no
@@ -201,6 +204,8 @@ recorded, now confirmed end to end through the browser too.
 | 2026-09-18 | Integration tests use Testcontainers Postgres, not H2 or mocks | Flyway migrations and the daily_logs check constraints are Postgres-specific; a lighter substitute wouldn't actually test them, matching settlement-engine's approach |
 | 2026-09-18 | Suggestion logic is unit-tested as a pure function, HTTP layer tested separately with respx | Keeps the rule's test cases fast and readable, and isolates HTTP mocking to the one test that needs it |
 | 2026-09-18 | TDD required for both services from the first line of code | Stated non-negotiable in PROJECT.md's rules section, not left to convention |
+| 2026-10-18 | `lib/auth/jwt.ts` is unit-tested with Vitest, not covered only by the live browser login check | It's a pure function (sign/verify) with real edge cases — expiry boundary, wrong secret, tampered payload, garbage input — exactly the kind of logic `schedule.ts`'s other pure functions already get fast, deterministic tests for, separate from the slower end-to-end browser verification of the full login flow |
+| 2026-10-18 | Password login's register → login → logout round trip (plus the wrong-password error path) was verified live in a real browser against a rebuilt Docker Compose stack, not just unit tests | `lib/auth/jwt.ts`'s tests cover the token logic in isolation but not the Server Actions, the cookie actually being set/cleared, or the redirect targets; a live click-through is the only check that exercises the whole path end to end |
 
 ## Open questions
 
