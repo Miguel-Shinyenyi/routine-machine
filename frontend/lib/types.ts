@@ -294,3 +294,19 @@ export interface PauseDecision {
   dueForTwentyFourHourFollowUp: boolean;
   dueForThirtyDayFollowUp: boolean;
 }
+
+export type MpesaCategory =
+  | "FOOD"
+  | "TRANSPORT"
+  | "FAMILY_SUPPORT"
+  | "DATA_AND_AIRTIME"
+  | "LEARNING"
+  | "BETTING"
+  | "OVERDRAFT_FEES"
+  | "OTHER";
+
+export interface MpesaImportResponse {
+  statementMonth: string;
+  transactionsParsed: number;
+  categoryTotals: Partial<Record<MpesaCategory, number>>;
+}

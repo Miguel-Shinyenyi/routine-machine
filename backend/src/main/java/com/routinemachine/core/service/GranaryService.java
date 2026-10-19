@@ -1,9 +1,11 @@
 package com.routinemachine.core.service;
 
+import com.routinemachine.core.domain.MpesaCategoryTotal;
 import com.routinemachine.core.domain.PauseDecision;
 import com.routinemachine.core.domain.PauseOutcome;
 import com.routinemachine.core.domain.Saving;
 import com.routinemachine.core.domain.User;
+import com.routinemachine.core.repository.MpesaCategoryTotalRepository;
 import com.routinemachine.core.repository.PauseDecisionRepository;
 import com.routinemachine.core.repository.SavingRepository;
 import org.springframework.stereotype.Service;
@@ -12,6 +14,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -23,10 +26,14 @@ public class GranaryService {
 
     private final SavingRepository savingRepository;
     private final PauseDecisionRepository pauseDecisionRepository;
+    private final MpesaCategoryTotalRepository mpesaCategoryTotalRepository;
 
-    public GranaryService(SavingRepository savingRepository, PauseDecisionRepository pauseDecisionRepository) {
+    public GranaryService(
+            SavingRepository savingRepository, PauseDecisionRepository pauseDecisionRepository,
+            MpesaCategoryTotalRepository mpesaCategoryTotalRepository) {
         this.savingRepository = savingRepository;
         this.pauseDecisionRepository = pauseDecisionRepository;
+        this.mpesaCategoryTotalRepository = mpesaCategoryTotalRepository;
     }
 
     // Idempotent: tapping "store" twice the same day is one saving, not two — matches
@@ -92,5 +99,28 @@ public class GranaryService {
         return pauseDecisionRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
                 .filter(p -> p.isDueForTwentyFourHourFollowUp(now) || p.isDueForThirtyDayFollowUp(now))
                 .toList();
+    }
+
+    // Reads the PDF's text (trying the given password, if any — see MpesaPdfReader),
+    // parses it into category totals (see MpesaStatementParser), and persists only those
+    // totals. The PDF bytes passed in are never written anywhere by this method or anything
+    // it calls; "delete the file after parsing" is true by construction, since the file is
+    // never saved in the first place.
+    public MpesaParseResult importMpesaStatement(User user, byte[] pdfBytes, String password) {
+        String text = MpesaPdfReader.extractText(pdfBytes, password);
+        MpesaParseResult result = MpesaStatementParser.parse(text);
+        LocalDate monthStart = result.statementMonth().atDay(1);
+        for (Map.Entry<MpesaCategory, Integer> entry : result.categoryTotals().entrySet()) {
+            mpesaCategoryTotalRepository.upsert(user.getId(), monthStart, entry.getKey().name(), entry.getValue());
+        }
+        return result;
+    }
+
+    public Map<MpesaCategory, Integer> mpesaCategoryTotals(User user, YearMonth month) {
+        Map<MpesaCategory, Integer> totals = new EnumMap<>(MpesaCategory.class);
+        for (MpesaCategoryTotal row : mpesaCategoryTotalRepository.findByUserIdAndStatementMonth(user.getId(), month.atDay(1))) {
+            totals.put(row.getCategory(), row.getAmount());
+        }
+        return totals;
     }
 }

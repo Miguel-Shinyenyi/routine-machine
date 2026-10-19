@@ -2,7 +2,19 @@ import { redirect } from "next/navigation";
 import { backendFetch } from "@/lib/api";
 import { createPause, decidePause, reflectPause, setSavingTargetAmount, storeSaving } from "@/lib/actions";
 import { getSessionUserId } from "@/lib/auth/session";
-import type { GranaryMonthSummary, PauseDecision } from "@/lib/types";
+import { MpesaImportForm } from "@/components/MpesaImportForm";
+import type { GranaryMonthSummary, MpesaCategory, PauseDecision } from "@/lib/types";
+
+const MPESA_CATEGORY_LABELS: Record<MpesaCategory, string> = {
+  FOOD: "Food",
+  TRANSPORT: "Transport",
+  FAMILY_SUPPORT: "Family support",
+  DATA_AND_AIRTIME: "Data and airtime",
+  LEARNING: "Learning",
+  BETTING: "Betting",
+  OVERDRAFT_FEES: "Overdraft fees",
+  OTHER: "Other",
+};
 
 const HEARD_FROM_OPTIONS = ["WhatsApp group", "X / TikTok", "A friend", "An advert"];
 
@@ -25,10 +37,14 @@ export default async function GranaryPage() {
     redirect("/login");
   }
 
-  const [summary, pauses] = await Promise.all([
+  const [summary, pauses, mpesaCategories] = await Promise.all([
     backendFetch<GranaryMonthSummary>(`/api/granary/summary?userId=${userId}`),
     backendFetch<PauseDecision[]>(`/api/granary/pauses?userId=${userId}`),
+    backendFetch<Partial<Record<MpesaCategory, number>>>(`/api/granary/mpesa-categories?userId=${userId}`).catch(
+      () => ({}),
+    ),
   ]);
+  const mpesaCategoryEntries = Object.entries(mpesaCategories) as [MpesaCategory, number][];
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,13 +57,16 @@ export default async function GranaryPage() {
             puts a pause between you and the next big promise.
           </p>
         </div>
-        {summary.savingTargetAmount !== null && (
-          <form action={storeSaving}>
-            <button type="submit" className="btn-fill rounded-full px-5 py-2.5 text-[15px] font-semibold">
-              Store {formatAmount(summary.savingTargetAmount, summary.currency)} today
-            </button>
-          </form>
-        )}
+        <div className="flex flex-wrap items-start gap-2">
+          <MpesaImportForm />
+          {summary.savingTargetAmount !== null && (
+            <form action={storeSaving}>
+              <button type="submit" className="btn-fill rounded-full px-5 py-2.5 text-[15px] font-semibold">
+                Store {formatAmount(summary.savingTargetAmount, summary.currency)} today
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       {summary.savingTargetAmount === null && (
@@ -246,12 +265,40 @@ export default async function GranaryPage() {
         </section>
 
         <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
+          {mpesaCategoryEntries.length > 0 && (
+            <section className="card flex flex-col gap-1 p-5">
+              <h2 className="text-[17px] font-semibold">Where it went</h2>
+              <p className="text-[13px] text-muted">
+                From your M-Pesa statement. Only category totals are kept; the statement is
+                deleted after import.
+              </p>
+              <div className="mt-2 flex flex-col gap-2">
+                {mpesaCategoryEntries
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([category, amount]) => {
+                    const max = Math.max(...mpesaCategoryEntries.map(([, v]) => v), 1);
+                    return (
+                      <div key={category} className="grid grid-cols-[1fr_1.4fr_auto] items-center gap-3 text-[14px]">
+                        <span>{MPESA_CATEGORY_LABELS[category]}</span>
+                        <span className="h-[10px] overflow-hidden rounded-[5px]" style={{ background: "#E8E8ED" }}>
+                          <span
+                            className="block h-full rounded-[5px]"
+                            style={{ width: `${Math.round((amount / max) * 100)}%`, background: "var(--ink)" }}
+                          />
+                        </span>
+                        <span className="text-right">{formatAmount(amount, summary.currency)}</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </section>
+          )}
           <section className="card flex flex-col gap-2 p-5">
             <h2 className="text-[17px] font-semibold">Where the granary drinks from</h2>
             <ul className="flex flex-col gap-1.5 text-[14px]">
               <li>
                 <strong className="font-semibold">M-Pesa statement</strong>{" "}
-                <span className="text-muted">&middot; not connected yet</span>
+                <span className="text-muted">&middot; the PDF from your M-Pesa app, imported monthly</span>
               </li>
               <li>
                 <strong className="font-semibold">Your money market fund</strong>{" "}

@@ -5,6 +5,7 @@ import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.PauseDecisionRepository;
 import com.routinemachine.core.repository.UserRepository;
 import com.routinemachine.core.service.GranaryService;
+import com.routinemachine.core.service.MpesaCategory;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -15,12 +16,16 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -112,6 +117,30 @@ public class GranaryController {
         PauseDecision pause = findPause(id);
         granaryService.reflectPause(pause, request.reflection());
         return PauseDecisionResponse.from(pause, Instant.now());
+    }
+
+    // Multipart, not JSON: the uploaded PDF's bytes are read straight into memory and handed
+    // to GranaryService — never written to disk, so "delete the file after parsing" is true by
+    // construction. password is optional form data, used once for this one call and never
+    // stored (see docs/product-direction.md's M-Pesa section and MpesaPdfReader).
+    @PostMapping("/mpesa-statement")
+    public MpesaImportResponse importMpesaStatement(
+            @RequestParam Long userId, @RequestParam MultipartFile file, @RequestParam Optional<String> password) {
+        User user = findUser(userId);
+        byte[] pdfBytes;
+        try {
+            pdfBytes = file.getBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not read the uploaded file", e);
+        }
+        return MpesaImportResponse.from(granaryService.importMpesaStatement(user, pdfBytes, password.orElse(null)));
+    }
+
+    @GetMapping("/mpesa-categories")
+    public Map<MpesaCategory, Integer> mpesaCategories(@RequestParam Long userId, @RequestParam Optional<YearMonth> month) {
+        User user = findUser(userId);
+        YearMonth target = month.orElseGet(() -> YearMonth.now(ZoneId.of(user.getTimeZone())).minusMonths(1));
+        return granaryService.mpesaCategoryTotals(user, target);
     }
 
     private User findUser(Long userId) {

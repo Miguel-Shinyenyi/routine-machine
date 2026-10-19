@@ -1,5 +1,7 @@
 package com.routinemachine.core.api;
 
+import com.routinemachine.core.service.MpesaStatementParseException;
+import com.routinemachine.core.service.MpesaStatementPasswordRequiredException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -38,5 +40,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, String>> handleIllegalState(IllegalStateException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", ex.getMessage()));
+    }
+
+    // A distinct "type" from a plain parse failure, so the frontend can prompt for a password
+    // specifically rather than showing a generic "couldn't read this statement" error.
+    @ExceptionHandler(MpesaStatementPasswordRequiredException.class)
+    public ResponseEntity<Map<String, String>> handlePasswordRequired(MpesaStatementPasswordRequiredException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage(), "type", "PASSWORD_REQUIRED"));
+    }
+
+    @ExceptionHandler(MpesaStatementParseException.class)
+    public ResponseEntity<Map<String, String>> handleMpesaParseFailure(MpesaStatementParseException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage(), "type", "PARSE_ERROR"));
     }
 }

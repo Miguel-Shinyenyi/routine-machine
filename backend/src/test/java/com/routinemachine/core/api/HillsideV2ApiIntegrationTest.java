@@ -135,6 +135,15 @@ class HillsideV2ApiIntegrationTest extends AbstractIntegrationTest {
                                 + "\"heardFrom\": \"a-granary-heard-from-marker\"}"))
                 .andExpect(status().isOk());
 
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/granary/saving-target-amount")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + user.getId() + ", \"amount\": 193837}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/granary/savings")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + user.getId() + "}"))
+                .andExpect(status().isOk());
+
         String body = mockMvc.perform(get("/api/hillside/v2")
                         .param("seasonStart", "2026-08-03")
                         .param("asUserId", user.getId().toString()))
@@ -145,6 +154,7 @@ class HillsideV2ApiIntegrationTest extends AbstractIntegrationTest {
                 .doesNotContain("a-granary-what-marker")
                 .doesNotContain("a-granary-amount-marker")
                 .doesNotContain("a-granary-why-marker")
-                .doesNotContain("a-granary-heard-from-marker");
+                .doesNotContain("a-granary-heard-from-marker")
+                .doesNotContain("193837");
     }
 }

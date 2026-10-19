@@ -168,7 +168,26 @@ doesn't double it, storing with no amount set 400s, creating a pause then decidi
 reflecting updates its state end to end, and deciding an unknown pause 404s.
 `HillsideV2ApiIntegrationTest` gained `granaryDataNeverAppearsInTheHillsideResponse`, the same
 marker-string technique as Phase 10's profile privacy test, for Phase 11's explicit "test it"
-boundary. 214 backend tests, all passing (200 plus 14 new for Phase 11).
+boundary. 214 backend tests at that point.
+M-Pesa statement import added `MpesaStatementParserTest` (7 cases, a pure function against
+plain text in the documented transaction-row shape, never a real statement per the task's
+explicit instruction): sums withdrawn amounts by category; Paid In never counts; unmatched
+details fall into OTHER; the BETTING/DATA_AND_AIRTIME/LEARNING/OVERDRAFT_FEES keyword sets;
+how many transactions were parsed; the statement month is derived from the first transaction's
+date; and text with no recognisable rows at all fails loudly (`MpesaStatementParseException`)
+rather than returning empty totals. `MpesaPdfReaderTest` (5 cases) builds real PDF fixtures
+with PDFBox itself — an unprotected PDF, a password-protected one with the right password, one
+with no password given, one with the wrong password, and bytes that aren't a PDF at all —
+proving the actual text-extraction and decryption path, not just the parser's string handling.
+`GranaryServiceTest` gained 4 cases covering the full import pipeline (persists only category
+totals, re-importing the same month replaces rather than adds, the password-protected path
+with the right password, and with no password at all). `GranaryApiIntegrationTest` gained 2
+multipart-upload cases (`MockMultipartFile`) covering a successful import and persistence, and
+a clear `"type": "PARSE_ERROR"` on an unrecognisable statement.
+`HillsideV2ApiIntegrationTest.granaryDataNeverAppearsInTheHillsideResponse` was extended to
+also set a saving target amount and store a saving with a distinctive marker value, proving
+that leaks through the same hillside-privacy boundary too. 232 backend tests, all passing (214
+plus 18 new for the M-Pesa import slice).
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
@@ -222,8 +241,11 @@ are small presentational helpers, same tier as the already-untested `formatDay` 
 file, not isolated business logic; Phase 10 added no new pure-logic module either — `/profile`
 and Today's analogy wiring are both plain data-fetch-and-render, verified live instead, same
 as every other page; Phase 11's `/granary` is the same — all the real logic, month targets,
-the jar, due-follow-up checks, lives in `GranaryService` on the backend, already covered by
-`GranaryServiceTest`). `submitReadingNote` stays untested as a unit, since it's
+the jar, due-follow-up checks, and the M-Pesa parsing/categorisation, lives on the backend,
+already covered by `GranaryServiceTest`/`MpesaStatementParserTest`/`MpesaPdfReaderTest`; the
+frontend's `MpesaImportForm` is a thin multipart-upload form with no logic of its own beyond
+reading the backend's error `type` field to decide which message to show). `submitReadingNote`
+stays untested as a unit, since it's
 a sequence of two external calls, not a pure function worth isolating. Page components are
 verified by running the app and clicking through the views and the full materialize → start
 → done flow in a browser instead, matching settlement-engine's frontend, which has no
@@ -263,6 +285,15 @@ correctly; logged a pause decision, confirmed both "Wait 24 hours" and "I've alr
 land on the same list with working Decline/Proceed controls regardless of the 24-hour timer,
 confirmed a decision persists on reload; confirmed the phone tab bar now matches the updated
 design reference exactly (Today/Reading/Granary/Tally/Hillside) via `compare.mjs`.
+Phase 11's M-Pesa statement import was verified live via Docker Compose with real
+PDFBox-generated fixtures (never a real statement): an unprotected statement imported
+and the "Where it went" category totals rendered correctly; a password-protected
+statement submitted with no password showed the correct inline "password-protected"
+error; the same statement resubmitted with the correct password imported successfully
+and cleared the form. The first "correct password still fails" result was a browser-automation
+testing mistake (a stale click coordinate landing on text below the Import button after the
+error message had pushed it down), not an application bug, confirmed by a direct `curl` of
+the same request succeeding throughout.
 
 ## Decisions log
 

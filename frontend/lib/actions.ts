@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "./api";
+import { authenticatedBackendFetch, ApiError, backendFetch, backendFetchMultipart, intelligenceFetch } from "./api";
 import { getSessionToken, getSessionUserId } from "./auth/session";
-import type { ReadingNoteAssessment } from "./types";
+import type { MpesaImportResponse, ReadingNoteAssessment } from "./types";
 
 function optionalNumber(value: FormDataEntryValue | null): number | null {
   if (value === null || value === "") return null;
@@ -259,4 +259,56 @@ export async function reflectPause(formData: FormData): Promise<void> {
   });
   revalidatePath("/granary");
   revalidatePath("/today");
+}
+
+export interface MpesaImportState {
+  error: string | null;
+  needsPassword: boolean;
+}
+
+// Phase 11: the PDF's bytes go straight to the backend as multipart form data and are never
+// written to disk here either — nothing in this action persists the file. See
+// docs/backend.md's decisions log for the password-protected-PDF and format-change handling
+// this was built against.
+export async function importMpesaStatement(
+  _prevState: MpesaImportState,
+  formData: FormData,
+): Promise<MpesaImportState> {
+  const userId = await getSessionUserId();
+  if (userId === null) {
+    return { error: "You need to be signed in to import a statement.", needsPassword: false };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Choose a PDF statement to import.", needsPassword: false };
+  }
+  const password = formData.get("password");
+
+  const body = new FormData();
+  body.set("userId", String(userId));
+  body.set("file", file);
+  if (typeof password === "string" && password.trim() !== "") {
+    body.set("password", password.trim());
+  }
+
+  try {
+    await backendFetchMultipart<MpesaImportResponse>("/api/granary/mpesa-statement", body);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      try {
+        const parsed = JSON.parse(error.message) as { error?: string; type?: string };
+        return {
+          error: parsed.error ?? "Couldn't import that statement.",
+          needsPassword: parsed.type === "PASSWORD_REQUIRED",
+        };
+      } catch {
+        return { error: "Couldn't import that statement.", needsPassword: false };
+      }
+    }
+    return { error: "Couldn't import that statement.", needsPassword: false };
+  }
+
+  revalidatePath("/granary");
+  return { error: null, needsPassword: false };
 }

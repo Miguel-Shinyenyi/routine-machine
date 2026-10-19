@@ -494,10 +494,61 @@ every write only records that a saving or a decision happened.
   `storeSaving` throws it when no `savingTargetAmount` is set yet, a real client-fixable
   precondition failure ("set an amount first"), not a server bug that should 500.
 
+**M-Pesa statement import built.** Proposed to the user before building (password-protected
+PDFs, a statement format that can change without notice) and confirmed before any of this was
+written.
+
+- **The file is never persisted.** `GranaryController.importMpesaStatement` reads the
+  uploaded `MultipartFile`'s bytes straight into memory (`file.getBytes()`) and passes them to
+  `GranaryService.importMpesaStatement`, which only ever holds them in a local `byte[]`
+  variable scoped to that one call. Nothing writes them to disk, a temp directory, or any
+  table — "delete the file after parsing" is true by construction, since the file is never
+  saved in the first place, not a delete step that could be skipped or fail.
+- **Password-protected PDFs**: `MpesaPdfReader.extractText(bytes, password)` tries the given
+  password (or none) via PDFBox's own decryption (`Loader.loadPDF(bytes, password)`). A wrong
+  or missing password on an encrypted PDF throws `MpesaStatementPasswordRequiredException`,
+  mapped to its own `400` with `"type": "PASSWORD_REQUIRED"` — distinct from a generic parse
+  failure, so the frontend can prompt for a password specifically rather than showing
+  "couldn't read this statement."
+- **Format changes, fail loudly**: `MpesaStatementParser.parse` matches each transaction row
+  against a single regex (receipt id, completion date/time, free-text details, a status word,
+  three decimal amounts) and categorises each one by keyword-matching the details text against
+  a fixed map (`MpesaCategory`: FOOD, TRANSPORT, FAMILY_SUPPORT, DATA_AND_AIRTIME, LEARNING,
+  BETTING, OVERDRAFT_FEES, OTHER — matching the design reference's own category list, with
+  OTHER as the honest catch-all for anything unmatched). If the text has *zero* recognisable
+  transaction rows at all, parsing throws `MpesaStatementParseException` ("the statement's
+  format may have changed") rather than returning empty or silently wrong totals — the real
+  M-Pesa statement text layout hasn't been verified against a real statement (see the open
+  questions), so a confident wrong answer would be worse than a clear failure.
+- **Only Withdrawn amounts count.** Paid In amounts (money arriving) are read but never
+  summed into a category total — these totals answer "where did spending go," matching the
+  design reference's "Where it went" framing, not "where did money come from."
+- **New table** (migration V23): `mpesa_category_totals(user_id, statement_month, category,
+  amount)`, unique on `(user_id, statement_month, category)`. Re-importing the same month's
+  statement replaces that month's totals via a native `ON CONFLICT ... DO UPDATE` upsert, not
+  a second set of rows — "only category totals are kept," and a corrected or re-uploaded
+  statement should overwrite, not accumulate alongside the old one.
+- **New endpoints**: `POST /api/granary/mpesa-statement` (multipart: `userId`, `file`,
+  optional `password`), `GET /api/granary/mpesa-categories` (defaults to last month).
+- **Tested against a synthetic fixture only**, per the task's explicit instruction, never a
+  real statement: `MpesaStatementParserTest` covers the parser as a pure function against
+  plain text in the documented row shape (summing by category, Paid In never counting, OTHER
+  as the fallback, each named category's keywords, the "no rows at all" failure case).
+  `MpesaPdfReaderTest` builds real PDF fixtures with PDFBox itself (unprotected, and
+  password-protected with a known password) to prove the actual text-extraction and
+  decryption path, not just the parser's string handling. `GranaryServiceTest` and
+  `GranaryApiIntegrationTest` cover the full pipeline end to end, including re-import
+  replacing totals and the password-required path.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-19 | M-Pesa statement parsing uses one regex matching the whole transaction-row shape, not a general-purpose PDF table extractor | PDFBox's basic `PDFTextStripper` doesn't preserve table column boundaries reliably; a row-shape regex anchored on the structurally distinctive parts (a receipt id, an ISO-ish date/time, a status word, three trailing decimal amounts) degrades to "no match, fail loudly" when the layout differs, rather than silently misreading columns — matching the proposed "fail loudly on format changes" approach |
+| 2026-10-19 | Category classification is a fixed keyword-to-category map with an OTHER fallback, not a model or a configurable rule set | Matches `tally.py`'s own precedent for simple, stated rules over fitted parameters (Phase 2's skip-heavy threshold); a spending category guess from free text is inherently approximate, and OTHER makes that honest instead of forcing every transaction into a category it doesn't really belong to |
+| 2026-10-19 | The PDF's bytes are read into a plain `byte[]` and never touch a file on disk, rather than "save then delete" | A save-then-delete step is one more place a bug, a crash between the two steps, or a forgotten cleanup path could leave the file behind; never writing it in the first place removes that failure mode entirely instead of relying on a delete call always running |
+| 2026-10-19 | `MpesaStatementPasswordRequiredException` is a distinct exception/response type from `MpesaStatementParseException`, both separately caught in `GlobalExceptionHandler` | The two failures need different frontend behaviour (prompt for a password vs. show "couldn't read this, format may have changed") — collapsing them into one generic 400 would make that distinction only inferable from message text, which is fragile compared to a `type` field |
+| 2026-10-19 | Re-importing the same statement month overwrites that month's category totals (an upsert), not a new set of rows alongside the old one | A user re-uploading a statement (a correction, or the same one twice by accident) should get one true set of totals for that month, not two conflicting sets the page would have to somehow reconcile or pick between |
 | 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
 | 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
 | 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |
@@ -581,10 +632,20 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 
 ## Open questions
 
-- M-Pesa statement import (the design reference's "Import M-Pesa statement" button and
-  "Where it went" category-totals card) isn't built yet — the task explicitly flagged this as
-  something to propose a handling approach for (password-protected PDFs, format changes)
-  before writing code, asked separately from the rest of Phase 11.
+- M-Pesa's real statement PDF text layout has never been verified against a real statement —
+  per the task's own instruction, `MpesaStatementParser`/`MpesaPdfReader` are tested only
+  against a synthetic fixture built in-test. The row-shape regex is a best-effort match for
+  the publicly-documented statement structure (receipt no., completion time, details,
+  transaction status, paid in, withdrawn, balance); if the real extracted text differs enough
+  that the regex never matches, every import will fail loudly (by design) until someone
+  checks it against a real statement and adjusts the pattern.
+- The category keyword map (`MpesaStatementParser.CATEGORY_KEYWORDS`) is a first pass, not
+  validated against real M-Pesa transaction description text — merchant names, Till/Paybill
+  numbers, and phrasing it hasn't seen will land in OTHER rather than their real category
+  until the map is extended with real examples.
+- Bank statement CSV import and a typed-in/read money-market-fund balance (both named in the
+  design reference's "Where the granary drinks from" card) aren't built — only M-Pesa and the
+  manual tap exist as sources.
 - `pause_decisions.amount`/`heard_from` are free text; there's no structured currency amount
   or a fixed enum for "where did you hear it" (the frontend offers a fixed radio set, but the
   backend accepts anything) — fine for the current single-field-per-pause scope, but would

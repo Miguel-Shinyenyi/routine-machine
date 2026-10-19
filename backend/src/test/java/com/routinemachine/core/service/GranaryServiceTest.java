@@ -4,6 +4,7 @@ import com.routinemachine.core.AbstractIntegrationTest;
 import com.routinemachine.core.domain.PauseDecision;
 import com.routinemachine.core.domain.PauseOutcome;
 import com.routinemachine.core.domain.User;
+import com.routinemachine.core.repository.MpesaCategoryTotalRepository;
 import com.routinemachine.core.repository.PauseDecisionRepository;
 import com.routinemachine.core.repository.SavingRepository;
 import com.routinemachine.core.repository.UserRepository;
@@ -16,8 +17,10 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
 class GranaryServiceTest extends AbstractIntegrationTest {
@@ -28,9 +31,11 @@ class GranaryServiceTest extends AbstractIntegrationTest {
     private SavingRepository savingRepository;
     @Autowired
     private PauseDecisionRepository pauseDecisionRepository;
+    @Autowired
+    private MpesaCategoryTotalRepository mpesaCategoryTotalRepository;
 
     private GranaryService service() {
-        return new GranaryService(savingRepository, pauseDecisionRepository);
+        return new GranaryService(savingRepository, pauseDecisionRepository, mpesaCategoryTotalRepository);
     }
 
     private User saveUser(String email) {
@@ -150,5 +155,91 @@ class GranaryServiceTest extends AbstractIntegrationTest {
 
         assertThat(due).extracting(PauseDecision::getWhat).containsExactly("Due");
         assertThat(due).extracting(PauseDecision::getId).containsExactly(duePause.getId());
+    }
+
+    private static final String STATEMENT_TEXT = "Receipt No. Completion Time Details Transaction Status Paid In Withdrawn Balance\n"
+            + "OEI2AB3C4D 2026-09-02 08:15:22 Pay Bill to NAIVAS SUPERMARKET Completed 0.00 1,200.00 8,800.00\n"
+            + "OEI2AB3C4E 2026-09-03 09:00:11 Customer Transfer to UBER KENYA Completed 0.00 450.00 8,350.00\n";
+
+    @Test
+    void importingAnMpesaStatementPersistsOnlyTheCategoryTotals() throws Exception {
+        User user = saveUser("mpesa-import@example.com");
+        byte[] pdf = buildUnprotectedPdf(STATEMENT_TEXT);
+
+        MpesaParseResult result = service().importMpesaStatement(user, pdf, null);
+
+        assertThat(result.transactionsParsed()).isEqualTo(2);
+        Map<MpesaCategory, Integer> stored = service().mpesaCategoryTotals(user, YearMonth.of(2026, 9));
+        assertThat(stored.get(MpesaCategory.FOOD)).isEqualTo(1200);
+        assertThat(stored.get(MpesaCategory.TRANSPORT)).isEqualTo(450);
+    }
+
+    @Test
+    void reimportingTheSameMonthReplacesItsTotalsRatherThanAddingToThem() throws Exception {
+        User user = saveUser("mpesa-reimport@example.com");
+        byte[] pdf = buildUnprotectedPdf(STATEMENT_TEXT);
+
+        service().importMpesaStatement(user, pdf, null);
+        service().importMpesaStatement(user, pdf, null);
+
+        Map<MpesaCategory, Integer> stored = service().mpesaCategoryTotals(user, YearMonth.of(2026, 9));
+        assertThat(stored.get(MpesaCategory.FOOD)).isEqualTo(1200);
+    }
+
+    @Test
+    void importingAPasswordProtectedStatementWithTheRightPasswordWorks() throws Exception {
+        User user = saveUser("mpesa-password@example.com");
+        byte[] pdf = buildProtectedPdf(STATEMENT_TEXT, "correct-horse");
+
+        MpesaParseResult result = service().importMpesaStatement(user, pdf, "correct-horse");
+
+        assertThat(result.transactionsParsed()).isEqualTo(2);
+    }
+
+    @Test
+    void importingAPasswordProtectedStatementWithNoPasswordAsksForOne() {
+        User user = saveUser("mpesa-no-password@example.com");
+
+        assertThatThrownBy(() -> {
+            byte[] pdf = buildProtectedPdf(STATEMENT_TEXT, "correct-horse");
+            service().importMpesaStatement(user, pdf, null);
+        }).isInstanceOf(MpesaStatementPasswordRequiredException.class);
+    }
+
+    private byte[] buildUnprotectedPdf(String text) throws Exception {
+        return buildPdf(text, null);
+    }
+
+    private byte[] buildProtectedPdf(String text, String password) throws Exception {
+        return buildPdf(text, password);
+    }
+
+    private byte[] buildPdf(String text, String ownerPassword) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument document = new org.apache.pdfbox.pdmodel.PDDocument()) {
+            org.apache.pdfbox.pdmodel.PDPage page = new org.apache.pdfbox.pdmodel.PDPage();
+            document.addPage(page);
+            try (org.apache.pdfbox.pdmodel.PDPageContentStream content =
+                         new org.apache.pdfbox.pdmodel.PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(
+                        new org.apache.pdfbox.pdmodel.font.PDType1Font(
+                                org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.HELVETICA), 9);
+                content.newLineAtOffset(20, 750);
+                for (String line : text.split("\n")) {
+                    content.showText(line);
+                    content.newLineAtOffset(0, -11);
+                }
+                content.endText();
+            }
+            if (ownerPassword != null) {
+                var permission = new org.apache.pdfbox.pdmodel.encryption.AccessPermission();
+                var policy = new org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy(
+                        ownerPassword, ownerPassword, permission);
+                document.protect(policy);
+            }
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            document.save(out);
+            return out.toByteArray();
+        }
     }
 }

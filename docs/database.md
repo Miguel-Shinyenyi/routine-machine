@@ -192,6 +192,13 @@ nullable — null until the user sets one on the granary page). Two new tables:
 Neither table is referenced by anything hillside- or cohort-facing — see `backend.md`'s
 decisions log and the privacy test that proves it.
 
+Phase 11 also built via `V23__mpesa_category_totals.sql`: `mpesa_category_totals(id, user_id
+references users, statement_month, category, amount, created_at)`, unique on
+`(user_id, statement_month, category)`. Only category totals are kept — no transaction-level
+detail at all, and the uploaded statement PDF is never written to disk, let alone to a table.
+Re-importing the same month's statement upserts (replaces) that month's totals rather than
+adding a second set of rows. Also not referenced by anything hillside- or cohort-facing.
+
 ## Decisions log
 
 | Date | Decision | Reason |

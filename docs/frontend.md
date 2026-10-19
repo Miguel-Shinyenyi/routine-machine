@@ -75,12 +75,18 @@ deliberate deviation rather than an oversight.
   or "I've already decided," both create the same entry; the pause list below always offers
   Decline/Proceed on an undecided entry, not only once the 24-hour mark has passed — see the
   decisions log) and a table of every pause logged, with inline decide/reflect controls; and a
-  sidebar ("Where the granary drinks from," a static boundaries card). Reads/writes
+  sidebar ("Where it went" — a per-category meter bar, only rendered once a statement has
+  been imported — "Where the granary drinks from," and a static boundaries card). M-Pesa
+  import (`components/MpesaImportForm.tsx`, collapsed behind an "Import M-Pesa statement"
+  button until opened) is a real, working upload: a PDF file input plus an optional password
+  field, submitted as multipart form data via `lib/actions.ts::importMpesaStatement` and a new
+  `backendFetchMultipart` helper in `lib/api.ts` (the only call in this app that isn't JSON).
+  A wrong/missing password or an unrecognised statement format shows its own inline error,
+  distinguishing the two by the backend's `type` field on the error response. Reads/writes
   `GET /api/granary/summary`, `PUT /api/granary/saving-target-amount`,
   `POST /api/granary/savings`, `GET`/`POST /api/granary/pauses`,
-  `PATCH /api/granary/pauses/{id}/decide`, `PATCH .../reflect`. M-Pesa import
-  ("Import M-Pesa statement" in the reference) isn't built — flagged, not silently dropped, see
-  the open questions.
+  `PATCH /api/granary/pauses/{id}/decide`, `PATCH .../reflect`,
+  `POST /api/granary/mpesa-statement`, `GET /api/granary/mpesa-categories`.
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
@@ -208,6 +214,9 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-19 | The M-Pesa import form is a collapsed, client-side `MpesaImportForm` component, not a server-rendered form always visible on the page | Matches the reference's own copy pattern of collapsing rarely-used forms, but the real reason is `useActionState`'s need for a client component to show the import's own pending/error state (the password prompt, the "couldn't read this" message) — this is the one piece of Phase 11 that genuinely needs client-side state, unlike every other granary control, which stays server-rendered |
+| 2026-10-19 | `backendFetchMultipart` is a new, separate helper in `lib/api.ts`, not a flag on the existing `request()`/`backendFetch` | The existing helper always sets `Content-Type: application/json`; a multipart upload needs fetch to set its own `Content-Type` with the correct boundary from the `FormData` body, which means never setting that header manually at all — a flag that conditionally skips a header is more error-prone than a second, explicit function with a different contract |
+| 2026-10-19 | The "Where it went" category-totals card only renders once at least one category total exists, rather than always showing with empty/zero bars | An import hasn't happened for most users most of the time; a permanently-visible chart of all zeros would look broken rather than simply "nothing imported yet," and the reference itself only shows this card because its sample data always has an import behind it |
 | 2026-10-19 | `Shell`'s phone tab bar changed from Today/Path/Reading/Tally/Hillside to Today/Reading/Granary/Tally/Hillside, matching the updated design reference exactly | Granary now exists, removing the reason the old order was kept (the reference's own target order needed a page that didn't exist yet). Path's "opens from Today" cross-link still isn't built, same already-flagged gap this doc records for Flock/Watering holes |
 | 2026-10-19 | The granary's "Decline"/"Proceed" buttons are shown on every undecided pause, not gated behind `dueForTwentyFourHourFollowUp` | The design reference's create-pause form has both "Wait 24 hours" and "I've already decided" as alternate submit buttons; both create the identical entry (there's no backend distinction for "already decided" — see `backend.md`'s decisions log), so "I've already decided" needs the decide controls to already be visible on the new row, not hidden until a 24-hour timer passes. The still-waiting case keeps a "Waiting · {date}" hint alongside the buttons so the timing isn't lost |
 | 2026-10-19 | `Shell`'s sidebar no longer shows the signed-in email + "Sign out" row; the sidebar's only account-related control is the Profile link (avatar + "Profile"), and "Sign out" moved onto `/profile` itself | User flagged that the email/sign-out row no longer matched the design reference's sidebar, which only ever shows the avatar/name "Profile" link (`docs/design-reference/pages/profile.html`'s `.sidefoot`/nav). Signing out is now a real action on the one page that's about the account, not a second place doing the same job the sidebar used to |
@@ -289,10 +298,8 @@ departure from precedent.
 
 ## Open questions
 
-- M-Pesa statement import isn't built — the "Import M-Pesa statement" button and the "Where
-  it went" category-totals sidebar card from the design reference aren't on `/granary` yet.
-  Explicitly flagged, since the task asked for a proposal on handling password-protected
-  PDFs and format changes before writing that code.
+- The M-Pesa import form hasn't been checked at 390px width — it's a `max-w-[420px]` card,
+  likely fine, but not confirmed live this phase.
 - Granary isn't reachable from the phone tab bar's own page content — it's in `PHONE_LINKS`
   now, but nothing within `/granary` itself has been checked at 390px width this phase.
 - Profile's "Export my data"/"Delete my account" buttons from the design reference weren't
