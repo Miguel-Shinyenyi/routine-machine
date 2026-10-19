@@ -16,15 +16,19 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
 // Phase 12 part 3 (docs/product-direction.md's cohort dashboard): the four decided pilot
 // measures, each with its own denominator — never a bare percentage. "Checked in" is any
 // DailyLog, same thing Today already tracks for every user; it deliberately does not require
 // hillside opt-in, since cohort participation and the hillside are separate concerns (see
-// docs/backend.md's decisions log for why). Study groups, the weekly check-in chart, and the
-// frontend are later parts.
+// docs/backend.md's decisions log for why). Part 4 adds the "by study group" breakdown with
+// small-groups-hidden. The weekly check-in chart and the frontend are later parts.
 @Service
 public class CohortDashboardService {
 
@@ -83,6 +87,47 @@ public class CohortDashboardService {
                 new CohortMeasure(supportive, responses.size()),
                 neutral,
                 pressuring);
+    }
+
+    // "Small groups stay hidden": a group under 5 members shows its member count but no
+    // rates, so no one can be picked out from a near-individual denominator
+    // (docs/product-direction.md). Unlike the cohort-wide measures above, these denominators
+    // are every member of the group, not just activated ones — matching the design
+    // reference's own "12 of 14" where 14 is the group's total headcount.
+    public List<CohortGroupMeasure> summarizeByGroup(Long cohortId, Long requestingUserId, LocalDate today) {
+        Cohort cohort = findCohort(cohortId);
+        requireParticipant(cohort, requestingUserId);
+
+        Map<String, List<CohortMembership>> byGroup = cohortMembershipRepository.findByCohortId(cohortId).stream()
+                .filter(member -> member.getStudyGroup() != null)
+                .collect(Collectors.groupingBy(CohortMembership::getStudyGroup, LinkedHashMap::new, Collectors.toList()));
+
+        List<CohortGroupMeasure> result = new ArrayList<>();
+        for (Map.Entry<String, List<CohortMembership>> entry : byGroup.entrySet()) {
+            List<CohortMembership> groupMembers = entry.getValue();
+            if (groupMembers.size() < 5) {
+                result.add(new CohortGroupMeasure(entry.getKey(), groupMembers.size(), true, null, null));
+                continue;
+            }
+
+            int checkedIn = (int) groupMembers.stream().filter(member -> checkedInCurrentWeek(cohort, member, today)).count();
+            int missedADay = 0;
+            int returnedWithinSevenDays = 0;
+            for (CohortMembership member : groupMembers) {
+                ReturnClassification classification = classifyReturn(member, today);
+                if (classification.missedADay()) {
+                    missedADay++;
+                    if (classification.returnedWithinSevenDays()) {
+                        returnedWithinSevenDays++;
+                    }
+                }
+            }
+            result.add(new CohortGroupMeasure(
+                    entry.getKey(), groupMembers.size(), false,
+                    new CohortMeasure(checkedIn, groupMembers.size()),
+                    new CohortMeasure(returnedWithinSevenDays, missedADay)));
+        }
+        return result;
     }
 
     public CohortSurveyResponse submitSurveyResponse(Long cohortId, Long requestingUserId, CohortSurveyAnswer answer) {

@@ -646,14 +646,33 @@ of this was written. New `CohortDashboardService`, migration V26 (`cohort_survey
   since the rule here is "admin OR member," not "admin only."
 - **Every measure is a `{count, denominator}` pair, never a bare number or percentage** —
   "each figure with its denominator" is explicit in `docs/product-direction.md`.
-- **Deliberately not built this slice**: study groups and the "by study group" breakdown,
-  small-groups-hidden (which only matters once there's a group breakdown to hide rows from),
-  the weekly check-in chart, and the frontend. These are from the design reference's richer
-  HTML mockup, not the five-bullet decided spec this slice implements exactly.
 - Tested with `CohortDashboardServiceTest` (every measure's numerator/denominator, the
   resubmit-replaces-the-answer case, both access-control branches) and
   `OrganisationApiIntegrationTest` (the full survey-submit → dashboard-reflects-it flow for a
   learner, and the 403 for a non-participant).
+
+**Phase 12 part 4: study groups, the "by study group" breakdown, and small-groups-hidden.**
+Migration V27: `cohort_memberships.study_group` and `cohort_invites.study_group`, both
+nullable — a member with no group just doesn't appear in the breakdown.
+
+- **A group is set via the CSV's optional second column** (`email,group`), not a separate
+  endpoint — matches the design reference, where groups are a property of how someone was
+  invited ("Morning group", "Evening group"). `CohortInvite` carries the group through to the
+  `CohortMembership` it eventually becomes, whether the person was added immediately
+  (existing account) or fulfilled later on registration.
+- **`CohortDashboardService.summarizeByGroup`'s denominators are every member of the group,
+  not just activated ones** — deliberately different from the cohort-wide measures above,
+  which denominate by activated members only. This matches the design reference's own
+  "12 of 14" where 14 is the group's whole headcount, not an activated subset.
+- **"Small groups stay hidden"**: a group under 5 members returns its member count but
+  `checkedInThisWeek`/`returnedAfterAMissedDay` are both `null` and `hidden` is `true` — the
+  count itself is shown (so an admin can see the group exists and how big it is) but no rate
+  is computed, so no individual in a near-1:1 denominator can be picked out.
+- **New endpoint**: `GET /api/organisations/cohorts/{id}/dashboard/by-group`.
+- Tested with `OrganisationServiceTest` (the group carried through both the immediate-add and
+  invite-then-register paths), `CohortDashboardServiceTest` (a 5+ group's real rates, a
+  under-5 group hidden but still counted, members with no group excluded entirely), and
+  `OrganisationApiIntegrationTest` (the hidden-group response over a real HTTP request).
 
 ## Decisions log
 
@@ -672,6 +691,8 @@ of this was written. New `CohortDashboardService`, migration V26 (`cohort_survey
 | 2026-10-19 | Cohort "checked in" uses `DailyLog`, not the hillside's `daily_credits` | User's explicit choice, flagged as a real fork with behavioural consequences (the credit pipeline requires hillside opt-in, which cohort members shouldn't need) before building either way |
 | 2026-10-19 | The supportive/neutral/pressuring survey was built this slice rather than deferred | User's explicit choice over leaving the fourth pilot measure unavailable; scoped to one question, one answer per learner per cohort, no reminders or UI beyond a bare submit |
 | 2026-10-19 | `CohortDashboardService` is a new service, not more methods added to `OrganisationService` | `OrganisationService` is about who's in what and who administers it; the dashboard is read-mostly aggregation over several other tables (`Goal`, `DailyLog`, survey responses) that has nothing to do with membership CRUD — same separation `HillsideV2Service` already has from `GranaryService` despite both reading user-scoped data |
+| 2026-10-19 | A study group is set via the CSV's optional second column, not a separate endpoint | Matches the design reference: groups are assigned at invite time ("Morning group," "Evening group"), not edited afterward as a standalone action — no need for more surface area than the one place groups are actually set |
+| 2026-10-19 | The by-group breakdown denominates by every group member, not just activated ones, unlike the cohort-wide measures | Matches the design reference's own group table ("12 of 14" where 14 is the group's full headcount) exactly, rather than silently reusing the cohort-wide measures' activated-only convention where the design doesn't ask for it |
 | 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
 | 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
 | 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |

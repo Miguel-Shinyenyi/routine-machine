@@ -2,6 +2,7 @@ package com.routinemachine.core.service;
 
 import com.routinemachine.core.AbstractIntegrationTest;
 import com.routinemachine.core.domain.Cohort;
+import com.routinemachine.core.domain.CohortMembership;
 import com.routinemachine.core.domain.CohortSurveyAnswer;
 import com.routinemachine.core.domain.DailyLog;
 import com.routinemachine.core.domain.Goal;
@@ -23,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -217,6 +219,62 @@ class CohortDashboardServiceTest extends AbstractIntegrationTest {
 
         assertThatThrownBy(() -> service().submitSurveyResponse(cohort.getId(), outsider.getId(), CohortSurveyAnswer.SUPPORTIVE))
                 .isInstanceOf(NotACohortParticipantException.class);
+    }
+
+    @Test
+    void aGroupOfFiveOrMoreShowsItsRealCheckedInAndReturnedRates() {
+        LocalDate today = LocalDate.of(2026, 10, 19);
+        Cohort cohort = setUp(today);
+        for (int i = 0; i < 4; i++) {
+            User member = saveUser("morning" + i + "@example.com");
+            cohortMembershipRepository.save(
+                    new CohortMembership(cohort.getId(), member.getId(), "Morning group"));
+        }
+        User checkedIn = saveUser("morning-checked-in@example.com");
+        cohortMembershipRepository.save(
+                new CohortMembership(cohort.getId(), checkedIn.getId(), "Morning group"));
+        log(checkedIn, today);
+
+        List<CohortGroupMeasure> groups = service().summarizeByGroup(cohort.getId(), adminIdOf(cohort), today);
+
+        assertThat(groups).hasSize(1);
+        CohortGroupMeasure morning = groups.get(0);
+        assertThat(morning.studyGroup()).isEqualTo("Morning group");
+        assertThat(morning.memberCount()).isEqualTo(5);
+        assertThat(morning.hidden()).isFalse();
+        assertThat(morning.checkedInThisWeek()).isEqualTo(new CohortMeasure(1, 5));
+    }
+
+    @Test
+    void aGroupUnderFiveIsHiddenButStillShowsItsMemberCount() {
+        LocalDate today = LocalDate.of(2026, 10, 19);
+        Cohort cohort = setUp(today);
+        for (int i = 0; i < 4; i++) {
+            User member = saveUser("weekend" + i + "@example.com");
+            cohortMembershipRepository.save(
+                    new CohortMembership(cohort.getId(), member.getId(), "Weekend group"));
+        }
+
+        List<CohortGroupMeasure> groups = service().summarizeByGroup(cohort.getId(), adminIdOf(cohort), today);
+
+        assertThat(groups).hasSize(1);
+        CohortGroupMeasure weekend = groups.get(0);
+        assertThat(weekend.memberCount()).isEqualTo(4);
+        assertThat(weekend.hidden()).isTrue();
+        assertThat(weekend.checkedInThisWeek()).isNull();
+        assertThat(weekend.returnedAfterAMissedDay()).isNull();
+    }
+
+    @Test
+    void membersWithNoStudyGroupDoNotAppearInTheByGroupBreakdown() {
+        LocalDate today = LocalDate.of(2026, 10, 19);
+        Cohort cohort = setUp(today);
+        User ungrouped = saveUser("ungrouped@example.com");
+        cohortMembershipRepository.save(new CohortMembership(cohort.getId(), ungrouped.getId()));
+
+        List<CohortGroupMeasure> groups = service().summarizeByGroup(cohort.getId(), adminIdOf(cohort), today);
+
+        assertThat(groups).isEmpty();
     }
 
     private Long adminIdOf(Cohort cohort) {

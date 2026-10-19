@@ -107,17 +107,18 @@ public class OrganisationService {
                 + cohortInviteRepository.countByCohortIdIn(cohortIdsInOrganisation);
 
         List<CsvInviteRowResult> results = new ArrayList<>();
-        for (String rawEmail : parseCsvEmails(csvContent)) {
-            CsvInviteOutcome outcome = inviteOneEmail(cohort, organisation, rawEmail, usedSeats);
+        for (CsvRow row : parseCsvRows(csvContent)) {
+            CsvInviteOutcome outcome = inviteOneEmail(cohort, organisation, row, usedSeats);
             if (outcome == CsvInviteOutcome.ADDED_IMMEDIATELY || outcome == CsvInviteOutcome.INVITE_RESERVED) {
                 usedSeats++;
             }
-            results.add(new CsvInviteRowResult(rawEmail, outcome));
+            results.add(new CsvInviteRowResult(row.email(), outcome));
         }
         return results;
     }
 
-    private CsvInviteOutcome inviteOneEmail(Cohort cohort, Organisation organisation, String email, long usedSeats) {
+    private CsvInviteOutcome inviteOneEmail(Cohort cohort, Organisation organisation, CsvRow row, long usedSeats) {
+        String email = row.email();
         if (!EMAIL_PATTERN.matcher(email).matches()) {
             return CsvInviteOutcome.INVALID_EMAIL;
         }
@@ -130,7 +131,7 @@ public class OrganisationService {
             if (seatLimitReached(organisation, usedSeats)) {
                 return CsvInviteOutcome.SEAT_LIMIT_REACHED;
             }
-            cohortMembershipRepository.save(new CohortMembership(cohort.getId(), existingUser.get().getId()));
+            cohortMembershipRepository.save(new CohortMembership(cohort.getId(), existingUser.get().getId(), row.studyGroup()));
             return CsvInviteOutcome.ADDED_IMMEDIATELY;
         }
 
@@ -140,7 +141,7 @@ public class OrganisationService {
         if (seatLimitReached(organisation, usedSeats)) {
             return CsvInviteOutcome.SEAT_LIMIT_REACHED;
         }
-        cohortInviteRepository.save(new CohortInvite(cohort.getId(), email));
+        cohortInviteRepository.save(new CohortInvite(cohort.getId(), email, row.studyGroup()));
         return CsvInviteOutcome.INVITE_RESERVED;
     }
 
@@ -155,21 +156,28 @@ public class OrganisationService {
     public void fulfillInvitesForNewUser(User user) {
         List<CohortInvite> invites = cohortInviteRepository.findByEmailIgnoreCase(user.getEmail());
         for (CohortInvite invite : invites) {
-            cohortMembershipRepository.save(new CohortMembership(invite.getCohortId(), user.getId()));
+            cohortMembershipRepository.save(new CohortMembership(invite.getCohortId(), user.getId(), invite.getStudyGroup()));
             cohortInviteRepository.delete(invite);
         }
     }
 
-    private List<String> parseCsvEmails(String csvContent) {
-        List<String> emails = new ArrayList<>();
+    // One email per line, optionally followed by a study group: "email" or "email,group".
+    // A literal "email" (or "email,group") header line and blank lines are skipped.
+    private record CsvRow(String email, String studyGroup) {
+    }
+
+    private List<CsvRow> parseCsvRows(String csvContent) {
+        List<CsvRow> rows = new ArrayList<>();
         for (String line : csvContent.split("\\R")) {
-            String field = line.split(",")[0].trim();
-            if (field.isEmpty() || field.equalsIgnoreCase("email")) {
+            String[] fields = line.split(",", 2);
+            String email = fields[0].trim();
+            if (email.isEmpty() || email.equalsIgnoreCase("email")) {
                 continue;
             }
-            emails.add(field);
+            String studyGroup = fields.length > 1 && !fields[1].trim().isEmpty() ? fields[1].trim() : null;
+            rows.add(new CsvRow(email, studyGroup));
         }
-        return emails;
+        return rows;
     }
 
     private Cohort findCohort(Long cohortId) {

@@ -216,4 +216,38 @@ class OrganisationApiIntegrationTest extends AbstractIntegrationTest {
                         .param("requestingUserId", String.valueOf(outsider)))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    void theByGroupBreakdownHidesAGroupUnderFiveButShowsItsMemberCount() throws Exception {
+        Long admin = saveUser("admin7@example.com");
+        saveUser("weekend1@example.com");
+        saveUser("weekend2@example.com");
+
+        MvcResult orgResult = mockMvc.perform(post("/api/organisations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Moringa School\",\"foundingAdminUserId\":" + admin + "}"))
+                .andReturn();
+        Long organisationId = Long.valueOf(
+                orgResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+        MvcResult cohortResult = mockMvc.perform(post("/api/organisations/" + organisationId + "/cohorts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestingUserId\":" + admin
+                                + ",\"name\":\"Cohort 14\",\"startsOn\":\"2026-10-19\",\"weeks\":8}"))
+                .andReturn();
+        Long cohortId = Long.valueOf(
+                cohortResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+
+        mockMvc.perform(post("/api/organisations/cohorts/" + cohortId + "/bulk-invite")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"requestingUserId\":" + admin
+                        + ",\"csv\":\"weekend1@example.com,Weekend group\\nweekend2@example.com,Weekend group\"}"));
+
+        mockMvc.perform(get("/api/organisations/cohorts/" + cohortId + "/dashboard/by-group")
+                        .param("requestingUserId", String.valueOf(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].studyGroup", is("Weekend group")))
+                .andExpect(jsonPath("$[0].memberCount", is(2)))
+                .andExpect(jsonPath("$[0].hidden", is(true)))
+                .andExpect(jsonPath("$[0].checkedInThisWeek").value(org.hamcrest.Matchers.nullValue()));
+    }
 }

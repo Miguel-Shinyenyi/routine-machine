@@ -296,4 +296,33 @@ class OrganisationServiceTest extends AbstractIntegrationTest {
 
         assertThat(cohortMembershipRepository.findByCohortId(999L)).isEmpty();
     }
+
+    @Test
+    void bulkInvitingWithAStudyGroupColumnCarriesTheGroupThroughToAnImmediateMember() {
+        User admin = saveUser("admin@example.com");
+        User learner = saveUser("learner@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+
+        service().bulkInviteByCsv(cohort.getId(), admin.getId(), "learner@example.com,Morning group");
+
+        CohortMembership membership = cohortMembershipRepository.findByCohortIdAndUserId(cohort.getId(), learner.getId())
+                .orElseThrow();
+        assertThat(membership.getStudyGroup()).isEqualTo("Morning group");
+    }
+
+    @Test
+    void aStudyGroupReservedForAnUnknownEmailCarriesThroughOnRegistration() {
+        User admin = saveUser("admin@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+        service().bulkInviteByCsv(cohort.getId(), admin.getId(), "newcomer2@example.com,Evening group");
+        User newcomer = saveUser("newcomer2@example.com");
+
+        service().fulfillInvitesForNewUser(newcomer);
+
+        CohortMembership membership = cohortMembershipRepository.findByCohortIdAndUserId(cohort.getId(), newcomer.getId())
+                .orElseThrow();
+        assertThat(membership.getStudyGroup()).isEqualTo("Evening group");
+    }
 }

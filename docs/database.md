@@ -225,13 +225,19 @@ confirmed before building — see `backend.md`'s decisions log):
   answer, created_at)`, unique on `(cohort_id, user_id)`. One learner's answer to the pilot's
   "did this feel supportive, neutral, or pressuring?" question — resubmitting replaces it.
 
-None of these six tables are read by `HillsideV2Service`/`GranaryService` or vice versa — the
-three modules are simply uncoupled so far, nothing yet requires the marker-string privacy
-test Phase 10/11 needed. `CohortDashboardService` does read `Goal` and `DailyLog` directly
-(what counts as "checked in," by the user's own explicit choice — see `backend.md`), but
-those two tables aren't hillside- or granary-private, so this doesn't cross the boundary
-either. That test becomes necessary once a later Phase 12 part surfaces anything from
-`savings`/`pause_decisions`/`mpesa_category_totals`/`daily_credits` on a cohort response.
+Phase 12 part 4 built via `V27__cohort_study_groups.sql`:
+- `cohort_memberships.study_group` and `cohort_invites.study_group` added, both nullable
+  `VARCHAR(255)`. Set via the CSV's optional second column (`email,group`); a member with no
+  group just doesn't appear in the "by study group" breakdown.
+
+None of these six tables (plus the two new columns) are read by `HillsideV2Service`/
+`GranaryService` or vice versa — the three modules are simply uncoupled so far, nothing yet
+requires the marker-string privacy test Phase 10/11 needed. `CohortDashboardService` does
+read `Goal` and `DailyLog` directly (what counts as "checked in," by the user's own explicit
+choice — see `backend.md`), but those two tables aren't hillside- or granary-private, so this
+doesn't cross the boundary either. That test becomes necessary once a later Phase 12 part
+surfaces anything from `savings`/`pause_decisions`/`mpesa_category_totals`/`daily_credits` on
+a cohort response.
 
 ## Decisions log
 
