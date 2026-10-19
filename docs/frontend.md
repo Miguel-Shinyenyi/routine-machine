@@ -59,6 +59,14 @@ deliberate deviation rather than an oversight.
   `GET /api/goals?userId=`, and `GET /api/evidence-events`; a signed-in session supplies the
   real `asUserId` automatically (the `?asUserId=` query param is ignored once a session
   exists, and only still works as a demo-mode preview when signed out).
+- **Profile** (`/profile`, new in Phase 10, signed-in only — redirects to `/login` otherwise):
+  "About you" (email, a time zone field, a "your day ends at" hour field feeding Phase 9's
+  local-date rule, currency), "What you love" (interest pick-chips from a fixed reference set
+  plus a free-text "add your own," and a free-text "thinkers you return to" field), "Explain it
+  my way" (the analogies on/off switch), and "How you like to learn" (another pick-chip list).
+  One form, one `updateProfile` Server Action, partial updates only (unset checkboxes send no
+  value, so only what's actually ticked is sent — matching the backend's own
+  only-apply-non-null-fields update). Reads/writes `GET`/`PUT /api/users/me/profile`.
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
@@ -134,7 +142,15 @@ load) — not the reference's fixed sample numbers.
   sample insight copy, which this app has no Phase-4-level pattern logic to honestly produce
   yet. The hillside teaser card links to `/hillside` with a generic invite, not a personalized
   claim, since there's no logged-in "you" to compute a real one for without the Next.js
-  session.
+  session. Phase 10: "The staff" card also shows an analogy box when a session exists, the
+  signed-in user's Profile has `analogiesEnabled` on and at least one interest set, and a topic
+  exists to explain — `POST /analogy` (intelligence service) called with
+  `{topic: suggestion.topic.name, interest: profile.interests[0]}`, the result rendered as the
+  analogy sentence, the plain definition, and a line naming which interest it came from plus a
+  link to Profile to turn it off. A failed or unconfigured call (`.catch(() => null)`, same
+  pattern `submitReadingNote` already uses for the assessment call) just means no analogy box,
+  never a page crash — verified live against the real Anthropic API, which failed on the same
+  account-billing issue Phase 7's reading-note assessment already hit, caught cleanly.
 - **Tally** (`app/tally`) renders the intelligence service's `/tally` output (tally stick,
   stat tiles, `GoalHoursChart`, per-routine meters) plus `/patterns`'s skip-heavy days and
   topic/routine correlation. The tally stick is grouped in fives (`<div>` per group of notch
@@ -175,6 +191,12 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-19 | `Shell`'s sidebar no longer shows the signed-in email + "Sign out" row; the sidebar's only account-related control is the Profile link (avatar + "Profile"), and "Sign out" moved onto `/profile` itself | User flagged that the email/sign-out row no longer matched the design reference's sidebar, which only ever shows the avatar/name "Profile" link (`docs/design-reference/pages/profile.html`'s `.sidefoot`/nav). Signing out is now a real action on the one page that's about the account, not a second place doing the same job the sidebar used to |
+| 2026-10-18 | Profile is its own page/route with a real `GET /api/users/me/profile` fetch, not folded into the existing `me` fetch `RootLayout` already does for the sidebar | The sidebar's existing `fetchShellContext()` call is on every single page load and only needs `email`/`hillsideOptIn`; adding a second backend round trip there for data only the Profile page itself uses would slow down every page for a fetch 99% of page loads never use |
+| 2026-10-18 | Interest/learning-preference pick-chips are real `<input type="checkbox">` elements styled via a CSS `:has()` selector (`.pick label:has(input:checked)`), not client-side state | Matches this app's established server-rendered-everything pattern (no client component, no `useState`) — the same reasoning the hillside's `.switch` and every segmented control already follow. `:has()` is supported in every browser this app already targets (the design reference's own pages assume a similarly modern baseline) |
+| 2026-10-18 | The "Explain it my way" switch uses a new `.toggle-track` CSS class, not the hillside's existing `.switch` | `.switch` toggles on a server-set `aria-checked` attribute (correct for a Link/form-submit toggle like the hillside's opt-in); Profile's switch is one field inside a larger form submitted all at once, so it needs to reflect the checkbox's own live `:checked` state via Tailwind's `peer` selector instead — a different mechanism for a different kind of toggle, not a style choice |
+| 2026-10-18 | Today's analogy box uses the first interest in the user's list (`profile.interests[0]`), not a selector to choose among several like the design reference's own in-page "explain through: Football / Philosophy / Skating" switcher | The task's explicit wiring instruction was "the Today staff card shows the analogy line," not a full interactive switcher; the reference's own switcher lives on the Profile page's preview section, which this app didn't build since nothing in the task asked for a second, duplicate live-preview surface beyond Today's own card |
+| 2026-10-18 | `intelligence-service/Dockerfile`'s explicit `COPY main.py suggestion.py ... assess_note.py` list needed `analogy.py` added by hand | Found via live Docker verification: the container crash-looped with `ModuleNotFoundError: No module named 'analogy'` even though the file existed in the repo and all tests passed locally, because the Dockerfile copies named files, not the whole directory. Fixed and re-verified the container actually starts, not just that the code imports locally |
 | 2026-10-18 | Phase 9: `/hillside` rebuilt entirely for the credit-based hillside v2, replacing Phase 8's days-shown-up version in place (same route, same file) | The design reference's `hillside.html` fully replaces the old layout — season/band/returns/ledger are a different feature, not an addition alongside the old one. Phase 8's backend `GET /api/hillside`, `HillsideService`, and their tests are deliberately left in place, just no longer called from this page — see `backend.md`'s open questions for the cleanup this leaves open |
 | 2026-10-18 | The goal segmented control lists each signed-in user's own real goals (`GET /api/goals?userId=`), not the reference's fixed "Coding/Reading/Learning/Writing/Movement" category buttons | Same precedent as every other page in this app showing real data instead of the reference's sample copy; this app's real goals are milestone-style (`cmu-masters-application`), not activity categories, so inventing fixed category buttons would misrepresent what a credit is actually for here |
 | 2026-10-18 | The hide/show control is a real `.switch` (role="switch", `aria-checked`), not a text link | The design reference shows this as a prominent toggle, not a link; copied `.switch`'s CSS from the reference's own `phone-hillside.html` stylesheet almost verbatim — its on-state green already matched this app's existing `--tended-ink` token exactly, so no new colour was needed. Still a plain `<form>`-submitted `<button type="submit">`, no client JS, same server-rendered pattern every other toggle in this app uses |
@@ -248,6 +270,16 @@ departure from precedent.
 
 ## Open questions
 
+- Profile's "Export my data"/"Delete my account" buttons from the design reference weren't
+  built — no backend endpoint exists for either, explicitly out of this phase's scope (see
+  `backend.md`'s open questions).
+- Profile isn't reachable from the phone tab bar at all (it's sidebar/desktop-only in the
+  reference too — "Profile under the main items" per the design reference's own nav notes —
+  but there's no phone entry point either, same kind of gap as Flock/Watering holes below).
+- The design reference's Profile page shows a live in-page analogy preview with its own
+  interest switcher ("Today's topic: X, explained through Football/Philosophy/Skating"); this
+  app only wires the analogy into Today's own staff card, not a second duplicate preview on
+  Profile — see the decisions log on why.
 - The phone tab bar still lists Today/Path/Reading/Tally/Hillside, not the updated design
   reference's Today/Reading/Granary/Tally/Hillside (Path moved off, opening from Today
   instead). Not changed this phase: Granary doesn't exist yet (Phase 11), and the "Path opens

@@ -162,3 +162,41 @@ export async function questionCredit(formData: FormData): Promise<void> {
   await backendFetch(`/api/evidence-events/${eventId}/question`, { method: "PATCH" });
   revalidatePath("/hillside");
 }
+
+function splitCommaList(value: FormDataEntryValue | null): string[] {
+  if (typeof value !== "string" || value.trim() === "") return [];
+  return value.split(",").map((v) => v.trim()).filter((v) => v.length > 0);
+}
+
+// Phase 10's Profile page. Interests/learning preferences are checkboxes (a fixed set, same
+// toggle-chip look as the design reference) plus a free-text "add your own" field merged in;
+// thinkers is free text only, since the reference shows it as a single text input, not a pick
+// list. See docs/product-direction.md's Profile section.
+export async function updateProfile(formData: FormData): Promise<void> {
+  const token = await getSessionToken();
+  if (!token) return;
+
+  const interests = [...formData.getAll("interests").map(String), ...splitCommaList(formData.get("customInterests"))];
+  const learningPreferences = formData.getAll("learningPreferences").map(String);
+  const thinkers = splitCommaList(formData.get("thinkers"));
+  const currency = formData.get("currency");
+  const timeZone = formData.get("timeZone");
+  const dayEndHour = formData.get("dayEndHour");
+  const analogiesEnabled = formData.get("analogiesEnabled") === "on";
+
+  await authenticatedBackendFetch("/api/users/me/profile", token, {
+    method: "PUT",
+    body: JSON.stringify({
+      interests,
+      thinkers,
+      learningPreferences,
+      currency: typeof currency === "string" && currency.trim() !== "" ? currency.trim() : null,
+      timeZone: typeof timeZone === "string" && timeZone.trim() !== "" ? timeZone.trim() : null,
+      dayEndHour: typeof dayEndHour === "string" && dayEndHour !== "" ? Number(dayEndHour) : null,
+      analogiesEnabled,
+    }),
+  });
+
+  revalidatePath("/profile");
+  revalidatePath("/today");
+}

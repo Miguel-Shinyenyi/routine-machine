@@ -256,3 +256,71 @@ body {
 .switch[aria-checked="true"]::after {
   transform: translateX(20px);
 }
+
+/* Phase 10: Profile's interest/learning-preference chip pickers, copied from the design
+   reference's own .pick rule (docs/design-reference/pages/base.css). Built from real
+   checkboxes (:has() toggles the look), not client JS, matching this app's server-rendered
+   toggle pattern everywhere else. */
+.pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pick label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--field-edge);
+  background: var(--surface);
+  border-radius: 980px;
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.pick label:has(input:checked) {
+  background: var(--tint-fill);
+  border-color: var(--tint);
+  color: var(--tint-text);
+  font-weight: 600;
+}
+.pick input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+/* Same look as .switch, driven by a real checkbox's :checked state (via Tailwind's `peer`)
+   instead of a server-set aria-checked attribute — for in-page toggles with no form
+   submission of their own, like Profile's "use my interests" switch. */
+.toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 51px;
+  height: 31px;
+  flex: none;
+  border-radius: 980px;
+  background: var(--fill);
+  transition: background 0.15s ease;
+}
+.toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+}
+.peer:checked ~ .toggle-track {
+  background: var(--tended-ink);
+}
+.peer:checked ~ .toggle-track::after {
+  transform: translateX(20px);
+}

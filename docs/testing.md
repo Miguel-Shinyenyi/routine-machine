@@ -141,6 +141,20 @@ no rule present, an unknown user 400s, the ledger lists every event in a window 
 status, questioning a credit records the request, and `/api/hillside/v2` returns a real
 band/rank for an explicit season and no personal band for a user with no credits yet. 193
 backend tests, all passing (171 plus 22 new for Phase 9).
+`EvidenceCreditServiceTest` gained two Phase 10 cases: evidence just before the user's
+configured `dayEndHour` still counts for the previous calendar day, and evidence at or after
+it counts for the new one. `UserControllerApiIntegrationTest` covers `GET`/
+`PUT /api/users/me/profile`: a new user gets the documented defaults (`dayEndHour: 0`,
+`timeZone: "UTC"`, `analogiesEnabled: true`), updating sends only the fields that changed and
+leaves the rest alone (two sequential `PUT`s, the second touching only `analogiesEnabled`,
+confirms `interests` from the first call survived), an out-of-range `dayEndHour` (24) 400s, and
+both endpoints 401 with no token. `HillsideV2ApiIntegrationTest.profileDataNeverAppearsInTheHillsideResponse`
+is Phase 10's explicit "write a test that proves it" privacy requirement: sets distinctive
+marker strings on every profile field, calls `GET /api/hillside/v2`, and asserts none of the
+markers appear anywhere in the raw response body — not just that the response type doesn't
+name those fields, which would be true by construction and wouldn't actually catch a future
+regression that accidentally serialized the whole `User`. 200 backend tests, all passing (193
+plus 7 new for Phase 10).
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
@@ -167,6 +181,16 @@ the filter were removed, not just return extra rows.
 `since_start` option: a deliberately tiny `window_days` is passed alongside `since_start=True`
 to prove it's ignored once set, and the no-logs case confirms the window still has a sane
 (single-day) fallback rather than exploding. 47 tests, all passing.
+Phase 10's `/analogy` gets the same pure-function/route split: `analogy.parse_analogy_response`
+(`test_analogy.py`, 7 cases: a well-formed response, stray prose tolerated, each required field
+missing in turn, no JSON object at all, malformed JSON, and the user-message builder names both
+the topic and the interest) and `POST /analogy` itself tested with `TestClient`/`respx`: a
+successful call, cached per `(topic, interest)` case-insensitively and whitespace-trimmed
+(asserts the mocked Anthropic route was hit exactly once across three calls, two of them
+differently-cased/spaced versions of the same pairing), no API key configured (503), and
+Anthropic responding with unparseable content (502). One of these was also verified against the
+real Anthropic API during manual testing, the same account-billing error `/reading-notes/assess`
+already hit in Phase 7, caught cleanly as a 502 rather than a crash. 58 tests, all passing.
 
 Frontend: Vitest, for pure logic only — `lib/schedule.ts` (which templates still need a task,
 a date's weekday independent of server timezone), `lib/formatDate.ts` and `lib/weekDates.ts`
@@ -181,7 +205,9 @@ lower, or tied against other days), and `lib/auth/jwt.ts` (`signSessionToken`/
 signed with the wrong secret, a tampered payload, and garbage input) — 29 tests total (Phase 9
 added no new pure-logic module: `seasonNumber` and `evidenceDescription` in `/hillside`'s page
 are small presentational helpers, same tier as the already-untested `formatDay` in the same
-file, not isolated business logic). `submitReadingNote` stays untested as a unit, since it's
+file, not isolated business logic; Phase 10 added no new pure-logic module either — `/profile`
+and Today's analogy wiring are both plain data-fetch-and-render, verified live instead, same
+as every other page). `submitReadingNote` stays untested as a unit, since it's
 a sequence of two external calls, not a pure function worth isolating. Page components are
 verified by running the app and clicking through the views and the full materialize → start
 → done flow in a browser instead, matching settlement-engine's frontend, which has no
@@ -205,7 +231,17 @@ and questioning a credit (confirmed it persists across a reload) all checked in 
 `docs/design-reference/compare.mjs` run against `/hillside` and `/hillside` @390 — the
 comparison surfaced three real structural gaps (no season number, the hide control was a text
 link instead of the reference's toggle switch, the ledger was missing its Evidence/Credit
-columns), fixed and re-compared before reporting.
+columns), fixed and re-compared before reporting. Phase 10's Profile page and Today's analogy
+wiring were verified live via Docker Compose: signed in, toggled an interest chip and set a
+time zone on Profile, saved, confirmed both persisted on reload; confirmed Today's staff card
+reaches the real `/analogy` endpoint (visible in the intelligence service's own logs and via a
+direct `curl`) without crashing the page when the call fails — which it did, on the same
+account-billing issue already documented for `/reading-notes/assess`. This surfaced a real
+deployment bug, not a logic bug: the intelligence service's Docker image crash-looped with
+`ModuleNotFoundError: No module named 'analogy'` because its `Dockerfile` copies an explicit
+file list that `analogy.py` hadn't been added to — caught by the live verification step, not by
+`pytest` (which runs against the real filesystem, not the built image), fixed, and the
+container confirmed actually starting before reporting.
 
 ## Decisions log
 

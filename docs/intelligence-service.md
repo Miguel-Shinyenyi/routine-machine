@@ -80,10 +80,27 @@ handed to it, it doesn't persist anything), the named ratio threshold that decid
 note counts toward the reading goal, and any wiring from this endpoint into `/tally`'s
 goal-hours rollup.
 
+Phase 10 added `POST /analogy`: given `{topic, interest}`, explains the topic through that
+one interest, then the precise technical definition — per `docs/product-direction.md`'s
+Profile section ("the analogy comes first, then the precise definition... labelled as an
+analogy, never as a source of truth"). Same pattern as `/reading-notes/assess`: a system
+prompt instructing JSON-only output, `analogy.parse_analogy_response` (pure function,
+`analogy.py`) extracting and validating it, `ANTHROPIC_API_KEY` missing returns 503, an
+Anthropic-side error is caught and returned as 502. Response includes `label: "analogy"`
+explicitly, so a caller never has to infer it's not the literal truth. Cached per
+`(topic.strip().lower(), interest.strip().lower())` in a process-lifetime in-memory dict
+(`_ANALOGY_CACHE`) — the same pairing is never billed or waited on twice; verified with a real
+Anthropic call during this phase's manual testing that reached the real API with a well-formed
+request and got a real account-billing error back, handled as a clean 502 rather than a crash,
+the same billing issue `/reading-notes/assess` already hit during Phase 7's own verification
+(see `testing.md`).
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-18 | `/analogy`'s cache is a plain process-lifetime `dict`, not persisted to the backend or any external store | The result is fully reproducible from its own inputs (same topic, same interest → deterministic enough a prompt not to need the exact same wording stored); nothing is lost on a restart that matters, and adding storage for a cache would need its own invalidation story for no real benefit at this service's current scale |
+| 2026-10-18 | The cache key normalises case and surrounding whitespace (`.strip().lower()`) | "idempotency keys"/"Idempotency Keys"/" idempotency keys " typed on different occasions should hit the same cache entry; without normalising, a trivial difference in how the frontend or a future caller phrases the same request would silently double the API calls and the cost |
 | 2026-10-18 | `compute_tally` gained `since_start: bool`, windowing from the earliest real log date instead of `today - window_days` | Tally's reference design has a "Since the start" toggle; a first attempt faked it from the frontend with a very large fixed `windowDays` (years), which made `days_shown_up` generate one entry per day back to a date nothing ever happened — thousands of meaningless notches. Computing the real earliest log date in `tally.py` itself is the honest version of what "since the start" means. 2 new tests |
 | 2026-10-17 | `/suggestion`, `/patterns`, and `/tally` each filter the backend's goals/routine-items/daily-logs to `userId is None` (a private `_unowned()` helper in `main.py`) before computing anything | This service has no "current user" concept — it has always computed for the one single-user world (see `backend.md`'s decisions log). Phase 8's hillside demo users each have their own goals/routine items/daily logs now; without this filter, their data silently mixed into every suggestion/pattern/tally computation, found via the design-reference comparison (Tally's per-routine meters listed every demo user's own items). Regression test: `test_suggestion_ignores_goals_and_logs_owned_by_a_hillside_demo_user` |
 | 2026-10-17 | `POST /reading-notes/assess` calls Anthropic's API directly with `httpx`, not the `anthropic` Python SDK | Matches every other external call this service already makes (backend reads, and now Anthropic) — one HTTP client pattern, one dependency surface, no new SDK to track for a single endpoint |
@@ -102,6 +119,9 @@ goal-hours rollup.
 
 ## Open questions
 
+- `/analogy`'s cache is process-lifetime only and not shared across replicas — fine for this
+  service's current single-instance deployment, but would need a real shared cache (Redis or
+  similar) if this service ever runs more than one instance.
 - The named ratio threshold that decides whether a reader's note counts toward the reading
   goal (per PROJECT.md's Phase 7 description) isn't decided yet; needs its own pass once
   note storage and the goal-hours rollup are being built, not guessed at alongside the

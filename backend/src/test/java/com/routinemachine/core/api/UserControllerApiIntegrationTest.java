@@ -101,6 +101,63 @@ class UserControllerApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void gettingTheProfileReturnsDefaultsForANewUser() throws Exception {
+        User user = userRepository.save(new User("profile-defaults@example.com", "irrelevant-hash", null, null));
+
+        mockMvc.perform(get("/api/users/me/profile")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dayEndHour", is(0)))
+                .andExpect(jsonPath("$.timeZone", is("UTC")))
+                .andExpect(jsonPath("$.analogiesEnabled", is(true)));
+    }
+
+    @Test
+    void updatingTheProfileChangesOnlyTheFieldsSent() throws Exception {
+        User user = userRepository.save(new User("profile-update@example.com", "irrelevant-hash", null, null));
+
+        mockMvc.perform(put("/api/users/me/profile")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"interests\": [\"football\", \"philosophy\"], \"dayEndHour\": 3, "
+                                + "\"timeZone\": \"Africa/Nairobi\", \"currency\": \"KES\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interests[0]", is("football")))
+                .andExpect(jsonPath("$.dayEndHour", is(3)))
+                .andExpect(jsonPath("$.timeZone", is("Africa/Nairobi")))
+                .andExpect(jsonPath("$.currency", is("KES")))
+                .andExpect(jsonPath("$.analogiesEnabled", is(true)));
+
+        mockMvc.perform(put("/api/users/me/profile")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"analogiesEnabled\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interests[0]", is("football")))
+                .andExpect(jsonPath("$.analogiesEnabled", is(false)));
+    }
+
+    @Test
+    void anOutOfRangeDayEndHourIsRejected() throws Exception {
+        User user = userRepository.save(new User("profile-bad-hour@example.com", "irrelevant-hash", null, null));
+
+        mockMvc.perform(put("/api/users/me/profile")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dayEndHour\": 24}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void theProfileEndpointsRequireAValidToken() throws Exception {
+        mockMvc.perform(get("/api/users/me/profile")).andExpect(status().isUnauthorized());
+        mockMvc.perform(put("/api/users/me/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void aMissingTokenIsRejected() throws Exception {
         mockMvc.perform(get("/api/users/me"))
                 .andExpect(status().isUnauthorized());

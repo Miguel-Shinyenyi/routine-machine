@@ -229,6 +229,26 @@ export interface HillsideV2 {
 
 export type EvidenceStatus = "ACCEPTED" | "REJECTED" | "PENDING" | "SELF_REPORTED";
 
+// Phase 10: profile data. Never fetched from or sent to anything cohort-/admin-facing — see
+// docs/backend.md's decisions log.
+export interface Profile {
+  interests: string[] | null;
+  thinkers: string[] | null;
+  learningPreferences: string[] | null;
+  currency: string | null;
+  dayEndHour: number;
+  timeZone: string;
+  analogiesEnabled: boolean;
+}
+
+export interface AnalogyResponse {
+  topic: string;
+  interest: string;
+  analogy: string;
+  definition: string;
+  label: string;
+}
+
 export interface EvidenceEvent {
   id: number;
   userId: number;
