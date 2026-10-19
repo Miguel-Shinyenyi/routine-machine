@@ -199,6 +199,46 @@ detail at all, and the uploaded statement PDF is never written to disk, let alon
 Re-importing the same month's statement upserts (replaces) that month's totals rather than
 adding a second set of rows. Also not referenced by anything hillside- or cohort-facing.
 
+Phase 12 part 1 built via `V24__organisations_and_cohorts.sql`:
+- `organisations(id, name, created_at)`.
+- `organisation_admins(id, organisation_id references organisations, user_id references
+  users, created_at)`, unique on `(organisation_id, user_id)`. Who administers an
+  organisation, and therefore every cohort under it — see `backend.md` for why this is
+  organisation-scoped, not cohort-scoped.
+- `cohorts(id, organisation_id references organisations, name, starts_on, weeks,
+  created_at)`.
+- `cohort_memberships(id, cohort_id references cohorts, user_id references users,
+  joined_at)`, unique on `(cohort_id, user_id)`. A learner's seat in one cohort.
+
+Phase 12 part 2 built via `V25__cohort_invites_and_seats.sql` (flagged to the user and
+confirmed before building — see `backend.md`'s decisions log):
+- `organisations.seat_limit` added, nullable integer, null meaning unlimited.
+- `cohort_invites(id, cohort_id references cohorts, email, created_at)`, unique on
+  `(cohort_id, email)`. A reserved seat for an email with no account yet — fulfilled (turned
+  into a `cohort_memberships` row, then deleted) the moment that email registers. There's no
+  outbound email infrastructure in this app, so this table represents a reservation, not a
+  record that mail was sent.
+
+Phase 12 part 3 built via `V26__cohort_survey_responses.sql` (flagged to the user and
+confirmed before building — see `backend.md`'s decisions log):
+- `cohort_survey_responses(id, cohort_id references cohorts, user_id references users,
+  answer, created_at)`, unique on `(cohort_id, user_id)`. One learner's answer to the pilot's
+  "did this feel supportive, neutral, or pressuring?" question — resubmitting replaces it.
+
+Phase 12 part 4 built via `V27__cohort_study_groups.sql`:
+- `cohort_memberships.study_group` and `cohort_invites.study_group` added, both nullable
+  `VARCHAR(255)`. Set via the CSV's optional second column (`email,group`); a member with no
+  group just doesn't appear in the "by study group" breakdown.
+
+None of these six tables (plus the two new columns) are read by `HillsideV2Service`/
+`GranaryService` or vice versa — the three modules are simply uncoupled so far, nothing yet
+requires the marker-string privacy test Phase 10/11 needed. `CohortDashboardService` does
+read `Goal` and `DailyLog` directly (what counts as "checked in," by the user's own explicit
+choice — see `backend.md`), but those two tables aren't hillside- or granary-private, so this
+doesn't cross the boundary either. That test becomes necessary once a later Phase 12 part
+surfaces anything from `savings`/`pause_decisions`/`mpesa_category_totals`/`daily_credits` on
+a cohort response.
+
 ## Decisions log
 
 | Date | Decision | Reason |

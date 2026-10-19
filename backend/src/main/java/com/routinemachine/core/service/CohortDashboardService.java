@@ -1,0 +1,249 @@
+package com.routinemachine.core.service;
+
+import com.routinemachine.core.domain.Cohort;
+import com.routinemachine.core.domain.CohortMembership;
+import com.routinemachine.core.domain.CohortSurveyAnswer;
+import com.routinemachine.core.domain.CohortSurveyResponse;
+import com.routinemachine.core.domain.DailyLog;
+import com.routinemachine.core.domain.Goal;
+import com.routinemachine.core.repository.CohortMembershipRepository;
+import com.routinemachine.core.repository.CohortRepository;
+import com.routinemachine.core.repository.CohortSurveyResponseRepository;
+import com.routinemachine.core.repository.DailyLogRepository;
+import com.routinemachine.core.repository.GoalRepository;
+import com.routinemachine.core.repository.OrganisationAdminRepository;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
+
+// Phase 12 part 3 (docs/product-direction.md's cohort dashboard): the four decided pilot
+// measures, each with its own denominator — never a bare percentage. "Checked in" is any
+// DailyLog, same thing Today already tracks for every user; it deliberately does not require
+// hillside opt-in, since cohort participation and the hillside are separate concerns (see
+// docs/backend.md's decisions log for why). Part 4 adds the "by study group" breakdown with
+// small-groups-hidden. The weekly check-in chart and the frontend are later parts.
+@Service
+public class CohortDashboardService {
+
+    private final CohortRepository cohortRepository;
+    private final CohortMembershipRepository cohortMembershipRepository;
+    private final OrganisationAdminRepository organisationAdminRepository;
+    private final GoalRepository goalRepository;
+    private final DailyLogRepository dailyLogRepository;
+    private final CohortSurveyResponseRepository cohortSurveyResponseRepository;
+
+    public CohortDashboardService(
+            CohortRepository cohortRepository,
+            CohortMembershipRepository cohortMembershipRepository,
+            OrganisationAdminRepository organisationAdminRepository,
+            GoalRepository goalRepository,
+            DailyLogRepository dailyLogRepository,
+            CohortSurveyResponseRepository cohortSurveyResponseRepository) {
+        this.cohortRepository = cohortRepository;
+        this.cohortMembershipRepository = cohortMembershipRepository;
+        this.organisationAdminRepository = organisationAdminRepository;
+        this.goalRepository = goalRepository;
+        this.dailyLogRepository = dailyLogRepository;
+        this.cohortSurveyResponseRepository = cohortSurveyResponseRepository;
+    }
+
+    public CohortDashboardSummary summarize(Long cohortId, Long requestingUserId, LocalDate today) {
+        Cohort cohort = findCohort(cohortId);
+        requireParticipant(cohort, requestingUserId);
+
+        List<CohortMembership> members = cohortMembershipRepository.findByCohortId(cohortId);
+        List<CohortMembership> activated = members.stream().filter(m -> isActivated(m, today)).toList();
+
+        int checkedInThisWeek = (int) activated.stream().filter(m -> checkedInCurrentWeek(cohort, m, today)).count();
+
+        int missedADay = 0;
+        int returnedWithinSevenDays = 0;
+        for (CohortMembership member : activated) {
+            ReturnClassification classification = classifyReturn(member, today);
+            if (classification.missedADay()) {
+                missedADay++;
+                if (classification.returnedWithinSevenDays()) {
+                    returnedWithinSevenDays++;
+                }
+            }
+        }
+
+        List<CohortSurveyResponse> responses = cohortSurveyResponseRepository.findByCohortId(cohortId);
+        int supportive = (int) responses.stream().filter(r -> r.getAnswer() == CohortSurveyAnswer.SUPPORTIVE).count();
+        int neutral = (int) responses.stream().filter(r -> r.getAnswer() == CohortSurveyAnswer.NEUTRAL).count();
+        int pressuring = (int) responses.stream().filter(r -> r.getAnswer() == CohortSurveyAnswer.PRESSURING).count();
+
+        return new CohortDashboardSummary(
+                new CohortMeasure(activated.size(), members.size()),
+                new CohortMeasure(checkedInThisWeek, activated.size()),
+                new CohortMeasure(returnedWithinSevenDays, missedADay),
+                new CohortMeasure(supportive, responses.size()),
+                neutral,
+                pressuring);
+    }
+
+    // "Small groups stay hidden": a group under 5 members shows its member count but no
+    // rates, so no one can be picked out from a near-individual denominator
+    // (docs/product-direction.md). Unlike the cohort-wide measures above, these denominators
+    // are every member of the group, not just activated ones — matching the design
+    // reference's own "12 of 14" where 14 is the group's total headcount.
+    public List<CohortGroupMeasure> summarizeByGroup(Long cohortId, Long requestingUserId, LocalDate today) {
+        Cohort cohort = findCohort(cohortId);
+        requireParticipant(cohort, requestingUserId);
+
+        Map<String, List<CohortMembership>> byGroup = cohortMembershipRepository.findByCohortId(cohortId).stream()
+                .filter(member -> member.getStudyGroup() != null)
+                .collect(Collectors.groupingBy(CohortMembership::getStudyGroup, LinkedHashMap::new, Collectors.toList()));
+
+        List<CohortGroupMeasure> result = new ArrayList<>();
+        for (Map.Entry<String, List<CohortMembership>> entry : byGroup.entrySet()) {
+            List<CohortMembership> groupMembers = entry.getValue();
+            if (groupMembers.size() < 5) {
+                result.add(new CohortGroupMeasure(entry.getKey(), groupMembers.size(), true, null, null));
+                continue;
+            }
+
+            int checkedIn = (int) groupMembers.stream().filter(member -> checkedInCurrentWeek(cohort, member, today)).count();
+            int missedADay = 0;
+            int returnedWithinSevenDays = 0;
+            for (CohortMembership member : groupMembers) {
+                ReturnClassification classification = classifyReturn(member, today);
+                if (classification.missedADay()) {
+                    missedADay++;
+                    if (classification.returnedWithinSevenDays()) {
+                        returnedWithinSevenDays++;
+                    }
+                }
+            }
+            result.add(new CohortGroupMeasure(
+                    entry.getKey(), groupMembers.size(), false,
+                    new CohortMeasure(checkedIn, groupMembers.size()),
+                    new CohortMeasure(returnedWithinSevenDays, missedADay)));
+        }
+        return result;
+    }
+
+    // The "weekly check-ins" bar chart (docs/design-reference's cohort.html): one bar per week
+    // of the cohort's stated pilot length (Cohort.weeks), a shared "of N activated"
+    // denominator across every bar rather than a denominator per week, and null (not zero)
+    // for a week that hasn't started yet.
+    public CohortWeeklyCheckInChart weeklyCheckIns(Long cohortId, Long requestingUserId, LocalDate today) {
+        Cohort cohort = findCohort(cohortId);
+        requireParticipant(cohort, requestingUserId);
+
+        List<CohortMembership> activated = cohortMembershipRepository.findByCohortId(cohortId).stream()
+                .filter(member -> isActivated(member, today))
+                .toList();
+
+        long currentWeekIndex = Math.max(0, ChronoUnit.DAYS.between(cohort.getStartsOn(), today) / 7);
+
+        List<CohortWeeklyCheckIn> weeks = new ArrayList<>();
+        for (int week = 1; week <= cohort.getWeeks(); week++) {
+            LocalDate weekStart = cohort.getStartsOn().plusDays((long) (week - 1) * 7);
+            LocalDate weekEnd = weekStart.plusDays(6);
+            boolean isFuture = weekStart.isAfter(today);
+            boolean isCurrentWeek = !isFuture && week - 1 == currentWeekIndex;
+            Integer checkedIn = isFuture
+                    ? null
+                    : (int) activated.stream()
+                            .filter(member -> hasLogBetween(member.getUserId(), weekStart, weekEnd))
+                            .count();
+            weeks.add(new CohortWeeklyCheckIn(week, checkedIn, isCurrentWeek, isFuture));
+        }
+        return new CohortWeeklyCheckInChart(activated.size(), weeks);
+    }
+
+    public CohortSurveyResponse submitSurveyResponse(Long cohortId, Long requestingUserId, CohortSurveyAnswer answer) {
+        findCohort(cohortId);
+        if (!cohortMembershipRepository.existsByCohortIdAndUserId(cohortId, requestingUserId)) {
+            throw new NotACohortParticipantException(
+                    "User " + requestingUserId + " is not a member of cohort " + cohortId);
+        }
+        return cohortSurveyResponseRepository.findByCohortIdAndUserId(cohortId, requestingUserId)
+                .map(existing -> {
+                    existing.changeAnswer(answer);
+                    return cohortSurveyResponseRepository.save(existing);
+                })
+                .orElseGet(() -> cohortSurveyResponseRepository.save(new CohortSurveyResponse(cohortId, requestingUserId, answer)));
+    }
+
+    // "Set a goal and checked in once" within the first 7 days of joining
+    // (docs/product-direction.md). Doesn't require the full 7-day window to have elapsed yet
+    // — a member who does both on day one is activated immediately, not made to wait.
+    private boolean isActivated(CohortMembership member, LocalDate today) {
+        LocalDate joinedDate = member.getJoinedAt().toLocalDate();
+        LocalDate windowEnd = joinedDate.plusDays(7);
+        boolean hasGoal = goalRepository.findByUserId(member.getUserId()).stream()
+                .anyMatch(goal -> withinWindow(goal.getCreatedAt().toLocalDate(), joinedDate, windowEnd));
+        boolean hasLog = dailyLogRepository.findByUserId(member.getUserId()).stream()
+                .anyMatch(log -> withinWindow(log.getLogDate(), joinedDate, windowEnd));
+        return hasGoal && hasLog;
+    }
+
+    private boolean checkedInCurrentWeek(Cohort cohort, CohortMembership member, LocalDate today) {
+        long daysSinceStart = Math.max(0, ChronoUnit.DAYS.between(cohort.getStartsOn(), today));
+        LocalDate weekStart = cohort.getStartsOn().plusDays((daysSinceStart / 7) * 7);
+        LocalDate weekEnd = weekStart.plusDays(6);
+        return hasLogBetween(member.getUserId(), weekStart, weekEnd);
+    }
+
+    private boolean hasLogBetween(Long userId, LocalDate start, LocalDate end) {
+        return dailyLogRepository.findByUserId(userId).stream()
+                .anyMatch(log -> withinWindow(log.getLogDate(), start, end));
+    }
+
+    // A first-cut definition, not the same algorithm as HillsideV2Service.countReturns (which
+    // counts every return across a season from the hillside credit pipeline): here, "missed a
+    // day" means this member's logged dates (since joining, up to today) have at least one gap
+    // of a full un-logged day; "returned within seven days" means the next log after that gap
+    // came within 7 days of it. Only the first gap is examined, for simplicity.
+    private ReturnClassification classifyReturn(CohortMembership member, LocalDate today) {
+        LocalDate joinedDate = member.getJoinedAt().toLocalDate();
+        List<LocalDate> logDates = dailyLogRepository.findByUserId(member.getUserId()).stream()
+                .map(DailyLog::getLogDate)
+                .filter(date -> !date.isBefore(joinedDate) && !date.isAfter(today))
+                .distinct()
+                .sorted()
+                .toList();
+
+        for (int i = 0; i < logDates.size() - 1; i++) {
+            LocalDate current = logDates.get(i);
+            LocalDate next = logDates.get(i + 1);
+            long gapDays = ChronoUnit.DAYS.between(current, next);
+            if (gapDays > 1) {
+                LocalDate missedDate = current.plusDays(1);
+                boolean returnedWithinSeven = ChronoUnit.DAYS.between(missedDate, next) <= 7;
+                return new ReturnClassification(true, returnedWithinSeven);
+            }
+        }
+        return new ReturnClassification(false, false);
+    }
+
+    private record ReturnClassification(boolean missedADay, boolean returnedWithinSevenDays) {
+    }
+
+    private boolean withinWindow(LocalDate date, LocalDate start, LocalDate end) {
+        return !date.isBefore(start) && !date.isAfter(end);
+    }
+
+    private Cohort findCohort(Long cohortId) {
+        return cohortRepository.findById(cohortId)
+                .orElseThrow(() -> new NoSuchElementException("No cohort with id " + cohortId));
+    }
+
+    private void requireParticipant(Cohort cohort, Long userId) {
+        boolean isAdmin = organisationAdminRepository.existsByOrganisationIdAndUserId(cohort.getOrganisationId(), userId);
+        boolean isMember = cohortMembershipRepository.existsByCohortIdAndUserId(cohort.getId(), userId);
+        if (!isAdmin && !isMember) {
+            throw new NotACohortParticipantException(
+                    "User " + userId + " is neither an admin nor a member of cohort " + cohort.getId());
+        }
+    }
+}

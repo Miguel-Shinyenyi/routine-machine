@@ -2,6 +2,7 @@ package com.routinemachine.core.api;
 
 import com.routinemachine.core.domain.User;
 import com.routinemachine.core.service.AuthService;
+import com.routinemachine.core.service.OrganisationService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -24,10 +25,14 @@ public class AuthController {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final AuthService authService;
+    private final OrganisationService organisationService;
     private final String internalToken;
 
-    public AuthController(AuthService authService, @Value("${auth.internal-token:}") String internalToken) {
+    public AuthController(
+            AuthService authService, OrganisationService organisationService,
+            @Value("${auth.internal-token:}") String internalToken) {
         this.authService = authService;
+        this.organisationService = organisationService;
         this.internalToken = internalToken;
     }
 
@@ -35,6 +40,7 @@ public class AuthController {
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse register(@Valid @RequestBody RegisterRequest request) {
         User user = authService.register(request.email(), request.password());
+        organisationService.fulfillInvitesForNewUser(user);
         return UserResponse.from(user);
     }
 
@@ -56,6 +62,7 @@ public class AuthController {
             @Valid @RequestBody GithubLoginRequest request) {
         requireValidInternalToken(authorizationHeader);
         User user = authService.findOrCreateFromGithub(request.githubId(), request.email(), request.displayName());
+        organisationService.fulfillInvitesForNewUser(user);
         return UserResponse.from(user);
     }
 

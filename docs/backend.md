@@ -540,6 +540,181 @@ written.
   `GranaryApiIntegrationTest` cover the full pipeline end to end, including re-import
   replacing totals and the password-required path.
 
+**Phase 12 part 1: organisations and cohorts, data model.** `OrganisationService` +
+three new tables (migration V24: `organisations`, `organisation_admins`, `cohorts`,
+`cohort_memberships`).
+
+- **Admin is organisation-scoped, not cohort-scoped.** `organisation_admins` is a separate
+  table from `cohort_memberships` on purpose: the design reference's admin view oversees
+  multiple cohorts ("Cohort 14", "Cohort 13") under one organisation header, while a learner's
+  `cohort_memberships` row is a seat in exactly one cohort. There's no "cohort admin" role —
+  only an organisation admin, checked against every cohort under that organisation.
+- **Authorization is a service-layer check, not a JWT-protected endpoint.** `/api/organisations/**`
+  stays `permitAll`, same pattern as `/api/granary/**` — every write takes a
+  `requestingUserId` and `OrganisationService` throws `NotAnOrganisationAdminException`
+  (→ `403`, a new `GlobalExceptionHandler` entry) if that user isn't an admin of the relevant
+  organisation. `createCohort`/`addCohortMember`/`listCohortMembers` all check this before
+  doing anything else.
+- **Adding the same learner to a cohort twice is a no-op, not a duplicate.**
+  `addCohortMember` checks `findByCohortIdAndUserId` first — same idempotent-write shape as
+  `GranaryService.storeSaving` for a day that's already been logged.
+- **New endpoints**: `POST /api/organisations` (creates an org and makes the given user its
+  founding admin in one call), `POST /api/organisations/{id}/cohorts`,
+  `POST /api/organisations/cohorts/{id}/members`, `GET /api/organisations/cohorts/{id}/members`.
+- Tested with `OrganisationServiceTest` (service-layer admin checks, idempotent membership)
+  and `OrganisationApiIntegrationTest` (the full create-org → create-cohort → add-member →
+  list-members flow end to end, plus the 403 path).
+
+**Phase 12 part 2: bulk CSV invites.** Proposed to the user before building (there's no
+outbound email infrastructure in this app, and the spec doesn't say what a "seat" caps or
+what happens for an email with no account yet) and confirmed before any of this was written.
+Migration V25: `organisations.seat_limit` (nullable — null means unlimited) and a new
+`cohort_invites` table.
+
+- **"Invite" means reserving a seat, not sending mail.** `OrganisationService.bulkInviteByCsv`
+  parses the CSV (one email per line, or email-first-column; a literal `email` header line
+  and blank lines are skipped) and, per row: an email with an existing `User` is added to the
+  cohort immediately (`ADDED_IMMEDIATELY`); an unknown email gets a `CohortInvite` reservation
+  (`INVITE_RESERVED`). No actual email is sent to anyone — notifying the invitee is a future
+  integration, not built now.
+- **Invites are fulfilled on registration, not polled for.** `AuthController.register` and
+  `.githubLogin` both call `OrganisationService.fulfillInvitesForNewUser(user)` right after
+  the account is created — every pending `CohortInvite` matching that email (case-insensitive,
+  same as `UserRepository.findByEmailIgnoreCase`) becomes a real `CohortMembership` and the
+  invite row is deleted. Called unconditionally on both paths since it's a safe no-op for a
+  user with no pending invites, rather than threading a "was this a brand-new account" flag
+  through `AuthService`.
+- **Every CSV row gets a reported outcome — `ADDED_IMMEDIATELY`, `INVITE_RESERVED`,
+  `ALREADY_A_MEMBER`, `ALREADY_INVITED`, `SEAT_LIMIT_REACHED`, or `INVALID_EMAIL`.** Nothing
+  is silently dropped from the response, same "fail loudly, never silently wrong" instinct as
+  the M-Pesa statement parser — an admin pasting in a messy list can see exactly what happened
+  to every row, not just a count.
+- **Seats are counted across the whole organisation, not per cohort**, and a batch stops
+  admitting new people once the limit is hit mid-batch (rows after the limit report
+  `SEAT_LIMIT_REACHED`) rather than failing the whole CSV or silently over-admitting.
+- **A real `IllegalStateException`-shaped bug caught by the full test suite, not the new
+  tests themselves**: the first version of `setSeatLimit` mutated the `Organisation` entity
+  without an explicit `organisationRepository.save(organisation)` call. It passed in
+  `OrganisationServiceTest` (a `@DataJpaTest`'s single shared persistence context returns the
+  same mutated in-memory object on a re-fetch) but failed in
+  `OrganisationApiIntegrationTest` (each `MockMvc` request is its own transaction, so the
+  mutation was silently lost) — caught by running the full suite before reporting, same
+  "verify with a real build/system, not memory of one" rule that found Phase 2's lazy-loading
+  bug. Fixed by adding the explicit `save`, matching `GranaryController.setSavingTargetAmount`'s
+  existing precedent for the same shape of write.
+- **New endpoints**: `PUT /api/organisations/{id}/seat-limit`,
+  `POST /api/organisations/cohorts/{id}/bulk-invite` (JSON body with the raw CSV text, not a
+  multipart file upload — a CSV of emails is small enough that the frontend can just read the
+  file client-side and send its text).
+- Tested with `OrganisationServiceTest` (every outcome, the seat-limit-mid-batch case, the
+  non-admin rejection, invite-then-register-fulfills-it) and `OrganisationApiIntegrationTest`
+  (the full bulk-invite → register → membership-appears flow end to end, and the seat-limit
+  cap enforced over a real HTTP request).
+
+**Phase 12 part 3: the cohort dashboard's four pilot measures.** Flagged to the user before
+building — `docs/product-direction.md` references "the operating plan" for exact definitions
+of these measures, but no such document exists in this repo, and the supportive/pressuring
+survey had no capture mechanism at all — and the user chose concrete definitions before any
+of this was written. New `CohortDashboardService`, migration V26 (`cohort_survey_responses`).
+
+- **"Checked in" is any `DailyLog`, the same thing Today already tracks for every user — not
+  the hillside's `daily_credits`.** The user's explicit choice: cohort participation
+  shouldn't require opting into the hillside, which is a separate, unrelated concern (see
+  `docs/database.md`'s decisions log on these two modules staying uncoupled).
+- **Activation** = a member who created ≥1 `Goal` and logged ≥1 `DailyLog`, both dated within
+  7 days of `cohort_memberships.joined_at` — matches the design reference's "set a goal and
+  checked in once." Doesn't require the full 7-day window to have elapsed; a member who does
+  both on day one is activated immediately.
+- **Weekly participation** ("checked in this week") is computed out of activated members only,
+  not the whole cohort, matching the design reference's own "of 34 activated" denominator —
+  the current week is derived from `cohort.startsOn`, not a calendar week.
+- **"Returned after a missed day"** is a first-cut definition, not the same algorithm as
+  `HillsideV2Service.countReturns` (which counts every return across a season from the
+  hillside credit pipeline): per activated member, only the *first* gap in their logged dates
+  since joining is examined — did a full un-logged day occur, and did their next log come
+  within 7 days of it. The denominator is members who had at least one such gap, not the
+  whole cohort — matches the design reference's "11 of 14."
+- **The survey** (`CohortSurveyResponse`, unique per `(cohort_id, user_id)`) lets any cohort
+  member submit one of `SUPPORTIVE`/`NEUTRAL`/`PRESSURING`; resubmitting replaces the answer
+  rather than adding a second row. The denominator for "felt supportive" is total responses
+  received, not total members — matches the design reference's "19 of 23" with the
+  neutral/pressuring counts shown separately, not folded into one percentage.
+- **Viewing the dashboard requires being either an organisation admin or a member of that
+  specific cohort** — "admins see aggregates only, learners can read the same page"
+  (docs/product-direction.md) means learners get read access too, not just admins. A new
+  `NotACohortParticipantException` (→ `403`) is distinct from `NotAnOrganisationAdminException`
+  since the rule here is "admin OR member," not "admin only."
+- **Every measure is a `{count, denominator}` pair, never a bare number or percentage** —
+  "each figure with its denominator" is explicit in `docs/product-direction.md`.
+- Tested with `CohortDashboardServiceTest` (every measure's numerator/denominator, the
+  resubmit-replaces-the-answer case, both access-control branches) and
+  `OrganisationApiIntegrationTest` (the full survey-submit → dashboard-reflects-it flow for a
+  learner, and the 403 for a non-participant).
+
+**Phase 12 part 4: study groups, the "by study group" breakdown, and small-groups-hidden.**
+Migration V27: `cohort_memberships.study_group` and `cohort_invites.study_group`, both
+nullable — a member with no group just doesn't appear in the breakdown.
+
+- **A group is set via the CSV's optional second column** (`email,group`), not a separate
+  endpoint — matches the design reference, where groups are a property of how someone was
+  invited ("Morning group", "Evening group"). `CohortInvite` carries the group through to the
+  `CohortMembership` it eventually becomes, whether the person was added immediately
+  (existing account) or fulfilled later on registration.
+- **`CohortDashboardService.summarizeByGroup`'s denominators are every member of the group,
+  not just activated ones** — deliberately different from the cohort-wide measures above,
+  which denominate by activated members only. This matches the design reference's own
+  "12 of 14" where 14 is the group's whole headcount, not an activated subset.
+- **"Small groups stay hidden"**: a group under 5 members returns its member count but
+  `checkedInThisWeek`/`returnedAfterAMissedDay` are both `null` and `hidden` is `true` — the
+  count itself is shown (so an admin can see the group exists and how big it is) but no rate
+  is computed, so no individual in a near-1:1 denominator can be picked out.
+- **New endpoint**: `GET /api/organisations/cohorts/{id}/dashboard/by-group`.
+- Tested with `OrganisationServiceTest` (the group carried through both the immediate-add and
+  invite-then-register paths), `CohortDashboardServiceTest` (a 5+ group's real rates, a
+  under-5 group hidden but still counted, members with no group excluded entirely), and
+  `OrganisationApiIntegrationTest` (the hidden-group response over a real HTTP request).
+
+**Phase 12 part 5: the weekly check-in chart.** `CohortDashboardService.weeklyCheckIns`, one
+bar per week of `Cohort.weeks` (the pilot's stated length), matching
+`docs/design-reference/pages/cohort.html`'s "Weekly check-ins, eight-week pilot."
+
+- **A single shared denominator across every bar** — `activatedDenominator`, the cohort's
+  current activated-member count — not a denominator recomputed per week, matching the design
+  reference's one caption ("of 34 activated") under the whole chart rather than per bar.
+- **A week that hasn't started yet reports `null`, not `0`.** `checkedIn` only has a real
+  count once the week has actually begun; a future week is a blank/dashed bar in the
+  reference, not a bar claiming zero people checked in during a week that hasn't happened.
+- **The current week is flagged (`isCurrentWeek`) separately from being future or past.**
+  Matches the reference's highlighted "now" bar, distinct styling from both completed weeks
+  and the dashed weeks ahead.
+- **A real test-fragility bug found and fixed while writing this**: `CohortMembership.joinedAt`
+  is DB-generated at insert time (`now()`), not settable from a test — so any test whose
+  activation check depends on `joinedAt` has to use dates anchored to the real wall-clock
+  date, not an arbitrary historical date, or the member silently never activates. The first
+  version of `weeklyCheckInsCountsActivatedMembersWhoLoggedInEachElapsedWeek` used
+  `cohortStart = 2026-09-01` and failed for exactly this reason; fixed by anchoring the test's
+  dates to the real "today" instead, with a comment explaining why, so the same mistake isn't
+  repeated in a later Phase 12 test.
+- **New endpoint**: `GET /api/organisations/cohorts/{id}/dashboard/weekly-check-ins`.
+- Tested with `CohortDashboardServiceTest` (the elapsed-weeks' real counts, future weeks
+  reporting `null`, the current-week flag, the access-control check) and
+  `OrganisationApiIntegrationTest` (the chart's shape over a real HTTP request).
+- **With this, every backend piece of Phase 12's cohort dashboard is built. Only the frontend
+  remains.**
+
+**Frontend built, two real bugs found and fixed live before reporting.** `/cohort/[cohortId]`
+(see `docs/frontend.md`) exercised two endpoints that had never been called by any frontend
+code before:
+
+- `setSeatLimit` and `submitSurveyResponse` both returned a plain `200` with an empty body
+  (ordinary `void`-returning `@PutMapping`/`@PostMapping` methods) instead of `204`. Nothing
+  caught this until the frontend's `request()` helper tried `response.json()` on an empty body
+  and threw `"Unexpected end of JSON input"` — not just the survey form's write, any future
+  caller of either endpoint would have hit the same thing. Fixed with
+  `@ResponseStatus(HttpStatus.NO_CONTENT)` on both `OrganisationController` methods, matching
+  how `request()` already special-cases `204`, rather than loosening the frontend's parsing.
+  `OrganisationApiIntegrationTest`'s assertions updated from `isOk()` to `isNoContent()`.
+
 ## Decisions log
 
 | Date | Decision | Reason |
@@ -549,6 +724,20 @@ written.
 | 2026-10-19 | The PDF's bytes are read into a plain `byte[]` and never touch a file on disk, rather than "save then delete" | A save-then-delete step is one more place a bug, a crash between the two steps, or a forgotten cleanup path could leave the file behind; never writing it in the first place removes that failure mode entirely instead of relying on a delete call always running |
 | 2026-10-19 | `MpesaStatementPasswordRequiredException` is a distinct exception/response type from `MpesaStatementParseException`, both separately caught in `GlobalExceptionHandler` | The two failures need different frontend behaviour (prompt for a password vs. show "couldn't read this, format may have changed") — collapsing them into one generic 400 would make that distinction only inferable from message text, which is fragile compared to a `type` field |
 | 2026-10-19 | Re-importing the same statement month overwrites that month's category totals (an upsert), not a new set of rows alongside the old one | A user re-uploading a statement (a correction, or the same one twice by accident) should get one true set of totals for that month, not two conflicting sets the page would have to somehow reconcile or pick between |
+| 2026-10-19 | Phase 12 built as data-model groundwork only this slice — no CSV invites, no dashboard metrics, no frontend | The full feature (bulk CSV invites, four pilot measures with denominators, weekly check-in history, small-groups-hidden, a frontend admin/learner dashboard) is more than three parts; per the standing rule, only the first (the data model and the admin/learner access rule everything else depends on) is built now |
+| 2026-10-19 | Admin status lives on `organisation_admins`, scoped to the organisation, not to a cohort | The design reference's admin view spans multiple cohorts under one organisation header ("Cohort 14", "Cohort 13" both under the same admin nav); a per-cohort admin role would need to be granted separately for each new cohort an admin creates, which doesn't match "run a programme," not "run one cohort" |
+| 2026-10-19 | "Invite" means reserving a cohort seat via `CohortInvite`, never sending an actual email | Flagged to the user and confirmed before building, same as Phase 11's M-Pesa handling: this app has no outbound email infrastructure at all. Fabricating a "sent" state for mail that was never sent would be worse than being honest that notifying the invitee is a future integration |
+| 2026-10-19 | A CSV bulk invite reports a per-row outcome for every row, never a bare success count | Matches the M-Pesa parser's "fail loudly, never silently wrong" instinct — an admin who pastes in a messy list (typos, existing members, a seat limit reached partway through) needs to see exactly which rows did what, not infer it from a number |
+| 2026-10-19 | `fulfillInvitesForNewUser` is called unconditionally from both `AuthController.register` and `.githubLogin`, not gated on "was this a brand-new account" | It's a safe no-op when there are no pending invites for that email, so there's no need to thread a new/existing flag through `AuthService` just to skip calling it — simpler than the alternative for no behavioural cost |
+| 2026-10-19 | Cohort "checked in" uses `DailyLog`, not the hillside's `daily_credits` | User's explicit choice, flagged as a real fork with behavioural consequences (the credit pipeline requires hillside opt-in, which cohort members shouldn't need) before building either way |
+| 2026-10-19 | The supportive/neutral/pressuring survey was built this slice rather than deferred | User's explicit choice over leaving the fourth pilot measure unavailable; scoped to one question, one answer per learner per cohort, no reminders or UI beyond a bare submit |
+| 2026-10-19 | `CohortDashboardService` is a new service, not more methods added to `OrganisationService` | `OrganisationService` is about who's in what and who administers it; the dashboard is read-mostly aggregation over several other tables (`Goal`, `DailyLog`, survey responses) that has nothing to do with membership CRUD — same separation `HillsideV2Service` already has from `GranaryService` despite both reading user-scoped data |
+| 2026-10-19 | A study group is set via the CSV's optional second column, not a separate endpoint | Matches the design reference: groups are assigned at invite time ("Morning group," "Evening group"), not edited afterward as a standalone action — no need for more surface area than the one place groups are actually set |
+| 2026-10-19 | The by-group breakdown denominates by every group member, not just activated ones, unlike the cohort-wide measures | Matches the design reference's own group table ("12 of 14" where 14 is the group's full headcount) exactly, rather than silently reusing the cohort-wide measures' activated-only convention where the design doesn't ask for it |
+| 2026-10-19 | The weekly check-in chart shares one `activatedDenominator` across every bar, instead of recomputing a per-week activated count | Matches the design reference's single "of 34 activated" caption under the whole chart; a per-week denominator would also be a stranger number to explain (activation is evaluated as of now, not as of that past week) |
+| 2026-10-19 | A future week's `checkedIn` is `null`, never `0` | A week that hasn't started can't have "zero people checked in" reported about it — that would read as a real, bad result rather than "no data yet," which is what the design reference's dashed, blank bar actually means |
+| 2026-10-19 | Test dates for anything touching `CohortMembership.joinedAt`-based activation must anchor to the real wall-clock date, not an arbitrary historical one, with a comment saying why | `joinedAt` is DB-generated at insert time and isn't settable from a test; a test using a historical date like `2026-09-01` silently fails activation since `joinedAt` is really "now." Found and fixed in `weeklyCheckInsCountsActivatedMembersWhoLoggedInEachElapsedWeek` before this was merged — the comment exists so the same mistake isn't made again in a later Phase 12 test |
+| 2026-10-19 | `setSeatLimit`/`submitSurveyResponse` return `204`, via `@ResponseStatus(HttpStatus.NO_CONTENT)`, not a bare `200` | Found live: the frontend's shared `request()` helper only special-cases `204` and otherwise always tries `response.json()`, so a `void` controller method's default `200`-with-empty-body threw `"Unexpected end of JSON input"` the first time either endpoint was actually called from the frontend. An honestly-empty write response should be `204`, matching the rest of this app's convention, rather than teaching the frontend to tolerate a malformed `200` |
 | 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
 | 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
 | 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |

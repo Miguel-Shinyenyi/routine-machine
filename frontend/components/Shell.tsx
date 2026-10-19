@@ -99,6 +99,72 @@ export function Shell({
     return <main className="mx-auto w-full max-w-[1100px] px-5 py-6">{children}</main>;
   }
 
+  // The cohort dashboard gets its own nav, matching the design reference: cohort.html's
+  // sidebar (aria-label="Programme admin") is a completely separate nav from the personal
+  // shepherd app's, not an entry added to it. Shown to whoever can reach the page at all —
+  // an admin or a learner, the backend's own 403 already gates anyone else — since "learners
+  // can read this exact page" in the reference means the same sidebar, not a second one.
+  // No "Seats and invites"/"Reports"/"Privacy and data" links: those pages don't exist yet,
+  // and a nav link to nothing would be worse than no nav link.
+  const cohortMatch = pathname.match(/^\/cohort\/([^/]+)/);
+  if (cohortMatch) {
+    const cohortId = cohortMatch[1];
+    return (
+      <div className="flex min-h-full flex-col md:flex-row">
+        <aside className="glass sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col gap-1 border-r hairline px-3 py-5 md:flex">
+          <Link
+            href={`/cohort/${cohortId}`}
+            className="mb-4 flex items-center gap-2.5 px-2.5 py-1.5 text-[15px] font-semibold text-ink"
+          >
+            <span
+              className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px]"
+              style={{ background: "var(--tint)" }}
+              aria-hidden="true"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1d1d1f" strokeWidth="2.4" strokeLinecap="round">
+                <path d="M14 21V8a4 4 0 0 0-8 0" />
+              </svg>
+            </span>
+            Routine Machine
+          </Link>
+          <Link
+            href={`/cohort/${cohortId}`}
+            aria-current="page"
+            className="flex min-h-9 items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[14px] text-ink"
+            style={{ background: "rgba(233,162,59,.2)", fontWeight: 600 }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="var(--tint-text)"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              className="shrink-0"
+            >
+              <path d="M4 19h16M7 16V9M12 16V5M17 16v-4" />
+            </svg>
+            Cohort {cohortId}
+          </Link>
+          <div className="mt-auto flex flex-col gap-2 pt-4">
+            <Link href="/today" className="flex min-h-9 items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[14px] text-ink hover:bg-fill">
+              My own Today
+            </Link>
+            <p className="px-2.5 text-[12px] text-muted">
+              Admins see cohort totals only. Learners can read this exact page.
+            </p>
+            <ThemeToggle />
+          </div>
+        </aside>
+
+        <main className="mx-auto w-full max-w-[1100px] flex-1 px-5 pb-10 pt-6">{children}</main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-full flex-col md:flex-row">
       <aside className="glass sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col gap-1 border-r hairline px-3 py-5 md:flex">

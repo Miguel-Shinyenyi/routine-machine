@@ -88,6 +88,29 @@ deliberate deviation rather than an oversight.
   `POST /api/granary/savings`, `GET`/`POST /api/granary/pauses`,
   `PATCH /api/granary/pauses/{id}/decide`, `PATCH .../reflect`,
   `POST /api/granary/mpesa-statement`, `GET /api/granary/mpesa-categories`.
+- **Cohort dashboard** (`/cohort/[cohortId]`, new in Phase 12, signed-in only — redirects to
+  `/login` otherwise): the four pilot measures as stat tiles (each a count-of-denominator, per
+  `docs/product-direction.md`'s "every figure with its denominator"), the weekly check-in bar
+  chart (a dashed/blank bar for a week that hasn't started, matching the backend's `null` for
+  an unstarted week — see `backend.md`), the "by study group" table (only rendered once a
+  cohort has at least one grouped member; a group under 5 shows its row with the two rate
+  columns collapsed into "Hidden: fewer than 5 people," never the real numbers), and a
+  three-button survey form ("Supportive"/"Neutral"/"Pressuring"). `Shell.tsx` swaps in a
+  completely separate sidebar for any `/cohort/*` route — matching the design reference's own
+  cohort/admin nav (`cohort.html`'s `aria-label="Programme admin"`), which is a different nav
+  from the personal shepherd app's, not an entry added to it — same branching precedent
+  `Shell` already uses for `/login`/`/register`'s minimal chrome. That nav only has what's
+  real: the current cohort (highlighted) and a "My own Today" cross-link back to the personal
+  app; no "Seats and invites"/"Reports"/"Privacy and data" links, since those pages don't
+  exist yet and a nav link to nothing would be worse than no nav link. Reached by direct URL
+  only — there's no org/cohort-creation UI yet, nor a "my cohorts" list to link from anywhere
+  (see the decisions log).
+  Deliberately read-mostly: admin actions (creating an organisation/cohort, bulk CSV invites,
+  setting a seat limit) have no UI yet, only the survey write does. A `403` from the backend
+  (neither an org admin nor a cohort member) renders a plain "Not your cohort" message instead
+  of the dashboard, inside the normal page chrome rather than crashing. Reads
+  `GET /api/organisations/cohorts/{id}/dashboard`, `GET .../dashboard/by-group`,
+  `GET .../dashboard/weekly-check-ins`; writes `POST .../survey-response`.
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
@@ -297,6 +320,10 @@ departure from precedent.
 | 2026-10-18 | "Tuesdays are the hardest climb." and "On learning days you tend more." are computed from real data (`steepDayInsight`/`learningInsight` in `app/tally/page.tsx`), not copied as static reference text | The reference's own headline and numbers are sample-data flavour, specific to its fictional week. `steepDayInsight` finds which real weekday `patterns.skipHeavyDays` cluster on and states the real count; `learningInsight` compares the real `topicRoutineCorrelation` averages and picks "tend more"/"tend less"/"look like any other day" accordingly. `CorrelationStatTiles` (the old two-bare-tiles component) was deleted, now folded into this computation |
 | 2026-10-18 | Reading's "Save draft" is a real feature (per-book `localStorage`, loaded via `useSyncExternalStore` the same way `ThemeToggle` reads `localStorage` — see the entry above on why not `useEffect` + `setState`), not a decorative copy of the reference's button | A dead button that looks like it saves something but doesn't would be worse than no button; the draft needs no backend change, survives a reload, and clears itself once the note is actually submitted |
 | 2026-10-18 | Today's "Start learning"/"Another topic" buttons were added back as plain, unwired `<button type="button">` elements | Reversed an earlier decision to omit them as a "half-finished implementation." The user explicitly asked for them back for visual parity, and — same as before — the reference itself never wires them to anything either (`app.js` only handles Today's checks and Hillside's switches), so matching that exact level of (non-)interactivity isn't adding a fake feature, it's matching the mockup precisely |
+| 2026-10-19 | `/cohort/[cohortId]` gets its own sidebar, swapped in by `Shell.tsx` itself (not just the page content living outside the main nav) | First shipped with the cohort page simply using the normal personal-app sidebar, which the user caught live ("the menu does not change to match the cohort menu from design reference") — the design reference's `cohort.html` has a completely separate `<nav aria-label="Programme admin">`, and the first version's own stated reasoning for keeping the page "outside Shell's nav" never actually followed through on building that separate nav. Fixed using the same pathname-branching pattern `Shell` already had for `/login`/`/register`'s different chrome, rather than restructuring the route into its own layout |
+| 2026-10-19 | The cohort dashboard page is read-mostly this slice: no UI for creating an organisation/cohort, bulk CSV invites, or setting a seat limit, only the survey form writes anything | Those admin actions are a separate, later part — this slice's job was the dashboard view itself (all five backend pieces already built in prior parts). Reachable today only via the API directly; a real admin needs the backend's existing endpoints until that UI exists |
+| 2026-10-19 | A real bug found live-testing before reporting: an org admin who isn't also a cohort member crashed the page when submitting the survey | The backend correctly 403s a non-member's survey answer (it's a learner's question, not an admin's), but `submitCohortSurveyResponse` didn't catch it, so `ApiError` reached the Server Action unhandled. Fixed by catching and swallowing a `403` specifically (any other error still surfaces) — the admin's click has no visible effect instead of crashing, which is correct since the backend already decided they're not eligible to answer |
+| 2026-10-19 | A second real bug found the same session: the survey/seat-limit `POST`/`PUT` calls threw `"Unexpected end of JSON input"` even for an eligible learner | Both backend endpoints returned a plain `200` with an empty body (`void`-returning `@PostMapping`/`@PutMapping`), but `lib/api.ts`'s `request()` only skips `response.json()` on a `204`. Fixed on the backend (`@ResponseStatus(HttpStatus.NO_CONTENT)` on both `OrganisationController` methods) rather than loosening the frontend's parsing, since a write with no response body should honestly be a `204`, matching how the rest of this app already treats empty responses |
 
 ## Open questions
 
