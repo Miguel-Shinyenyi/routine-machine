@@ -540,12 +540,9 @@ written.
   `GranaryApiIntegrationTest` cover the full pipeline end to end, including re-import
   replacing totals and the password-required path.
 
-**Phase 12 groundwork: organisations and cohorts, data model only.** `OrganisationService` +
+**Phase 12 part 1: organisations and cohorts, data model.** `OrganisationService` +
 three new tables (migration V24: `organisations`, `organisation_admins`, `cohorts`,
-`cohort_memberships`). Bulk CSV invites, the cohort dashboard's pilot measures (activation,
-weekly participation, returns, the "supportive/neutral/pressuring" survey, small-groups-hidden)
-and the frontend are deliberately not built yet — this is the first of several parts, per the
-"do the first part only" rule; see PROJECT.md's status log for the rest.
+`cohort_memberships`).
 
 - **Admin is organisation-scoped, not cohort-scoped.** `organisation_admins` is a separate
   table from `cohort_memberships` on purpose: the design reference's admin view oversees
@@ -568,6 +565,52 @@ and the frontend are deliberately not built yet — this is the first of several
   and `OrganisationApiIntegrationTest` (the full create-org → create-cohort → add-member →
   list-members flow end to end, plus the 403 path).
 
+**Phase 12 part 2: bulk CSV invites.** Proposed to the user before building (there's no
+outbound email infrastructure in this app, and the spec doesn't say what a "seat" caps or
+what happens for an email with no account yet) and confirmed before any of this was written.
+Migration V25: `organisations.seat_limit` (nullable — null means unlimited) and a new
+`cohort_invites` table.
+
+- **"Invite" means reserving a seat, not sending mail.** `OrganisationService.bulkInviteByCsv`
+  parses the CSV (one email per line, or email-first-column; a literal `email` header line
+  and blank lines are skipped) and, per row: an email with an existing `User` is added to the
+  cohort immediately (`ADDED_IMMEDIATELY`); an unknown email gets a `CohortInvite` reservation
+  (`INVITE_RESERVED`). No actual email is sent to anyone — notifying the invitee is a future
+  integration, not built now.
+- **Invites are fulfilled on registration, not polled for.** `AuthController.register` and
+  `.githubLogin` both call `OrganisationService.fulfillInvitesForNewUser(user)` right after
+  the account is created — every pending `CohortInvite` matching that email (case-insensitive,
+  same as `UserRepository.findByEmailIgnoreCase`) becomes a real `CohortMembership` and the
+  invite row is deleted. Called unconditionally on both paths since it's a safe no-op for a
+  user with no pending invites, rather than threading a "was this a brand-new account" flag
+  through `AuthService`.
+- **Every CSV row gets a reported outcome — `ADDED_IMMEDIATELY`, `INVITE_RESERVED`,
+  `ALREADY_A_MEMBER`, `ALREADY_INVITED`, `SEAT_LIMIT_REACHED`, or `INVALID_EMAIL`.** Nothing
+  is silently dropped from the response, same "fail loudly, never silently wrong" instinct as
+  the M-Pesa statement parser — an admin pasting in a messy list can see exactly what happened
+  to every row, not just a count.
+- **Seats are counted across the whole organisation, not per cohort**, and a batch stops
+  admitting new people once the limit is hit mid-batch (rows after the limit report
+  `SEAT_LIMIT_REACHED`) rather than failing the whole CSV or silently over-admitting.
+- **A real `IllegalStateException`-shaped bug caught by the full test suite, not the new
+  tests themselves**: the first version of `setSeatLimit` mutated the `Organisation` entity
+  without an explicit `organisationRepository.save(organisation)` call. It passed in
+  `OrganisationServiceTest` (a `@DataJpaTest`'s single shared persistence context returns the
+  same mutated in-memory object on a re-fetch) but failed in
+  `OrganisationApiIntegrationTest` (each `MockMvc` request is its own transaction, so the
+  mutation was silently lost) — caught by running the full suite before reporting, same
+  "verify with a real build/system, not memory of one" rule that found Phase 2's lazy-loading
+  bug. Fixed by adding the explicit `save`, matching `GranaryController.setSavingTargetAmount`'s
+  existing precedent for the same shape of write.
+- **New endpoints**: `PUT /api/organisations/{id}/seat-limit`,
+  `POST /api/organisations/cohorts/{id}/bulk-invite` (JSON body with the raw CSV text, not a
+  multipart file upload — a CSV of emails is small enough that the frontend can just read the
+  file client-side and send its text).
+- Tested with `OrganisationServiceTest` (every outcome, the seat-limit-mid-batch case, the
+  non-admin rejection, invite-then-register-fulfills-it) and `OrganisationApiIntegrationTest`
+  (the full bulk-invite → register → membership-appears flow end to end, and the seat-limit
+  cap enforced over a real HTTP request).
+
 ## Decisions log
 
 | Date | Decision | Reason |
@@ -579,6 +622,9 @@ and the frontend are deliberately not built yet — this is the first of several
 | 2026-10-19 | Re-importing the same statement month overwrites that month's category totals (an upsert), not a new set of rows alongside the old one | A user re-uploading a statement (a correction, or the same one twice by accident) should get one true set of totals for that month, not two conflicting sets the page would have to somehow reconcile or pick between |
 | 2026-10-19 | Phase 12 built as data-model groundwork only this slice — no CSV invites, no dashboard metrics, no frontend | The full feature (bulk CSV invites, four pilot measures with denominators, weekly check-in history, small-groups-hidden, a frontend admin/learner dashboard) is more than three parts; per the standing rule, only the first (the data model and the admin/learner access rule everything else depends on) is built now |
 | 2026-10-19 | Admin status lives on `organisation_admins`, scoped to the organisation, not to a cohort | The design reference's admin view spans multiple cohorts under one organisation header ("Cohort 14", "Cohort 13" both under the same admin nav); a per-cohort admin role would need to be granted separately for each new cohort an admin creates, which doesn't match "run a programme," not "run one cohort" |
+| 2026-10-19 | "Invite" means reserving a cohort seat via `CohortInvite`, never sending an actual email | Flagged to the user and confirmed before building, same as Phase 11's M-Pesa handling: this app has no outbound email infrastructure at all. Fabricating a "sent" state for mail that was never sent would be worse than being honest that notifying the invitee is a future integration |
+| 2026-10-19 | A CSV bulk invite reports a per-row outcome for every row, never a bare success count | Matches the M-Pesa parser's "fail loudly, never silently wrong" instinct — an admin who pastes in a messy list (typos, existing members, a seat limit reached partway through) needs to see exactly which rows did what, not infer it from a number |
+| 2026-10-19 | `fulfillInvitesForNewUser` is called unconditionally from both `AuthController.register` and `.githubLogin`, not gated on "was this a brand-new account" | It's a safe no-op when there are no pending invites for that email, so there's no need to thread a new/existing flag through `AuthService` just to skip calling it — simpler than the alternative for no behavioural cost |
 | 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
 | 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
 | 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |

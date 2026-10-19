@@ -25,6 +25,12 @@ public class Organisation {
     @Column(nullable = false)
     private String name;
 
+    // Null means unlimited. Set via OrganisationService.setSeatLimit, enforced by
+    // bulkInviteByCsv — "buy seats in bulk" (docs/product-direction.md), not a hard cap most
+    // organisations need from day one.
+    @Column(name = "seat_limit")
+    private Integer seatLimit;
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private OffsetDateTime createdAt;
@@ -42,6 +48,17 @@ public class Organisation {
 
     public String getName() {
         return name;
+    }
+
+    public Integer getSeatLimit() {
+        return seatLimit;
+    }
+
+    public void changeSeatLimit(Integer seatLimit) {
+        if (seatLimit != null && seatLimit <= 0) {
+            throw new IllegalArgumentException("seatLimit must be positive");
+        }
+        this.seatLimit = seatLimit;
     }
 
     public OffsetDateTime getCreatedAt() {

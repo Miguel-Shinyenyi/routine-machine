@@ -5,11 +5,13 @@ import com.routinemachine.core.domain.CohortMembership;
 import com.routinemachine.core.domain.Organisation;
 import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.UserRepository;
+import com.routinemachine.core.service.CsvInviteRowResult;
 import com.routinemachine.core.service.OrganisationService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -18,11 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.NoSuchElementException;
 
-// Phase 12 groundwork (docs/product-direction.md's "Organisations and cohorts"): just the
-// data model's own CRUD, admin-checked at the service layer the same way the rest of this
+// Phase 12 (docs/product-direction.md's "Organisations and cohorts"): the data model's own
+// CRUD and bulk CSV invites, admin-checked at the service layer the same way the rest of this
 // app scopes by a client-supplied userId (see GranaryController) rather than a JWT-protected
-// chain — no table here is read or written by anything hillside- or granary-facing. Bulk CSV
-// invites and the cohort dashboard's pilot measures are later parts.
+// chain — no table here is read or written by anything hillside- or granary-facing. The
+// cohort dashboard's pilot measures and the frontend are later parts.
 @RestController
 @RequestMapping("/api/organisations")
 public class OrganisationController {
@@ -60,6 +62,16 @@ public class OrganisationController {
         return organisationService.listCohortMembers(cohortId, requestingUserId).stream()
                 .map(this::toMemberResponse)
                 .toList();
+    }
+
+    @PutMapping("/{organisationId}/seat-limit")
+    public void setSeatLimit(@PathVariable Long organisationId, @Valid @RequestBody SetSeatLimitRequest request) {
+        organisationService.setSeatLimit(organisationId, request.requestingUserId(), request.seatLimit());
+    }
+
+    @PostMapping("/cohorts/{cohortId}/bulk-invite")
+    public List<CsvInviteRowResult> bulkInvite(@PathVariable Long cohortId, @Valid @RequestBody BulkInviteRequest request) {
+        return organisationService.bulkInviteByCsv(cohortId, request.requestingUserId(), request.csv());
     }
 
     private CohortMemberResponse toMemberResponse(CohortMembership membership) {

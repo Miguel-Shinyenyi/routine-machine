@@ -2,9 +2,11 @@ package com.routinemachine.core.service;
 
 import com.routinemachine.core.AbstractIntegrationTest;
 import com.routinemachine.core.domain.Cohort;
+import com.routinemachine.core.domain.CohortInvite;
 import com.routinemachine.core.domain.CohortMembership;
 import com.routinemachine.core.domain.Organisation;
 import com.routinemachine.core.domain.User;
+import com.routinemachine.core.repository.CohortInviteRepository;
 import com.routinemachine.core.repository.CohortMembershipRepository;
 import com.routinemachine.core.repository.CohortRepository;
 import com.routinemachine.core.repository.OrganisationAdminRepository;
@@ -33,10 +35,13 @@ class OrganisationServiceTest extends AbstractIntegrationTest {
     private CohortRepository cohortRepository;
     @Autowired
     private CohortMembershipRepository cohortMembershipRepository;
+    @Autowired
+    private CohortInviteRepository cohortInviteRepository;
 
     private OrganisationService service() {
         return new OrganisationService(
-                organisationRepository, organisationAdminRepository, cohortRepository, cohortMembershipRepository);
+                organisationRepository, organisationAdminRepository, cohortRepository, cohortMembershipRepository,
+                cohortInviteRepository, userRepository);
     }
 
     private User saveUser(String email) {
@@ -148,5 +153,147 @@ class OrganisationServiceTest extends AbstractIntegrationTest {
 
         assertThatThrownBy(() -> service().createCohort(999L, admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8))
                 .isInstanceOf(java.util.NoSuchElementException.class);
+    }
+
+    @Test
+    void anOrganisationAdminCanSetASeatLimit() {
+        User admin = saveUser("admin@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+
+        service().setSeatLimit(organisation.getId(), admin.getId(), 100);
+
+        assertThat(organisationRepository.findById(organisation.getId()).orElseThrow().getSeatLimit()).isEqualTo(100);
+    }
+
+    @Test
+    void someoneWhoIsNotAnOrganisationAdminCannotSetASeatLimit() {
+        User admin = saveUser("admin@example.com");
+        User outsider = saveUser("outsider@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+
+        assertThatThrownBy(() -> service().setSeatLimit(organisation.getId(), outsider.getId(), 100))
+                .isInstanceOf(NotAnOrganisationAdminException.class);
+    }
+
+    @Test
+    void bulkInvitingAnExistingUserByCsvAddsThemImmediately() {
+        User admin = saveUser("admin@example.com");
+        User learner = saveUser("learner@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+
+        List<CsvInviteRowResult> results = service().bulkInviteByCsv(cohort.getId(), admin.getId(), "learner@example.com");
+
+        assertThat(results).containsExactly(new CsvInviteRowResult("learner@example.com", CsvInviteOutcome.ADDED_IMMEDIATELY));
+        assertThat(cohortMembershipRepository.existsByCohortIdAndUserId(cohort.getId(), learner.getId())).isTrue();
+    }
+
+    @Test
+    void bulkInvitingAnUnknownEmailByCsvReservesASeat() {
+        User admin = saveUser("admin@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+
+        List<CsvInviteRowResult> results = service().bulkInviteByCsv(cohort.getId(), admin.getId(), "nobody@example.com");
+
+        assertThat(results).containsExactly(new CsvInviteRowResult("nobody@example.com", CsvInviteOutcome.INVITE_RESERVED));
+        assertThat(cohortInviteRepository.findByCohortIdAndEmailIgnoreCase(cohort.getId(), "nobody@example.com")).isPresent();
+    }
+
+    @Test
+    void bulkInvitingParsesMultipleLinesAndSkipsAHeaderAndBlankLines() {
+        User admin = saveUser("admin@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+        String csv = "email\n\na@example.com\nb@example.com\n";
+
+        List<CsvInviteRowResult> results = service().bulkInviteByCsv(cohort.getId(), admin.getId(), csv);
+
+        assertThat(results).extracting(CsvInviteRowResult::email).containsExactly("a@example.com", "b@example.com");
+    }
+
+    @Test
+    void bulkInvitingAnAlreadyInvitedEmailTwiceReportsAlreadyInvited() {
+        User admin = saveUser("admin@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+        service().bulkInviteByCsv(cohort.getId(), admin.getId(), "nobody@example.com");
+
+        List<CsvInviteRowResult> results = service().bulkInviteByCsv(cohort.getId(), admin.getId(), "nobody@example.com");
+
+        assertThat(results).containsExactly(new CsvInviteRowResult("nobody@example.com", CsvInviteOutcome.ALREADY_INVITED));
+    }
+
+    @Test
+    void bulkInvitingAnAlreadyAMemberEmailReportsAlreadyAMember() {
+        User admin = saveUser("admin@example.com");
+        User learner = saveUser("learner@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+        service().addCohortMember(cohort.getId(), admin.getId(), learner.getId());
+
+        List<CsvInviteRowResult> results = service().bulkInviteByCsv(cohort.getId(), admin.getId(), "learner@example.com");
+
+        assertThat(results).containsExactly(new CsvInviteRowResult("learner@example.com", CsvInviteOutcome.ALREADY_A_MEMBER));
+    }
+
+    @Test
+    void bulkInvitingAnInvalidEmailReportsInvalidEmail() {
+        User admin = saveUser("admin@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+
+        List<CsvInviteRowResult> results = service().bulkInviteByCsv(cohort.getId(), admin.getId(), "not-an-email");
+
+        assertThat(results).containsExactly(new CsvInviteRowResult("not-an-email", CsvInviteOutcome.INVALID_EMAIL));
+    }
+
+    @Test
+    void bulkInvitingStopsAddingOnceTheSeatLimitIsReached() {
+        User admin = saveUser("admin@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        service().setSeatLimit(organisation.getId(), admin.getId(), 1);
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+        String csv = "a@example.com\nb@example.com\n";
+
+        List<CsvInviteRowResult> results = service().bulkInviteByCsv(cohort.getId(), admin.getId(), csv);
+
+        assertThat(results).containsExactly(
+                new CsvInviteRowResult("a@example.com", CsvInviteOutcome.INVITE_RESERVED),
+                new CsvInviteRowResult("b@example.com", CsvInviteOutcome.SEAT_LIMIT_REACHED));
+    }
+
+    @Test
+    void someoneWhoIsNotAnOrganisationAdminCannotBulkInvite() {
+        User admin = saveUser("admin@example.com");
+        User outsider = saveUser("outsider@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+
+        assertThatThrownBy(() -> service().bulkInviteByCsv(cohort.getId(), outsider.getId(), "nobody@example.com"))
+                .isInstanceOf(NotAnOrganisationAdminException.class);
+    }
+
+    @Test
+    void registeringWithAnInvitedEmailFulfillsTheInviteIntoARealMembership() {
+        User admin = saveUser("admin@example.com");
+        Organisation organisation = service().createOrganisation("Moringa School", admin.getId());
+        Cohort cohort = service().createCohort(organisation.getId(), admin.getId(), "Cohort 14", LocalDate.of(2026, 10, 19), 8);
+        service().bulkInviteByCsv(cohort.getId(), admin.getId(), "newcomer@example.com");
+        User newcomer = saveUser("newcomer@example.com");
+
+        service().fulfillInvitesForNewUser(newcomer);
+
+        assertThat(cohortMembershipRepository.existsByCohortIdAndUserId(cohort.getId(), newcomer.getId())).isTrue();
+        assertThat(cohortInviteRepository.findByCohortIdAndEmailIgnoreCase(cohort.getId(), "newcomer@example.com")).isEmpty();
+    }
+
+    @Test
+    void fulfillingInvitesForAUserWithNoPendingInvitesDoesNothing() {
+        User user = saveUser("nobody-invited@example.com");
+
+        service().fulfillInvitesForNewUser(user);
+
+        assertThat(cohortMembershipRepository.findByCohortId(999L)).isEmpty();
     }
 }

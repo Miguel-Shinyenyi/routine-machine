@@ -12,4 +12,6 @@ public interface CohortMembershipRepository extends JpaRepository<CohortMembersh
     Optional<CohortMembership> findByCohortIdAndUserId(Long cohortId, Long userId);
 
     boolean existsByCohortIdAndUserId(Long cohortId, Long userId);
+
+    long countByCohortIdIn(List<Long> cohortIds);
 }

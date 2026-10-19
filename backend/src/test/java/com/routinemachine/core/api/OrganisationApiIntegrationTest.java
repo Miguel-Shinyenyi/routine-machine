@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -84,5 +85,77 @@ class OrganisationApiIntegrationTest extends AbstractIntegrationTest {
                         .content("{\"requestingUserId\":" + outsider
                                 + ",\"name\":\"Cohort 14\",\"startsOn\":\"2026-10-19\",\"weeks\":8}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void bulkInvitingByCsvAddsAnExistingUserAndReservesASeatForAnUnknownEmail() throws Exception {
+        Long admin = saveUser("admin3@example.com");
+        Long learner = saveUser("learner3@example.com");
+
+        MvcResult orgResult = mockMvc.perform(post("/api/organisations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Moringa School\",\"foundingAdminUserId\":" + admin + "}"))
+                .andReturn();
+        Long organisationId = Long.valueOf(
+                orgResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+        MvcResult cohortResult = mockMvc.perform(post("/api/organisations/" + organisationId + "/cohorts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestingUserId\":" + admin
+                                + ",\"name\":\"Cohort 14\",\"startsOn\":\"2026-10-19\",\"weeks\":8}"))
+                .andReturn();
+        Long cohortId = Long.valueOf(
+                cohortResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+
+        mockMvc.perform(post("/api/organisations/cohorts/" + cohortId + "/bulk-invite")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestingUserId\":" + admin
+                                + ",\"csv\":\"learner3@example.com\\nnewcomer3@example.com\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].email", is("learner3@example.com")))
+                .andExpect(jsonPath("$[0].outcome", is("ADDED_IMMEDIATELY")))
+                .andExpect(jsonPath("$[1].email", is("newcomer3@example.com")))
+                .andExpect(jsonPath("$[1].outcome", is("INVITE_RESERVED")));
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"newcomer3@example.com\",\"password\":\"a-strong-password\"}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/organisations/cohorts/" + cohortId + "/members")
+                        .param("requestingUserId", String.valueOf(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[1].email", is("newcomer3@example.com")));
+    }
+
+    @Test
+    void settingASeatLimitCapsFurtherBulkInvites() throws Exception {
+        Long admin = saveUser("admin4@example.com");
+
+        MvcResult orgResult = mockMvc.perform(post("/api/organisations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Moringa School\",\"foundingAdminUserId\":" + admin + "}"))
+                .andReturn();
+        Long organisationId = Long.valueOf(
+                orgResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+
+        mockMvc.perform(put("/api/organisations/" + organisationId + "/seat-limit")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestingUserId\":" + admin + ",\"seatLimit\":1}"))
+                .andExpect(status().isOk());
+
+        MvcResult cohortResult = mockMvc.perform(post("/api/organisations/" + organisationId + "/cohorts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestingUserId\":" + admin
+                                + ",\"name\":\"Cohort 14\",\"startsOn\":\"2026-10-19\",\"weeks\":8}"))
+                .andReturn();
+        Long cohortId = Long.valueOf(
+                cohortResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+
+        mockMvc.perform(post("/api/organisations/cohorts/" + cohortId + "/bulk-invite")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestingUserId\":" + admin + ",\"csv\":\"a4@example.com\\nb4@example.com\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].outcome", is("INVITE_RESERVED")))
+                .andExpect(jsonPath("$[1].outcome", is("SEAT_LIMIT_REACHED")));
     }
 }
