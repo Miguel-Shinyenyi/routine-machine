@@ -12,6 +12,7 @@ import com.routinemachine.core.service.CohortWeeklyCheckInChart;
 import com.routinemachine.core.service.CsvInviteRowResult;
 import com.routinemachine.core.service.OrganisationService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
@@ -75,6 +77,7 @@ public class OrganisationController {
     }
 
     @PutMapping("/{organisationId}/seat-limit")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public void setSeatLimit(@PathVariable Long organisationId, @Valid @RequestBody SetSeatLimitRequest request) {
         organisationService.setSeatLimit(organisationId, request.requestingUserId(), request.seatLimit());
     }
@@ -100,6 +103,7 @@ public class OrganisationController {
     }
 
     @PostMapping("/cohorts/{cohortId}/survey-response")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public void submitSurveyResponse(@PathVariable Long cohortId, @Valid @RequestBody SubmitSurveyResponseRequest request) {
         cohortDashboardService.submitSurveyResponse(cohortId, request.requestingUserId(), request.answer());
     }

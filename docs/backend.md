@@ -702,6 +702,19 @@ bar per week of `Cohort.weeks` (the pilot's stated length), matching
 - **With this, every backend piece of Phase 12's cohort dashboard is built. Only the frontend
   remains.**
 
+**Frontend built, two real bugs found and fixed live before reporting.** `/cohort/[cohortId]`
+(see `docs/frontend.md`) exercised two endpoints that had never been called by any frontend
+code before:
+
+- `setSeatLimit` and `submitSurveyResponse` both returned a plain `200` with an empty body
+  (ordinary `void`-returning `@PutMapping`/`@PostMapping` methods) instead of `204`. Nothing
+  caught this until the frontend's `request()` helper tried `response.json()` on an empty body
+  and threw `"Unexpected end of JSON input"` — not just the survey form's write, any future
+  caller of either endpoint would have hit the same thing. Fixed with
+  `@ResponseStatus(HttpStatus.NO_CONTENT)` on both `OrganisationController` methods, matching
+  how `request()` already special-cases `204`, rather than loosening the frontend's parsing.
+  `OrganisationApiIntegrationTest`'s assertions updated from `isOk()` to `isNoContent()`.
+
 ## Decisions log
 
 | Date | Decision | Reason |
@@ -724,6 +737,7 @@ bar per week of `Cohort.weeks` (the pilot's stated length), matching
 | 2026-10-19 | The weekly check-in chart shares one `activatedDenominator` across every bar, instead of recomputing a per-week activated count | Matches the design reference's single "of 34 activated" caption under the whole chart; a per-week denominator would also be a stranger number to explain (activation is evaluated as of now, not as of that past week) |
 | 2026-10-19 | A future week's `checkedIn` is `null`, never `0` | A week that hasn't started can't have "zero people checked in" reported about it — that would read as a real, bad result rather than "no data yet," which is what the design reference's dashed, blank bar actually means |
 | 2026-10-19 | Test dates for anything touching `CohortMembership.joinedAt`-based activation must anchor to the real wall-clock date, not an arbitrary historical one, with a comment saying why | `joinedAt` is DB-generated at insert time and isn't settable from a test; a test using a historical date like `2026-09-01` silently fails activation since `joinedAt` is really "now." Found and fixed in `weeklyCheckInsCountsActivatedMembersWhoLoggedInEachElapsedWeek` before this was merged — the comment exists so the same mistake isn't made again in a later Phase 12 test |
+| 2026-10-19 | `setSeatLimit`/`submitSurveyResponse` return `204`, via `@ResponseStatus(HttpStatus.NO_CONTENT)`, not a bare `200` | Found live: the frontend's shared `request()` helper only special-cases `204` and otherwise always tries `response.json()`, so a `void` controller method's default `200`-with-empty-body threw `"Unexpected end of JSON input"` the first time either endpoint was actually called from the frontend. An honestly-empty write response should be `204`, matching the rest of this app's convention, rather than teaching the frontend to tolerate a malformed `200` |
 | 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
 | 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
 | 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |

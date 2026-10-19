@@ -141,7 +141,7 @@ class OrganisationApiIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(put("/api/organisations/" + organisationId + "/seat-limit")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"requestingUserId\":" + admin + ",\"seatLimit\":1}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isNoContent());
 
         MvcResult cohortResult = mockMvc.perform(post("/api/organisations/" + organisationId + "/cohorts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -184,7 +184,7 @@ class OrganisationApiIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/organisations/cohorts/" + cohortId + "/survey-response")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"requestingUserId\":" + learner + ",\"answer\":\"SUPPORTIVE\"}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/organisations/cohorts/" + cohortId + "/dashboard")
                         .param("requestingUserId", String.valueOf(learner)))

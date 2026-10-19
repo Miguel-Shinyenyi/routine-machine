@@ -312,3 +312,24 @@ export async function importMpesaStatement(
   revalidatePath("/granary");
   return { error: null, needsPassword: false };
 }
+
+// An org admin who isn't also enrolled in this specific cohort can view the dashboard
+// ("admins see aggregates only") but isn't eligible to answer the pilot's own survey, which
+// is a learner's question, not an admin's — the backend 403s that case. Swallowed here
+// rather than crashing the page; any other failure still surfaces as a real error.
+export async function submitCohortSurveyResponse(formData: FormData): Promise<void> {
+  const userId = await getSessionUserId();
+  if (userId === null) return;
+  const cohortId = formData.get("cohortId");
+  try {
+    await backendFetch(`/api/organisations/cohorts/${cohortId}/survey-response`, {
+      method: "POST",
+      body: JSON.stringify({ requestingUserId: userId, answer: formData.get("answer") }),
+    });
+  } catch (error) {
+    if (!(error instanceof ApiError && error.status === 403)) {
+      throw error;
+    }
+  }
+  revalidatePath(`/cohort/${cohortId}`);
+}

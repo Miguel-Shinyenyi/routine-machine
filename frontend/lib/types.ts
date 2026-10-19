@@ -310,3 +310,39 @@ export interface MpesaImportResponse {
   transactionsParsed: number;
   categoryTotals: Partial<Record<MpesaCategory, number>>;
 }
+
+export interface CohortMeasure {
+  count: number;
+  denominator: number;
+}
+
+export interface CohortDashboardSummary {
+  activatedWithinSevenDays: CohortMeasure;
+  checkedInThisWeek: CohortMeasure;
+  returnedAfterAMissedDay: CohortMeasure;
+  feltSupportive: CohortMeasure;
+  saidNeutral: number;
+  saidPressuring: number;
+}
+
+export interface CohortGroupMeasure {
+  studyGroup: string;
+  memberCount: number;
+  hidden: boolean;
+  checkedInThisWeek: CohortMeasure | null;
+  returnedAfterAMissedDay: CohortMeasure | null;
+}
+
+export interface CohortWeeklyCheckIn {
+  week: number;
+  checkedIn: number | null;
+  isCurrentWeek: boolean;
+  isFuture: boolean;
+}
+
+export interface CohortWeeklyCheckInChart {
+  activatedDenominator: number;
+  weeks: CohortWeeklyCheckIn[];
+}
+
+export type CohortSurveyAnswer = "SUPPORTIVE" | "NEUTRAL" | "PRESSURING";
