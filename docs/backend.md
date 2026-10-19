@@ -540,6 +540,34 @@ written.
   `GranaryApiIntegrationTest` cover the full pipeline end to end, including re-import
   replacing totals and the password-required path.
 
+**Phase 12 groundwork: organisations and cohorts, data model only.** `OrganisationService` +
+three new tables (migration V24: `organisations`, `organisation_admins`, `cohorts`,
+`cohort_memberships`). Bulk CSV invites, the cohort dashboard's pilot measures (activation,
+weekly participation, returns, the "supportive/neutral/pressuring" survey, small-groups-hidden)
+and the frontend are deliberately not built yet — this is the first of several parts, per the
+"do the first part only" rule; see PROJECT.md's status log for the rest.
+
+- **Admin is organisation-scoped, not cohort-scoped.** `organisation_admins` is a separate
+  table from `cohort_memberships` on purpose: the design reference's admin view oversees
+  multiple cohorts ("Cohort 14", "Cohort 13") under one organisation header, while a learner's
+  `cohort_memberships` row is a seat in exactly one cohort. There's no "cohort admin" role —
+  only an organisation admin, checked against every cohort under that organisation.
+- **Authorization is a service-layer check, not a JWT-protected endpoint.** `/api/organisations/**`
+  stays `permitAll`, same pattern as `/api/granary/**` — every write takes a
+  `requestingUserId` and `OrganisationService` throws `NotAnOrganisationAdminException`
+  (→ `403`, a new `GlobalExceptionHandler` entry) if that user isn't an admin of the relevant
+  organisation. `createCohort`/`addCohortMember`/`listCohortMembers` all check this before
+  doing anything else.
+- **Adding the same learner to a cohort twice is a no-op, not a duplicate.**
+  `addCohortMember` checks `findByCohortIdAndUserId` first — same idempotent-write shape as
+  `GranaryService.storeSaving` for a day that's already been logged.
+- **New endpoints**: `POST /api/organisations` (creates an org and makes the given user its
+  founding admin in one call), `POST /api/organisations/{id}/cohorts`,
+  `POST /api/organisations/cohorts/{id}/members`, `GET /api/organisations/cohorts/{id}/members`.
+- Tested with `OrganisationServiceTest` (service-layer admin checks, idempotent membership)
+  and `OrganisationApiIntegrationTest` (the full create-org → create-cohort → add-member →
+  list-members flow end to end, plus the 403 path).
+
 ## Decisions log
 
 | Date | Decision | Reason |
@@ -549,6 +577,8 @@ written.
 | 2026-10-19 | The PDF's bytes are read into a plain `byte[]` and never touch a file on disk, rather than "save then delete" | A save-then-delete step is one more place a bug, a crash between the two steps, or a forgotten cleanup path could leave the file behind; never writing it in the first place removes that failure mode entirely instead of relying on a delete call always running |
 | 2026-10-19 | `MpesaStatementPasswordRequiredException` is a distinct exception/response type from `MpesaStatementParseException`, both separately caught in `GlobalExceptionHandler` | The two failures need different frontend behaviour (prompt for a password vs. show "couldn't read this, format may have changed") — collapsing them into one generic 400 would make that distinction only inferable from message text, which is fragile compared to a `type` field |
 | 2026-10-19 | Re-importing the same statement month overwrites that month's category totals (an upsert), not a new set of rows alongside the old one | A user re-uploading a statement (a correction, or the same one twice by accident) should get one true set of totals for that month, not two conflicting sets the page would have to somehow reconcile or pick between |
+| 2026-10-19 | Phase 12 built as data-model groundwork only this slice — no CSV invites, no dashboard metrics, no frontend | The full feature (bulk CSV invites, four pilot measures with denominators, weekly check-in history, small-groups-hidden, a frontend admin/learner dashboard) is more than three parts; per the standing rule, only the first (the data model and the admin/learner access rule everything else depends on) is built now |
+| 2026-10-19 | Admin status lives on `organisation_admins`, scoped to the organisation, not to a cohort | The design reference's admin view spans multiple cohorts under one organisation header ("Cohort 14", "Cohort 13" both under the same admin nav); a per-cohort admin role would need to be granted separately for each new cohort an admin creates, which doesn't match "run a programme," not "run one cohort" |
 | 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
 | 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
 | 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |

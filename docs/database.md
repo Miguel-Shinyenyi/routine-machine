@@ -199,6 +199,23 @@ detail at all, and the uploaded statement PDF is never written to disk, let alon
 Re-importing the same month's statement upserts (replaces) that month's totals rather than
 adding a second set of rows. Also not referenced by anything hillside- or cohort-facing.
 
+Phase 12 groundwork built via `V24__organisations_and_cohorts.sql` (data model only — see
+`backend.md`'s decisions log for why the rest of Phase 12 isn't built yet):
+- `organisations(id, name, created_at)`.
+- `organisation_admins(id, organisation_id references organisations, user_id references
+  users, created_at)`, unique on `(organisation_id, user_id)`. Who administers an
+  organisation, and therefore every cohort under it — see `backend.md` for why this is
+  organisation-scoped, not cohort-scoped.
+- `cohorts(id, organisation_id references organisations, name, starts_on, weeks,
+  created_at)`.
+- `cohort_memberships(id, cohort_id references cohorts, user_id references users,
+  joined_at)`, unique on `(cohort_id, user_id)`. A learner's seat in one cohort.
+
+None of these four tables are read by `HillsideV2Service`/`GranaryService` or vice versa —
+the two modules are simply uncoupled so far, nothing yet requires the marker-string privacy
+test Phase 10/11 needed. That test becomes necessary once a later Phase 12 part actually
+assembles a cohort dashboard response from other users' data.
+
 ## Decisions log
 
 | Date | Decision | Reason |

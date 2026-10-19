@@ -1,0 +1,70 @@
+package com.routinemachine.core.api;
+
+import com.routinemachine.core.domain.Cohort;
+import com.routinemachine.core.domain.CohortMembership;
+import com.routinemachine.core.domain.Organisation;
+import com.routinemachine.core.domain.User;
+import com.routinemachine.core.repository.UserRepository;
+import com.routinemachine.core.service.OrganisationService;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.NoSuchElementException;
+
+// Phase 12 groundwork (docs/product-direction.md's "Organisations and cohorts"): just the
+// data model's own CRUD, admin-checked at the service layer the same way the rest of this
+// app scopes by a client-supplied userId (see GranaryController) rather than a JWT-protected
+// chain — no table here is read or written by anything hillside- or granary-facing. Bulk CSV
+// invites and the cohort dashboard's pilot measures are later parts.
+@RestController
+@RequestMapping("/api/organisations")
+public class OrganisationController {
+
+    private final OrganisationService organisationService;
+    private final UserRepository userRepository;
+
+    public OrganisationController(OrganisationService organisationService, UserRepository userRepository) {
+        this.organisationService = organisationService;
+        this.userRepository = userRepository;
+    }
+
+    @PostMapping
+    public OrganisationResponse createOrganisation(@Valid @RequestBody CreateOrganisationRequest request) {
+        Organisation organisation = organisationService.createOrganisation(request.name(), request.foundingAdminUserId());
+        return OrganisationResponse.from(organisation);
+    }
+
+    @PostMapping("/{organisationId}/cohorts")
+    public CohortResponse createCohort(@PathVariable Long organisationId, @Valid @RequestBody CreateCohortRequest request) {
+        Cohort cohort = organisationService.createCohort(
+                organisationId, request.requestingUserId(), request.name(), request.startsOn(), request.weeks());
+        return CohortResponse.from(cohort);
+    }
+
+    @PostMapping("/cohorts/{cohortId}/members")
+    public CohortMemberResponse addCohortMember(@PathVariable Long cohortId, @Valid @RequestBody AddCohortMemberRequest request) {
+        CohortMembership membership =
+                organisationService.addCohortMember(cohortId, request.requestingUserId(), request.newMemberUserId());
+        return toMemberResponse(membership);
+    }
+
+    @GetMapping("/cohorts/{cohortId}/members")
+    public List<CohortMemberResponse> listCohortMembers(@PathVariable Long cohortId, @RequestParam Long requestingUserId) {
+        return organisationService.listCohortMembers(cohortId, requestingUserId).stream()
+                .map(this::toMemberResponse)
+                .toList();
+    }
+
+    private CohortMemberResponse toMemberResponse(CohortMembership membership) {
+        User user = userRepository.findById(membership.getUserId())
+                .orElseThrow(() -> new NoSuchElementException("No user with id " + membership.getUserId()));
+        return new CohortMemberResponse(user.getId(), user.getEmail(), membership.getJoinedAt());
+    }
+}
