@@ -611,6 +611,50 @@ Migration V25: `organisations.seat_limit` (nullable — null means unlimited) an
   (the full bulk-invite → register → membership-appears flow end to end, and the seat-limit
   cap enforced over a real HTTP request).
 
+**Phase 12 part 3: the cohort dashboard's four pilot measures.** Flagged to the user before
+building — `docs/product-direction.md` references "the operating plan" for exact definitions
+of these measures, but no such document exists in this repo, and the supportive/pressuring
+survey had no capture mechanism at all — and the user chose concrete definitions before any
+of this was written. New `CohortDashboardService`, migration V26 (`cohort_survey_responses`).
+
+- **"Checked in" is any `DailyLog`, the same thing Today already tracks for every user — not
+  the hillside's `daily_credits`.** The user's explicit choice: cohort participation
+  shouldn't require opting into the hillside, which is a separate, unrelated concern (see
+  `docs/database.md`'s decisions log on these two modules staying uncoupled).
+- **Activation** = a member who created ≥1 `Goal` and logged ≥1 `DailyLog`, both dated within
+  7 days of `cohort_memberships.joined_at` — matches the design reference's "set a goal and
+  checked in once." Doesn't require the full 7-day window to have elapsed; a member who does
+  both on day one is activated immediately.
+- **Weekly participation** ("checked in this week") is computed out of activated members only,
+  not the whole cohort, matching the design reference's own "of 34 activated" denominator —
+  the current week is derived from `cohort.startsOn`, not a calendar week.
+- **"Returned after a missed day"** is a first-cut definition, not the same algorithm as
+  `HillsideV2Service.countReturns` (which counts every return across a season from the
+  hillside credit pipeline): per activated member, only the *first* gap in their logged dates
+  since joining is examined — did a full un-logged day occur, and did their next log come
+  within 7 days of it. The denominator is members who had at least one such gap, not the
+  whole cohort — matches the design reference's "11 of 14."
+- **The survey** (`CohortSurveyResponse`, unique per `(cohort_id, user_id)`) lets any cohort
+  member submit one of `SUPPORTIVE`/`NEUTRAL`/`PRESSURING`; resubmitting replaces the answer
+  rather than adding a second row. The denominator for "felt supportive" is total responses
+  received, not total members — matches the design reference's "19 of 23" with the
+  neutral/pressuring counts shown separately, not folded into one percentage.
+- **Viewing the dashboard requires being either an organisation admin or a member of that
+  specific cohort** — "admins see aggregates only, learners can read the same page"
+  (docs/product-direction.md) means learners get read access too, not just admins. A new
+  `NotACohortParticipantException` (→ `403`) is distinct from `NotAnOrganisationAdminException`
+  since the rule here is "admin OR member," not "admin only."
+- **Every measure is a `{count, denominator}` pair, never a bare number or percentage** —
+  "each figure with its denominator" is explicit in `docs/product-direction.md`.
+- **Deliberately not built this slice**: study groups and the "by study group" breakdown,
+  small-groups-hidden (which only matters once there's a group breakdown to hide rows from),
+  the weekly check-in chart, and the frontend. These are from the design reference's richer
+  HTML mockup, not the five-bullet decided spec this slice implements exactly.
+- Tested with `CohortDashboardServiceTest` (every measure's numerator/denominator, the
+  resubmit-replaces-the-answer case, both access-control branches) and
+  `OrganisationApiIntegrationTest` (the full survey-submit → dashboard-reflects-it flow for a
+  learner, and the 403 for a non-participant).
+
 ## Decisions log
 
 | Date | Decision | Reason |
@@ -625,6 +669,9 @@ Migration V25: `organisations.seat_limit` (nullable — null means unlimited) an
 | 2026-10-19 | "Invite" means reserving a cohort seat via `CohortInvite`, never sending an actual email | Flagged to the user and confirmed before building, same as Phase 11's M-Pesa handling: this app has no outbound email infrastructure at all. Fabricating a "sent" state for mail that was never sent would be worse than being honest that notifying the invitee is a future integration |
 | 2026-10-19 | A CSV bulk invite reports a per-row outcome for every row, never a bare success count | Matches the M-Pesa parser's "fail loudly, never silently wrong" instinct — an admin who pastes in a messy list (typos, existing members, a seat limit reached partway through) needs to see exactly which rows did what, not infer it from a number |
 | 2026-10-19 | `fulfillInvitesForNewUser` is called unconditionally from both `AuthController.register` and `.githubLogin`, not gated on "was this a brand-new account" | It's a safe no-op when there are no pending invites for that email, so there's no need to thread a new/existing flag through `AuthService` just to skip calling it — simpler than the alternative for no behavioural cost |
+| 2026-10-19 | Cohort "checked in" uses `DailyLog`, not the hillside's `daily_credits` | User's explicit choice, flagged as a real fork with behavioural consequences (the credit pipeline requires hillside opt-in, which cohort members shouldn't need) before building either way |
+| 2026-10-19 | The supportive/neutral/pressuring survey was built this slice rather than deferred | User's explicit choice over leaving the fourth pilot measure unavailable; scoped to one question, one answer per learner per cohort, no reminders or UI beyond a bare submit |
+| 2026-10-19 | `CohortDashboardService` is a new service, not more methods added to `OrganisationService` | `OrganisationService` is about who's in what and who administers it; the dashboard is read-mostly aggregation over several other tables (`Goal`, `DailyLog`, survey responses) that has nothing to do with membership CRUD — same separation `HillsideV2Service` already has from `GranaryService` despite both reading user-scoped data |
 | 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
 | 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
 | 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |

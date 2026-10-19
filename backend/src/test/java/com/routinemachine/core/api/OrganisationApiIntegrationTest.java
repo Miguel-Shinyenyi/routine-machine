@@ -158,4 +158,62 @@ class OrganisationApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[0].outcome", is("INVITE_RESERVED")))
                 .andExpect(jsonPath("$[1].outcome", is("SEAT_LIMIT_REACHED")));
     }
+
+    @Test
+    void theDashboardReflectsASurveyResponseAndIsReadableByAMember() throws Exception {
+        Long admin = saveUser("admin5@example.com");
+        Long learner = saveUser("learner5@example.com");
+
+        MvcResult orgResult = mockMvc.perform(post("/api/organisations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Moringa School\",\"foundingAdminUserId\":" + admin + "}"))
+                .andReturn();
+        Long organisationId = Long.valueOf(
+                orgResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+        MvcResult cohortResult = mockMvc.perform(post("/api/organisations/" + organisationId + "/cohorts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestingUserId\":" + admin
+                                + ",\"name\":\"Cohort 14\",\"startsOn\":\"2026-10-19\",\"weeks\":8}"))
+                .andReturn();
+        Long cohortId = Long.valueOf(
+                cohortResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+        mockMvc.perform(post("/api/organisations/cohorts/" + cohortId + "/members")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"requestingUserId\":" + admin + ",\"newMemberUserId\":" + learner + "}"));
+
+        mockMvc.perform(post("/api/organisations/cohorts/" + cohortId + "/survey-response")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestingUserId\":" + learner + ",\"answer\":\"SUPPORTIVE\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/organisations/cohorts/" + cohortId + "/dashboard")
+                        .param("requestingUserId", String.valueOf(learner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.feltSupportive.count", is(1)))
+                .andExpect(jsonPath("$.feltSupportive.denominator", is(1)));
+    }
+
+    @Test
+    void someoneWhoIsNeitherAnAdminNorAMemberCannotReadTheDashboard() throws Exception {
+        Long admin = saveUser("admin6@example.com");
+        Long outsider = saveUser("outsider6@example.com");
+
+        MvcResult orgResult = mockMvc.perform(post("/api/organisations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Moringa School\",\"foundingAdminUserId\":" + admin + "}"))
+                .andReturn();
+        Long organisationId = Long.valueOf(
+                orgResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+        MvcResult cohortResult = mockMvc.perform(post("/api/organisations/" + organisationId + "/cohorts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestingUserId\":" + admin
+                                + ",\"name\":\"Cohort 14\",\"startsOn\":\"2026-10-19\",\"weeks\":8}"))
+                .andReturn();
+        Long cohortId = Long.valueOf(
+                cohortResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+
+        mockMvc.perform(get("/api/organisations/cohorts/" + cohortId + "/dashboard")
+                        .param("requestingUserId", String.valueOf(outsider)))
+                .andExpect(status().isForbidden());
+    }
 }

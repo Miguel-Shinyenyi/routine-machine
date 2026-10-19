@@ -5,6 +5,8 @@ import com.routinemachine.core.domain.CohortMembership;
 import com.routinemachine.core.domain.Organisation;
 import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.UserRepository;
+import com.routinemachine.core.service.CohortDashboardService;
+import com.routinemachine.core.service.CohortDashboardSummary;
 import com.routinemachine.core.service.CsvInviteRowResult;
 import com.routinemachine.core.service.OrganisationService;
 import jakarta.validation.Valid;
@@ -17,23 +19,29 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.NoSuchElementException;
 
 // Phase 12 (docs/product-direction.md's "Organisations and cohorts"): the data model's own
-// CRUD and bulk CSV invites, admin-checked at the service layer the same way the rest of this
-// app scopes by a client-supplied userId (see GranaryController) rather than a JWT-protected
-// chain — no table here is read or written by anything hillside- or granary-facing. The
-// cohort dashboard's pilot measures and the frontend are later parts.
+// CRUD, bulk CSV invites, and the cohort dashboard's four pilot measures, all checked at the
+// service layer the same way the rest of this app scopes by a client-supplied userId (see
+// GranaryController) rather than a JWT-protected chain — no table here is read or written by
+// anything hillside- or granary-facing. Study groups, the weekly check-in chart, and the
+// frontend are later parts.
 @RestController
 @RequestMapping("/api/organisations")
 public class OrganisationController {
 
     private final OrganisationService organisationService;
+    private final CohortDashboardService cohortDashboardService;
     private final UserRepository userRepository;
 
-    public OrganisationController(OrganisationService organisationService, UserRepository userRepository) {
+    public OrganisationController(
+            OrganisationService organisationService, CohortDashboardService cohortDashboardService,
+            UserRepository userRepository) {
         this.organisationService = organisationService;
+        this.cohortDashboardService = cohortDashboardService;
         this.userRepository = userRepository;
     }
 
@@ -72,6 +80,16 @@ public class OrganisationController {
     @PostMapping("/cohorts/{cohortId}/bulk-invite")
     public List<CsvInviteRowResult> bulkInvite(@PathVariable Long cohortId, @Valid @RequestBody BulkInviteRequest request) {
         return organisationService.bulkInviteByCsv(cohortId, request.requestingUserId(), request.csv());
+    }
+
+    @GetMapping("/cohorts/{cohortId}/dashboard")
+    public CohortDashboardSummary dashboard(@PathVariable Long cohortId, @RequestParam Long requestingUserId) {
+        return cohortDashboardService.summarize(cohortId, requestingUserId, LocalDate.now());
+    }
+
+    @PostMapping("/cohorts/{cohortId}/survey-response")
+    public void submitSurveyResponse(@PathVariable Long cohortId, @Valid @RequestBody SubmitSurveyResponseRequest request) {
+        cohortDashboardService.submitSurveyResponse(cohortId, request.requestingUserId(), request.answer());
     }
 
     private CohortMemberResponse toMemberResponse(CohortMembership membership) {

@@ -2,6 +2,7 @@ package com.routinemachine.core.api;
 
 import com.routinemachine.core.service.MpesaStatementParseException;
 import com.routinemachine.core.service.MpesaStatementPasswordRequiredException;
+import com.routinemachine.core.service.NotACohortParticipantException;
 import com.routinemachine.core.service.NotAnOrganisationAdminException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -59,6 +60,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NotAnOrganisationAdminException.class)
     public ResponseEntity<Map<String, String>> handleNotAnOrganisationAdmin(NotAnOrganisationAdminException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(NotACohortParticipantException.class)
+    public ResponseEntity<Map<String, String>> handleNotACohortParticipant(NotACohortParticipantException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", ex.getMessage()));
     }
 }
