@@ -77,8 +77,9 @@ deliberate deviation rather than an oversight.
   decisions log) and a table of every pause logged, with inline decide/reflect controls; and a
   sidebar ("Where it went" — a per-category meter bar, only rendered once a statement has
   been imported — "Where the granary drinks from," and a static boundaries card). M-Pesa
-  import (`components/MpesaImportForm.tsx`, collapsed behind an "Import M-Pesa statement"
-  button until opened) is a real, working upload: a PDF file input plus an optional password
+  import (`components/MpesaImportForm.tsx`, behind an "Import M-Pesa statement" button that
+  opens a native `<dialog>` modal, not an inline expanding card) is a real, working upload: a
+  PDF file input plus an optional password
   field, submitted as multipart form data via `lib/actions.ts::importMpesaStatement` and a new
   `backendFetchMultipart` helper in `lib/api.ts` (the only call in this app that isn't JSON).
   A wrong/missing password or an unrecognised statement format shows its own inline error,
@@ -214,7 +215,8 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
-| 2026-10-19 | The M-Pesa import form is a collapsed, client-side `MpesaImportForm` component, not a server-rendered form always visible on the page | Matches the reference's own copy pattern of collapsing rarely-used forms, but the real reason is `useActionState`'s need for a client component to show the import's own pending/error state (the password prompt, the "couldn't read this" message) — this is the one piece of Phase 11 that genuinely needs client-side state, unlike every other granary control, which stays server-rendered |
+| 2026-10-19 | The M-Pesa import form is a client-side `MpesaImportForm` component, not a server-rendered form always visible on the page | The real reason is `useActionState`'s need for a client component to show the import's own pending/error state (the password prompt, the "couldn't read this" message) — this is the one piece of Phase 11 that genuinely needs client-side state, unlike every other granary control, which stays server-rendered |
+| 2026-10-19 | The M-Pesa import form opens in a native `<dialog>` modal (`showModal()`), not an inline expanding card | User feedback: the inline card was "hidden" in the sense of not reading as a real dialog and shifting the page layout around it when opened. A native `<dialog>` gets a true modal with backdrop, focus handling, and Esc-to-close for free, with no extra dependency. The form closes itself automatically on a successful submit (tracked via a `submittedRef` so the initial render's `error: null` state isn't mistaken for a just-completed success) but stays open to show the inline error on failure; clicking the backdrop also closes it |
 | 2026-10-19 | `backendFetchMultipart` is a new, separate helper in `lib/api.ts`, not a flag on the existing `request()`/`backendFetch` | The existing helper always sets `Content-Type: application/json`; a multipart upload needs fetch to set its own `Content-Type` with the correct boundary from the `FormData` body, which means never setting that header manually at all — a flag that conditionally skips a header is more error-prone than a second, explicit function with a different contract |
 | 2026-10-19 | The "Where it went" category-totals card only renders once at least one category total exists, rather than always showing with empty/zero bars | An import hasn't happened for most users most of the time; a permanently-visible chart of all zeros would look broken rather than simply "nothing imported yet," and the reference itself only shows this card because its sample data always has an import behind it |
 | 2026-10-19 | `Shell`'s phone tab bar changed from Today/Path/Reading/Tally/Hillside to Today/Reading/Granary/Tally/Hillside, matching the updated design reference exactly | Granary now exists, removing the reason the old order was kept (the reference's own target order needed a page that didn't exist yet). Path's "opens from Today" cross-link still isn't built, same already-flagged gap this doc records for Flock/Watering holes |
