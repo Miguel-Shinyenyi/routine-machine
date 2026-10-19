@@ -2,6 +2,7 @@ export interface Goal {
   id: number;
   name: string;
   description: string | null;
+  userId: number | null;
 }
 
 export type RoutineItemCategory = "BODY" | "MIND" | "WORK" | "HOME";
@@ -204,4 +205,42 @@ export interface CurrentUser {
   email: string;
   displayName: string | null;
   hillsideOptIn: boolean;
+}
+
+// Phase 9: the credit-based hillside.
+export interface NeighborCreditRow {
+  rank: number;
+  pseudonym: string;
+  credits: number;
+  daysShownUp: number;
+  isYou: boolean;
+}
+
+export interface HillsideV2 {
+  totalParticipants: number;
+  yourScore: number | null;
+  yourDaysShownUp: number | null;
+  yourRank: number | null;
+  yourGoalCount: number | null;
+  band: string | null;
+  cohortReturns: number;
+  neighbors: NeighborCreditRow[];
+}
+
+export type EvidenceStatus = "ACCEPTED" | "REJECTED" | "PENDING" | "SELF_REPORTED";
+
+export interface EvidenceEvent {
+  id: number;
+  userId: number;
+  goalId: number;
+  goalName: string;
+  source: string;
+  sourceEventId: string;
+  occurredAt: string;
+  localDate: string;
+  minutes: number | null;
+  status: EvidenceStatus;
+  scoringRuleVersion: number;
+  reason: string;
+  questioned: boolean;
 }

@@ -17,9 +17,13 @@ docs/design-reference/
   pages/             the screens as static HTML (open pages/index.html)
     index.html       list of screens
     today.html ... watering-holes.html     desktop pages, fluid, drawn at 1440
-    phone-today.html, phone-reading.html, phone-hillside.html   phone screens, 390 wide
+    granary.html, profile.html                  new on 2026-10-18, learner pages
+    cohort.html                                 new on 2026-10-18, programme admin view
+    phone-today.html, phone-reading.html, phone-hillside.html, phone-granary.html   phone, 390 wide
     tokens.css       the design tokens as CSS variables, light and dark
-    app.js           behaviour for Today (check a task) and Hillside (switch field, window)
+    base.css         shared layout rules used by the pages added on 2026-10-18
+    app.js           behaviour: Today checks, switches, chip pickers, segmented controls,
+                     Profile analogies, Hillside hide and scope, Granary store
   screenshots/       PNGs of each page, the visual target
   compare.mjs        screenshots the running app and puts it beside the reference
 ```
@@ -45,9 +49,15 @@ Open `pages/index.html` in a browser, or serve the folder:
 | phone-today.html | /today | | 390 |
 | phone-reading.html | /reading | | 390 |
 | phone-hillside.html | /hillside | | 390 |
+| granary.html | /granary | new | 1440 |
+| profile.html | /profile | new | 1440 |
+| cohort.html | /admin/cohorts/[id] | new | 1440 |
+| phone-granary.html | /granary | new | 390 |
 
-On desktop the navigation is the glass sidebar. On phone it is a floating glass tab bar
-with Today, Path, Reading, Tally and Hillside. The desktop pages reflow at 390 (the sidebar
+On desktop the navigation is the glass sidebar, with Granary between Reading and Hillside and
+Profile under the main items. On phone it is a floating glass tab bar with Today, Reading,
+Granary, Tally and Hillside (Path moved off the tab bar; it opens from Today). The admin view
+has its own sidebar for programme staff. The desktop pages reflow at 390 (the sidebar
 stacks), but the phone screens are the intended phone design; match those.
 
 ## How to compare
@@ -83,6 +93,32 @@ check:
 
 Record any deliberate difference in the decisions log of `docs/frontend.md`, so the next
 comparison doesn't flag it again.
+
+## What changed on 2026-10-18
+
+- **Hillside v2**, from the leaderboard design notes:
+  - Opt-in, and limited to an invited cohort by default. The open hillside is a second
+    choice.
+  - Weekly seasons: the board starts fresh every Monday.
+  - One credit per goal per local day, capped at 3.
+  - "Came back after a break" is counted separately and never ranked.
+  - A credit ledger shows the status of each piece of evidence (accepted, self-reported,
+    pending, not counted) and the rule version.
+  - A switch hides the board for a personal-only view.
+  - No "discipline score".
+- **Granary**, the financial-discipline page: small daily savings, "the pause" (a 24-hour
+  wait and a 30-day look back on tempting decisions), and category totals imported from an
+  M-Pesa statement. Private, never on the hillside.
+- **Profile:** interests that become the language of explanations, with an analogy switch
+  (football, philosophy, skating) and a plain-version fallback. It also states exactly what
+  a programme can and cannot see.
+- **Cohort**, the programme admin view: aggregates only, with every rate shown with its
+  denominator. Groups under 5 are hidden. It matches the pilot measures in the operating
+  plan.
+- **Smaller changes:**
+  - Today gains an analogy line in the staff card and a granary card.
+  - Flock gains a "Small saving" routine.
+  - Watering holes names the M-Pesa statement as the finance source.
 
 ## Not in the reference
 

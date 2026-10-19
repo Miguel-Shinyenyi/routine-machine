@@ -28,9 +28,13 @@ const PAIRS = [
   ["reading-1440.png", "/reading", 1440],
   ["hillside-1440.png", "/hillside", 1440],
   ["watering-holes-1440.png", "/watering-holes", 1440],
+  ["granary-1440.png", "/granary", 1440],
+  ["profile-1440.png", "/profile", 1440],
+  ["cohort-1440.png", process.env.COHORT_ROUTE ?? "/admin/cohorts/1", 1440],
   ["phone-today.png", "/today", 390],
   ["phone-reading.png", "/reading", 390],
   ["phone-hillside.png", "/hillside", 390],
+  ["phone-granary.png", "/granary", 390],
 ];
 
 function sideBySide(leftBuf, rightBuf) {

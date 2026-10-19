@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Granary, phone</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="tokens.css">
+</head>
+<body>
+<style>
+body{margin:0}
+*{box-sizing:border-box}
+a{color:#9A5208}a:hover{color:#7A4106}
+.ph{position:relative;width:390px;height:1500px;overflow:hidden;background:#F5F5F7;color:#1D1D1F;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.pad{padding:56px 20px 120px;display:flex;flex-direction:column;gap:18px}
+.eyebrow{font-size:13px;font-weight:600;color:#9A5208;margin:0}
+h1{font-size:34px;line-height:1.1;letter-spacing:-.02em;font-weight:700;margin:2px 0 0}
+h2{font-size:20px;font-weight:600;margin:0;letter-spacing:-.01em}
+.muted{color:#6E6E73}
+.glass{background:rgba(255,255,255,.72);backdrop-filter:blur(20px) saturate(180%);border:1px solid rgba(255,255,255,.8);box-shadow:0 8px 32px rgba(0,0,0,.10);border-radius:20px}
+.list{background:#fff;border-radius:14px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:60px;padding:9px 14px;border-top:1px solid #E5E5EA}
+.row.first{border-top:0}
+.check{width:28px;height:28px;flex:none;border-radius:50%;border:2px solid #C7C7CC;background:#fff;display:flex;align-items:center;justify-content:center}
+.check.done{background:#1B7332;border-color:#1B7332}
+.t{font-size:16px;font-weight:600}
+.t.done{color:#6E6E73}
+.m{font-size:12px;color:#6E6E73}
+.r{margin-left:auto;font-size:13px;color:#6E6E73;text-align:right;white-space:nowrap}
+.bar{height:8px;border-radius:4px;background:#E8E8ED;overflow:hidden}
+.bar i{display:block;height:100%;background:#E9A23B}
+.card{background:#fff;border-radius:18px;padding:16px}
+.tabbar{position:absolute;left:16px;right:16px;bottom:24px;height:64px;display:flex;justify-content:space-around;align-items:center;padding:0 6px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:56px;min-height:48px;justify-content:center;font-size:10px;font-weight:500;color:#6E6E73;text-decoration:none}
+.tab svg{width:24px;height:24px}
+.tab.on{color:#9A5208}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:0;background:#E9A23B;color:#1D1D1F;font-family:inherit;font-weight:600;cursor:pointer}
+.btn.gray{background:rgba(118,118,128,.12);color:#9A5208}
+</style>
+<div class="ph">
+<div class="pad">
+<div>
+<p class="eyebrow">The granary · October</p>
+<h1>Store a little</h1>
+</div>
+<div class="card">
+<div style="display: flex; justify-content: space-between; align-items: baseline;"><span class="muted" style="font-size: 13px;">Stored this month</span><span class="muted" style="font-size: 13px;">15 of 18 days</span></div>
+<div style="font-size: 30px; font-weight: 600; letter-spacing: -.02em;">KSh 750 <span class="muted" style="font-size: 16px; font-weight: 500;">of 900</span></div>
+<div class="bar" style="margin-top: 8px;" aria-hidden="true"><i style="width: 83%;"></i></div>
+</div>
+<button class="btn" data-store style="width: 100%; min-height: 50px; border-radius: 14px; font-size: 17px;">Store KSh 50 today</button>
+
+<div>
+<h2 style="margin: 0 4px 8px;">The pause</h2>
+<div class="list">
+<div class="row first"><div><div class="t">Token presale</div><div class="m">WhatsApp group · KSh 5,000</div></div><div class="r" style="color: #9A5208; font-weight: 600;">23 h left</div></div>
+<div class="row"><div><div class="t">AI course bundle</div><div class="m">Advert · KSh 3,900</div></div><div class="r">Declined</div></div>
+<div class="row"><div><div class="t">Betting tips group</div><div class="m">WhatsApp · KSh 500 a week</div></div><div class="r">Declined</div></div>
+</div>
+</div>
+
+<div class="glass" style="padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start;">
+<svg viewBox="0 0 120 150" width="32" height="40" aria-hidden="true" style="flex: none;"><path d="M92 146V44q0-18-14-18-12 0-12 12" fill="none" stroke="#7A4A1E" stroke-width="6" stroke-linecap="round"></path><path d="M30 146L40 74Q60 60 80 74L90 146Z" fill="#3E7B4F" stroke="#1D1D1F" stroke-width="3"></path><path d="M44 74L84 124L78 132L38 86Z" fill="#C8372D" stroke="#1D1D1F" stroke-width="3"></path><circle cx="60" cy="50" r="17" fill="#6B4226" stroke="#1D1D1F" stroke-width="3"></circle></svg>
+<div><div style="font-size: 12px;" class="muted"><strong style="color: #1D1D1F; font-weight: 600;">Shepherd</strong> · about the presale</div><p style="margin: 2px 0 0; font-size: 15px;">"Everyone says it will 10x" is the loudest reason, not the best one. Sleep on it. I'll ask you tomorrow.</p></div>
+</div>
+
+<div class="card"><strong style="font-weight: 600;">September, from your M-Pesa statement</strong><p class="muted" style="margin: 4px 0 0; font-size: 14px;">Food KSh 9,400 · Transport 5,400 · Family 5,000 · Betting 0. Only totals are kept.</p></div>
+<p class="muted" style="margin: 0; font-size: 13px; text-align: center;">Money never reaches the hillside or your programme.</p>
+</div>
+
+<nav class="tabbar glass" aria-label="Tabs">
+<a class="tab" href="phone-today.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"></path></svg>Today</a>
+<a class="tab" href="phone-reading.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"></path></svg>Reading</a>
+<a class="tab on" href="phone-granary.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8M9 3v3L6 10v9a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-9l-3-4V3"></path><path d="M6 13h12"></path></svg>Granary</a>
+<a class="tab" href="tally.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6"></path></svg>Tally</a>
+<a class="tab" href="phone-hillside.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 19l7-10 4 5 3-3 6 8z"></path></svg>Hillside</a>
+</nav>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

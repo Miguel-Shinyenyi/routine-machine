@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cohort, admin view</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="base.css">
+<style>
+.wk{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px;align-items:end;height:190px;padding-top:8px}
+.wk div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;color:#6E6E73}
+.wk b{display:block;width:100%;border-radius:6px 6px 2px 2px;background:#1D1D1F}
+.wk b.now{background:#E9A23B}
+.wk b.future{background:transparent;border:1.5px dashed #AEAEB2}
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="side" aria-label="Programme admin">
+<a class="brand" href="cohort.html"><span class="logo"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1D1D1F" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M14 21V8a4 4 0 0 0-8 0"></path></svg></span>Routine Machine</a>
+<div class="navhead">[Programme name] · admin</div>
+<a class="nav on" href="cohort.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 19h16M7 16V9M12 16V5M17 16v-4"></path></svg>Cohort 14<small>40</small></a>
+<a class="nav" href="cohort.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 19h16M7 16V9M12 16V5M17 16v-4"></path></svg>Cohort 13<small>36</small></a>
+<a class="nav" href="cohort.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c1-4 4-6 6-6s5 2 6 6M16 11a3 3 0 1 0 0-6M21 20c-.5-2.5-2-4.2-4-5"></path></svg>Seats and invites<small>76 of 100</small></a>
+<a class="nav" href="cohort.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM9 12h7M9 16h7"></path></svg>Reports</a>
+<a class="nav" href="cohort.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"></path></svg>Privacy and data</a>
+<div class="navhead">You</div>
+<a class="nav" href="today.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2"></path></svg>My own Today</a>
+<div class="sidefoot">Admins see cohort totals only. Learners can read this exact page.</div>
+</nav>
+
+<main class="main">
+<div class="wrap">
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; justify-content: space-between;">
+<div style="flex: 1 1 420px; min-width: 0;">
+<p class="eyebrow">[Programme name] · Cohort 14 · week 5 of 8</p>
+<h1>How the cohort is walking.</h1>
+<p class="sub">Totals only. You never see a learner's notes, journal, money, interests or hillside name. Every rate shows its count.</p>
+</div>
+<div style="display: flex; gap: 8px; flex-wrap: wrap;"><button class="btn gray">Export CSV</button><button class="btn">Invite learners</button></div>
+</div>
+
+<div class="stats">
+<div class="stat"><div class="k">Activated in the first 7 days</div><div class="v">34 <small>of 40</small></div><div class="h">85% set a goal and checked in once</div></div>
+<div class="stat"><div class="k">Checked in this week</div><div class="v">27 <small>of 34</small></div><div class="h">79% of activated learners</div></div>
+<div class="stat"><div class="k">Came back after a missed day</div><div class="v">11 <small>of 14</small></div><div class="h">Returned within 7 days</div></div>
+<div class="stat"><div class="k">Said it felt supportive</div><div class="v">19 <small>of 23</small></div><div class="h">2 said pressuring, 2 neutral · 11 didn't answer</div></div>
+</div>
+
+<section class="card" aria-labelledby="weeks">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap;"><h2 id="weeks">Weekly check-ins, eight-week pilot</h2><span class="muted" style="font-size: 14px;">Learners who checked in at least once that week, of 34 activated</span></div>
+<div class="wk" role="img" aria-label="Weekly check-ins: week 1 32, week 2 30, week 3 26, week 4 28, week 5 27 so far, weeks 6 to 8 ahead">
+<div><span>32</span><b style="height: 141px;"></b><span>Wk 1</span></div>
+<div><span>30</span><b style="height: 132px;"></b><span>Wk 2</span></div>
+<div><span>26</span><b style="height: 115px;"></b><span>Wk 3</span></div>
+<div><span>28</span><b style="height: 124px;"></b><span>Wk 4</span></div>
+<div><span>27</span><b class="now" style="height: 119px;"></b><span>Wk 5</span></div>
+<div><span>&nbsp;</span><b class="future" style="height: 40px;"></b><span>Wk 6</span></div>
+<div><span>&nbsp;</span><b class="future" style="height: 40px;"></b><span>Wk 7</span></div>
+<div><span>&nbsp;</span><b class="future" style="height: 40px;"></b><span>Wk 8</span></div>
+</div>
+<p class="muted" style="margin: 10px 0 0; font-size: 13px;">Week 3 dipped during the project deadline. 7 of the 8 who missed that week came back by week 4.</p>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start;">
+<section style="flex: 999 1 520px; min-width: 0;" aria-labelledby="groups">
+<h2 id="groups" style="font-size: 17px; margin: 0 4px 8px;">By study group</h2>
+<div class="tbl"><table style="min-width: 560px;">
+<thead><tr><th scope="col">Group</th><th scope="col">Learners</th><th scope="col">Checked in this week</th><th scope="col">Came back after a break</th></tr></thead>
+<tbody>
+<tr><td style="border-top: 0;">Morning group</td><td style="border-top: 0;">14</td><td style="border-top: 0;">12 of 14</td><td style="border-top: 0;">5 of 6</td></tr>
+<tr><td>Evening group</td><td>16</td><td>11 of 16</td><td>5 of 6</td></tr>
+<tr><td>Weekend group</td><td>4</td><td colspan="2"><span class="chip no">Hidden: fewer than 5 people</span></td></tr>
+</tbody></table></div>
+<p class="muted" style="margin: 8px 4px 0; font-size: 13px;">Groups under 5 are hidden so no one can be picked out from a total.</p>
+</section>
+
+<aside style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 16px;" aria-label="Pilot terms">
+<div class="card">
+<h2 style="font-size: 17px;">What this pilot is measuring</h2>
+<ul style="margin: 8px 0 0; padding-left: 18px; font-size: 14px; display: flex; flex-direction: column; gap: 6px;">
+<li>Whether learners start, keep going and come back after a missed day</li>
+<li>Whether it feels supportive or pressuring</li>
+<li>Whether you would pay to continue</li>
+</ul>
+<p class="muted" style="margin: 10px 0 0; font-size: 13px;">It does not measure grades or completion, and we won't claim it changes them.</p>
+</div>
+<div class="card">
+<h2 style="font-size: 17px;">Data</h2>
+<p class="muted" style="margin: 6px 0 0; font-size: 14px;">Pilot data is deleted 90 days after the pilot ends unless your contract says otherwise. Learners can export or delete their own data at any time.</p>
+</div>
+</aside>
+</div>
+</div>
+</main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
