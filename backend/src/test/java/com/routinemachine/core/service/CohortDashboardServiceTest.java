@@ -277,6 +277,55 @@ class CohortDashboardServiceTest extends AbstractIntegrationTest {
         assertThat(groups).isEmpty();
     }
 
+    @Test
+    void weeklyCheckInsCountsActivatedMembersWhoLoggedInEachElapsedWeek() {
+        // cohortStart must match the real wall-clock date: CohortMembership.joinedAt is
+        // DB-generated at insert time (now()), not settable in a test, so isActivated's
+        // 7-day window is always anchored to the real "now," not this test's chosen dates.
+        LocalDate cohortStart = LocalDate.of(2026, 10, 19);
+        LocalDate today = cohortStart.plusDays(15);
+        Cohort cohort = setUp(cohortStart);
+        User activated = saveUser("activated@example.com");
+        organisationService().addCohortMember(cohort.getId(), adminIdOf(cohort), activated.getId());
+        setGoal(activated, cohortStart);
+        log(activated, cohortStart);
+        log(activated, cohortStart.plusDays(8));
+
+        CohortWeeklyCheckInChart chart = service().weeklyCheckIns(cohort.getId(), adminIdOf(cohort), today);
+
+        assertThat(chart.activatedDenominator()).isEqualTo(1);
+        assertThat(chart.weeks()).hasSize(8);
+        assertThat(chart.weeks().get(0).week()).isEqualTo(1);
+        assertThat(chart.weeks().get(0).checkedIn()).isEqualTo(1);
+        assertThat(chart.weeks().get(0).isFuture()).isFalse();
+        assertThat(chart.weeks().get(1).checkedIn()).isEqualTo(1);
+        assertThat(chart.weeks().get(2).isCurrentWeek()).isTrue();
+        assertThat(chart.weeks().get(2).checkedIn()).isEqualTo(0);
+    }
+
+    @Test
+    void weeksThatHaveNotStartedYetReportNullNotZero() {
+        LocalDate cohortStart = LocalDate.of(2026, 9, 1);
+        LocalDate today = LocalDate.of(2026, 9, 2);
+        Cohort cohort = setUp(cohortStart);
+
+        CohortWeeklyCheckInChart chart = service().weeklyCheckIns(cohort.getId(), adminIdOf(cohort), today);
+
+        assertThat(chart.weeks().get(0).isFuture()).isFalse();
+        assertThat(chart.weeks().get(1).isFuture()).isTrue();
+        assertThat(chart.weeks().get(1).checkedIn()).isNull();
+    }
+
+    @Test
+    void someoneWhoIsNeitherAnAdminNorAMemberCannotViewTheWeeklyChart() {
+        LocalDate today = LocalDate.of(2026, 10, 19);
+        Cohort cohort = setUp(today);
+        User outsider = saveUser("outsider@example.com");
+
+        assertThatThrownBy(() -> service().weeklyCheckIns(cohort.getId(), outsider.getId(), today))
+                .isInstanceOf(NotACohortParticipantException.class);
+    }
+
     private Long adminIdOf(Cohort cohort) {
         return organisationAdminRepository.findByOrganisationId(cohort.getOrganisationId()).get(0).getUserId();
     }

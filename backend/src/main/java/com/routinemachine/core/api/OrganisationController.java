@@ -8,6 +8,7 @@ import com.routinemachine.core.repository.UserRepository;
 import com.routinemachine.core.service.CohortDashboardService;
 import com.routinemachine.core.service.CohortDashboardSummary;
 import com.routinemachine.core.service.CohortGroupMeasure;
+import com.routinemachine.core.service.CohortWeeklyCheckInChart;
 import com.routinemachine.core.service.CsvInviteRowResult;
 import com.routinemachine.core.service.OrganisationService;
 import jakarta.validation.Valid;
@@ -25,11 +26,11 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 // Phase 12 (docs/product-direction.md's "Organisations and cohorts"): the data model's own
-// CRUD, bulk CSV invites, the cohort dashboard's four pilot measures, and the "by study
-// group" breakdown, all checked at the service layer the same way the rest of this app scopes
-// by a client-supplied userId (see GranaryController) rather than a JWT-protected chain — no
-// table here is read or written by anything hillside- or granary-facing. The weekly check-in
-// chart and the frontend are later parts.
+// CRUD, bulk CSV invites, the cohort dashboard's four pilot measures, the "by study group"
+// breakdown, and the weekly check-in chart, all checked at the service layer the same way the
+// rest of this app scopes by a client-supplied userId (see GranaryController) rather than a
+// JWT-protected chain — no table here is read or written by anything hillside- or
+// granary-facing. The frontend is the last remaining part.
 @RestController
 @RequestMapping("/api/organisations")
 public class OrganisationController {
@@ -91,6 +92,11 @@ public class OrganisationController {
     @GetMapping("/cohorts/{cohortId}/dashboard/by-group")
     public List<CohortGroupMeasure> dashboardByGroup(@PathVariable Long cohortId, @RequestParam Long requestingUserId) {
         return cohortDashboardService.summarizeByGroup(cohortId, requestingUserId, LocalDate.now());
+    }
+
+    @GetMapping("/cohorts/{cohortId}/dashboard/weekly-check-ins")
+    public CohortWeeklyCheckInChart weeklyCheckIns(@PathVariable Long cohortId, @RequestParam Long requestingUserId) {
+        return cohortDashboardService.weeklyCheckIns(cohortId, requestingUserId, LocalDate.now());
     }
 
     @PostMapping("/cohorts/{cohortId}/survey-response")

@@ -674,6 +674,34 @@ nullable — a member with no group just doesn't appear in the breakdown.
   under-5 group hidden but still counted, members with no group excluded entirely), and
   `OrganisationApiIntegrationTest` (the hidden-group response over a real HTTP request).
 
+**Phase 12 part 5: the weekly check-in chart.** `CohortDashboardService.weeklyCheckIns`, one
+bar per week of `Cohort.weeks` (the pilot's stated length), matching
+`docs/design-reference/pages/cohort.html`'s "Weekly check-ins, eight-week pilot."
+
+- **A single shared denominator across every bar** — `activatedDenominator`, the cohort's
+  current activated-member count — not a denominator recomputed per week, matching the design
+  reference's one caption ("of 34 activated") under the whole chart rather than per bar.
+- **A week that hasn't started yet reports `null`, not `0`.** `checkedIn` only has a real
+  count once the week has actually begun; a future week is a blank/dashed bar in the
+  reference, not a bar claiming zero people checked in during a week that hasn't happened.
+- **The current week is flagged (`isCurrentWeek`) separately from being future or past.**
+  Matches the reference's highlighted "now" bar, distinct styling from both completed weeks
+  and the dashed weeks ahead.
+- **A real test-fragility bug found and fixed while writing this**: `CohortMembership.joinedAt`
+  is DB-generated at insert time (`now()`), not settable from a test — so any test whose
+  activation check depends on `joinedAt` has to use dates anchored to the real wall-clock
+  date, not an arbitrary historical date, or the member silently never activates. The first
+  version of `weeklyCheckInsCountsActivatedMembersWhoLoggedInEachElapsedWeek` used
+  `cohortStart = 2026-09-01` and failed for exactly this reason; fixed by anchoring the test's
+  dates to the real "today" instead, with a comment explaining why, so the same mistake isn't
+  repeated in a later Phase 12 test.
+- **New endpoint**: `GET /api/organisations/cohorts/{id}/dashboard/weekly-check-ins`.
+- Tested with `CohortDashboardServiceTest` (the elapsed-weeks' real counts, future weeks
+  reporting `null`, the current-week flag, the access-control check) and
+  `OrganisationApiIntegrationTest` (the chart's shape over a real HTTP request).
+- **With this, every backend piece of Phase 12's cohort dashboard is built. Only the frontend
+  remains.**
+
 ## Decisions log
 
 | Date | Decision | Reason |
@@ -693,6 +721,9 @@ nullable — a member with no group just doesn't appear in the breakdown.
 | 2026-10-19 | `CohortDashboardService` is a new service, not more methods added to `OrganisationService` | `OrganisationService` is about who's in what and who administers it; the dashboard is read-mostly aggregation over several other tables (`Goal`, `DailyLog`, survey responses) that has nothing to do with membership CRUD — same separation `HillsideV2Service` already has from `GranaryService` despite both reading user-scoped data |
 | 2026-10-19 | A study group is set via the CSV's optional second column, not a separate endpoint | Matches the design reference: groups are assigned at invite time ("Morning group," "Evening group"), not edited afterward as a standalone action — no need for more surface area than the one place groups are actually set |
 | 2026-10-19 | The by-group breakdown denominates by every group member, not just activated ones, unlike the cohort-wide measures | Matches the design reference's own group table ("12 of 14" where 14 is the group's full headcount) exactly, rather than silently reusing the cohort-wide measures' activated-only convention where the design doesn't ask for it |
+| 2026-10-19 | The weekly check-in chart shares one `activatedDenominator` across every bar, instead of recomputing a per-week activated count | Matches the design reference's single "of 34 activated" caption under the whole chart; a per-week denominator would also be a stranger number to explain (activation is evaluated as of now, not as of that past week) |
+| 2026-10-19 | A future week's `checkedIn` is `null`, never `0` | A week that hasn't started can't have "zero people checked in" reported about it — that would read as a real, bad result rather than "no data yet," which is what the design reference's dashed, blank bar actually means |
+| 2026-10-19 | Test dates for anything touching `CohortMembership.joinedAt`-based activation must anchor to the real wall-clock date, not an arbitrary historical one, with a comment saying why | `joinedAt` is DB-generated at insert time and isn't settable from a test; a test using a historical date like `2026-09-01` silently fails activation since `joinedAt` is really "now." Found and fixed in `weeklyCheckInsCountsActivatedMembersWhoLoggedInEachElapsedWeek` before this was merged — the comment exists so the same mistake isn't made again in a later Phase 12 test |
 | 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
 | 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
 | 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |

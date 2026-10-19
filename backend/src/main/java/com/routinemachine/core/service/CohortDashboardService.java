@@ -130,6 +130,36 @@ public class CohortDashboardService {
         return result;
     }
 
+    // The "weekly check-ins" bar chart (docs/design-reference's cohort.html): one bar per week
+    // of the cohort's stated pilot length (Cohort.weeks), a shared "of N activated"
+    // denominator across every bar rather than a denominator per week, and null (not zero)
+    // for a week that hasn't started yet.
+    public CohortWeeklyCheckInChart weeklyCheckIns(Long cohortId, Long requestingUserId, LocalDate today) {
+        Cohort cohort = findCohort(cohortId);
+        requireParticipant(cohort, requestingUserId);
+
+        List<CohortMembership> activated = cohortMembershipRepository.findByCohortId(cohortId).stream()
+                .filter(member -> isActivated(member, today))
+                .toList();
+
+        long currentWeekIndex = Math.max(0, ChronoUnit.DAYS.between(cohort.getStartsOn(), today) / 7);
+
+        List<CohortWeeklyCheckIn> weeks = new ArrayList<>();
+        for (int week = 1; week <= cohort.getWeeks(); week++) {
+            LocalDate weekStart = cohort.getStartsOn().plusDays((long) (week - 1) * 7);
+            LocalDate weekEnd = weekStart.plusDays(6);
+            boolean isFuture = weekStart.isAfter(today);
+            boolean isCurrentWeek = !isFuture && week - 1 == currentWeekIndex;
+            Integer checkedIn = isFuture
+                    ? null
+                    : (int) activated.stream()
+                            .filter(member -> hasLogBetween(member.getUserId(), weekStart, weekEnd))
+                            .count();
+            weeks.add(new CohortWeeklyCheckIn(week, checkedIn, isCurrentWeek, isFuture));
+        }
+        return new CohortWeeklyCheckInChart(activated.size(), weeks);
+    }
+
     public CohortSurveyResponse submitSurveyResponse(Long cohortId, Long requestingUserId, CohortSurveyAnswer answer) {
         findCohort(cohortId);
         if (!cohortMembershipRepository.existsByCohortIdAndUserId(cohortId, requestingUserId)) {
@@ -161,8 +191,12 @@ public class CohortDashboardService {
         long daysSinceStart = Math.max(0, ChronoUnit.DAYS.between(cohort.getStartsOn(), today));
         LocalDate weekStart = cohort.getStartsOn().plusDays((daysSinceStart / 7) * 7);
         LocalDate weekEnd = weekStart.plusDays(6);
-        return dailyLogRepository.findByUserId(member.getUserId()).stream()
-                .anyMatch(log -> withinWindow(log.getLogDate(), weekStart, weekEnd));
+        return hasLogBetween(member.getUserId(), weekStart, weekEnd);
+    }
+
+    private boolean hasLogBetween(Long userId, LocalDate start, LocalDate end) {
+        return dailyLogRepository.findByUserId(userId).stream()
+                .anyMatch(log -> withinWindow(log.getLogDate(), start, end));
     }
 
     // A first-cut definition, not the same algorithm as HillsideV2Service.countReturns (which

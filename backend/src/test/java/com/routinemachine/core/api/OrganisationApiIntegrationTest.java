@@ -250,4 +250,31 @@ class OrganisationApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[0].hidden", is(true)))
                 .andExpect(jsonPath("$[0].checkedInThisWeek").value(org.hamcrest.Matchers.nullValue()));
     }
+
+    @Test
+    void theWeeklyCheckInChartHasOneBarPerWeekOfThePilot() throws Exception {
+        Long admin = saveUser("admin8@example.com");
+
+        MvcResult orgResult = mockMvc.perform(post("/api/organisations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Moringa School\",\"foundingAdminUserId\":" + admin + "}"))
+                .andReturn();
+        Long organisationId = Long.valueOf(
+                orgResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+        MvcResult cohortResult = mockMvc.perform(post("/api/organisations/" + organisationId + "/cohorts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestingUserId\":" + admin
+                                + ",\"name\":\"Cohort 14\",\"startsOn\":\"2026-10-19\",\"weeks\":8}"))
+                .andReturn();
+        Long cohortId = Long.valueOf(
+                cohortResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+
+        mockMvc.perform(get("/api/organisations/cohorts/" + cohortId + "/dashboard/weekly-check-ins")
+                        .param("requestingUserId", String.valueOf(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.weeks.length()", is(8)))
+                .andExpect(jsonPath("$.weeks[0].week", is(1)))
+                .andExpect(jsonPath("$.weeks[0].isFuture", is(false)))
+                .andExpect(jsonPath("$.weeks[7].isFuture", is(true)));
+    }
 }
