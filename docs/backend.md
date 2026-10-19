@@ -462,10 +462,126 @@ which carry profile data. `HillsideV2ApiIntegrationTest.profileDataNeverAppearsI
 proves this against the real serialized JSON, not just by reasoning about the types, per
 `docs/product-direction.md`'s explicit "write a test that proves it" instruction.
 
+**Phase 11: the granary built.** `GranaryService` + two new tables (migration V22,
+`savings`/`pause_decisions`) and `users.saving_target_amount`. Never holds or moves money —
+every write only records that a saving or a decision happened.
+
+- **Savings**: `storeSaving(user, today)` is idempotent via `savings`' own
+  `UNIQUE(user_id, local_date)` plus a find-first check — tapping twice the same day is one
+  saving, not two. `monthSummary(user, month, today)` computes `storedThisMonth`,
+  `targetThisMonth` (the daily amount times days *elapsed* so far this month, not the whole
+  month — a target on day 3 of October isn't already "31 days behind"), `daysStored`, the
+  per-day `jar` array (one boolean per elapsed day), and `totalStoredEver` (every saving,
+  any month).
+- **The pause**: `PauseDecision` sets both `followUp24hAt` and `followUp30dAt` at creation
+  (`now + 24h`, `now + 30d`). `outcome` stays null until `decidePause` is called — from the
+  24-hour follow-up or immediately ("I've already decided"); `isDueForTwentyFourHourFollowUp`
+  only fires while `outcome` is still null. `reflectionThirtyDay` is separate and independent:
+  `isDueForThirtyDayFollowUp` fires regardless of what `outcome` ended up being, since the
+  30-day look-back is about how the decision feels in hindsight, not a second chance to
+  change it.
+- **New endpoints**: `POST /api/granary/savings`, `PUT /api/granary/saving-target-amount`,
+  `GET /api/granary/summary`, `POST /api/granary/pauses`, `GET /api/granary/pauses`,
+  `GET /api/granary/pauses/due` (what Today prompts about), `PATCH .../decide`,
+  `PATCH .../reflect`. None are JWT-protected (same `permitAll` pattern `/api/evidence-events`
+  already uses) — the frontend resolves `userId` from the verified session itself before
+  calling any of them, never from client-submitted form data.
+- **Privacy**: same structural guarantee as Phase 10's profile data — no hillside/credit
+  response type has a path to `savings`/`pause_decisions` at all.
+  `HillsideV2ApiIntegrationTest.granaryDataNeverAppearsInTheHillsideResponse` proves it against
+  the real serialized JSON, the explicit "test it" requirement.
+- **A new `IllegalStateException` → 400 handler** was added to `GlobalExceptionHandler`:
+  `storeSaving` throws it when no `savingTargetAmount` is set yet, a real client-fixable
+  precondition failure ("set an amount first"), not a server bug that should 500.
+
+**M-Pesa statement import built.** Proposed to the user before building (password-protected
+PDFs, a statement format that can change without notice) and confirmed before any of this was
+written.
+
+- **The file is never persisted.** `GranaryController.importMpesaStatement` reads the
+  uploaded `MultipartFile`'s bytes straight into memory (`file.getBytes()`) and passes them to
+  `GranaryService.importMpesaStatement`, which only ever holds them in a local `byte[]`
+  variable scoped to that one call. Nothing writes them to disk, a temp directory, or any
+  table — "delete the file after parsing" is true by construction, since the file is never
+  saved in the first place, not a delete step that could be skipped or fail.
+- **Password-protected PDFs**: `MpesaPdfReader.extractText(bytes, password)` tries the given
+  password (or none) via PDFBox's own decryption (`Loader.loadPDF(bytes, password)`). A wrong
+  or missing password on an encrypted PDF throws `MpesaStatementPasswordRequiredException`,
+  mapped to its own `400` with `"type": "PASSWORD_REQUIRED"` — distinct from a generic parse
+  failure, so the frontend can prompt for a password specifically rather than showing
+  "couldn't read this statement."
+- **Format changes, fail loudly**: `MpesaStatementParser.parse` matches each transaction row
+  against a single regex (receipt id, completion date/time, free-text details, a status word,
+  three decimal amounts) and categorises each one by keyword-matching the details text against
+  a fixed map (`MpesaCategory`: FOOD, TRANSPORT, FAMILY_SUPPORT, DATA_AND_AIRTIME, LEARNING,
+  BETTING, OVERDRAFT_FEES, OTHER — matching the design reference's own category list, with
+  OTHER as the honest catch-all for anything unmatched). If the text has *zero* recognisable
+  transaction rows at all, parsing throws `MpesaStatementParseException` ("the statement's
+  format may have changed") rather than returning empty or silently wrong totals — the real
+  M-Pesa statement text layout hasn't been verified against a real statement (see the open
+  questions), so a confident wrong answer would be worse than a clear failure.
+- **Only Withdrawn amounts count.** Paid In amounts (money arriving) are read but never
+  summed into a category total — these totals answer "where did spending go," matching the
+  design reference's "Where it went" framing, not "where did money come from."
+- **New table** (migration V23): `mpesa_category_totals(user_id, statement_month, category,
+  amount)`, unique on `(user_id, statement_month, category)`. Re-importing the same month's
+  statement replaces that month's totals via a native `ON CONFLICT ... DO UPDATE` upsert, not
+  a second set of rows — "only category totals are kept," and a corrected or re-uploaded
+  statement should overwrite, not accumulate alongside the old one.
+- **New endpoints**: `POST /api/granary/mpesa-statement` (multipart: `userId`, `file`,
+  optional `password`), `GET /api/granary/mpesa-categories` (defaults to last month).
+- **Tested against a synthetic fixture only**, per the task's explicit instruction, never a
+  real statement: `MpesaStatementParserTest` covers the parser as a pure function against
+  plain text in the documented row shape (summing by category, Paid In never counting, OTHER
+  as the fallback, each named category's keywords, the "no rows at all" failure case).
+  `MpesaPdfReaderTest` builds real PDF fixtures with PDFBox itself (unprotected, and
+  password-protected with a known password) to prove the actual text-extraction and
+  decryption path, not just the parser's string handling. `GranaryServiceTest` and
+  `GranaryApiIntegrationTest` cover the full pipeline end to end, including re-import
+  replacing totals and the password-required path.
+
+**Phase 12 groundwork: organisations and cohorts, data model only.** `OrganisationService` +
+three new tables (migration V24: `organisations`, `organisation_admins`, `cohorts`,
+`cohort_memberships`). Bulk CSV invites, the cohort dashboard's pilot measures (activation,
+weekly participation, returns, the "supportive/neutral/pressuring" survey, small-groups-hidden)
+and the frontend are deliberately not built yet — this is the first of several parts, per the
+"do the first part only" rule; see PROJECT.md's status log for the rest.
+
+- **Admin is organisation-scoped, not cohort-scoped.** `organisation_admins` is a separate
+  table from `cohort_memberships` on purpose: the design reference's admin view oversees
+  multiple cohorts ("Cohort 14", "Cohort 13") under one organisation header, while a learner's
+  `cohort_memberships` row is a seat in exactly one cohort. There's no "cohort admin" role —
+  only an organisation admin, checked against every cohort under that organisation.
+- **Authorization is a service-layer check, not a JWT-protected endpoint.** `/api/organisations/**`
+  stays `permitAll`, same pattern as `/api/granary/**` — every write takes a
+  `requestingUserId` and `OrganisationService` throws `NotAnOrganisationAdminException`
+  (→ `403`, a new `GlobalExceptionHandler` entry) if that user isn't an admin of the relevant
+  organisation. `createCohort`/`addCohortMember`/`listCohortMembers` all check this before
+  doing anything else.
+- **Adding the same learner to a cohort twice is a no-op, not a duplicate.**
+  `addCohortMember` checks `findByCohortIdAndUserId` first — same idempotent-write shape as
+  `GranaryService.storeSaving` for a day that's already been logged.
+- **New endpoints**: `POST /api/organisations` (creates an org and makes the given user its
+  founding admin in one call), `POST /api/organisations/{id}/cohorts`,
+  `POST /api/organisations/cohorts/{id}/members`, `GET /api/organisations/cohorts/{id}/members`.
+- Tested with `OrganisationServiceTest` (service-layer admin checks, idempotent membership)
+  and `OrganisationApiIntegrationTest` (the full create-org → create-cohort → add-member →
+  list-members flow end to end, plus the 403 path).
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-19 | M-Pesa statement parsing uses one regex matching the whole transaction-row shape, not a general-purpose PDF table extractor | PDFBox's basic `PDFTextStripper` doesn't preserve table column boundaries reliably; a row-shape regex anchored on the structurally distinctive parts (a receipt id, an ISO-ish date/time, a status word, three trailing decimal amounts) degrades to "no match, fail loudly" when the layout differs, rather than silently misreading columns — matching the proposed "fail loudly on format changes" approach |
+| 2026-10-19 | Category classification is a fixed keyword-to-category map with an OTHER fallback, not a model or a configurable rule set | Matches `tally.py`'s own precedent for simple, stated rules over fitted parameters (Phase 2's skip-heavy threshold); a spending category guess from free text is inherently approximate, and OTHER makes that honest instead of forcing every transaction into a category it doesn't really belong to |
+| 2026-10-19 | The PDF's bytes are read into a plain `byte[]` and never touch a file on disk, rather than "save then delete" | A save-then-delete step is one more place a bug, a crash between the two steps, or a forgotten cleanup path could leave the file behind; never writing it in the first place removes that failure mode entirely instead of relying on a delete call always running |
+| 2026-10-19 | `MpesaStatementPasswordRequiredException` is a distinct exception/response type from `MpesaStatementParseException`, both separately caught in `GlobalExceptionHandler` | The two failures need different frontend behaviour (prompt for a password vs. show "couldn't read this, format may have changed") — collapsing them into one generic 400 would make that distinction only inferable from message text, which is fragile compared to a `type` field |
+| 2026-10-19 | Re-importing the same statement month overwrites that month's category totals (an upsert), not a new set of rows alongside the old one | A user re-uploading a statement (a correction, or the same one twice by accident) should get one true set of totals for that month, not two conflicting sets the page would have to somehow reconcile or pick between |
+| 2026-10-19 | Phase 12 built as data-model groundwork only this slice — no CSV invites, no dashboard metrics, no frontend | The full feature (bulk CSV invites, four pilot measures with denominators, weekly check-in history, small-groups-hidden, a frontend admin/learner dashboard) is more than three parts; per the standing rule, only the first (the data model and the admin/learner access rule everything else depends on) is built now |
+| 2026-10-19 | Admin status lives on `organisation_admins`, scoped to the organisation, not to a cohort | The design reference's admin view spans multiple cohorts under one organisation header ("Cohort 14", "Cohort 13" both under the same admin nav); a per-cohort admin role would need to be granted separately for each new cohort an admin creates, which doesn't match "run a programme," not "run one cohort" |
+| 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
+| 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
+| 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |
 | 2026-10-18 | Profile is its own `GET`/`PUT /api/users/me/profile` response type, not added to `UserResponse`/`GET /api/users/me` | `GET /api/users/me` is already called from several places that have no reason to ever see profile data (the sidebar's "signed in as," Hillside's session check); keeping it lean means there's no response path that could ever leak interests/thinkers/currency by accident just because something reused the "get the current user" call. The privacy test (`profileDataNeverAppearsInTheHillsideResponse`) is stronger for having two genuinely separate response shapes to prove apart, not one shape with fields that happen to be omitted sometimes |
 | 2026-10-18 | `User.updateProfile(...)` takes every field as nullable and only applies the ones that aren't null, rather than requiring the full profile on every `PUT` | Matches this project's existing partial-update precedent (`HillsideOptInRequest` aside, most PATCH/PUT endpoints here update one concern at a time); a Profile form with many independent fields (interests, thinkers, currency, time zone, day-end hour, the analogies switch) shouldn't need to resend fields the user isn't currently touching |
 | 2026-10-18 | `day_end_hour` defaults to 0, which is a mathematical no-op in `EvidenceCreditService`'s `hour < dayEndHour` check | Every existing Phase 9 test, and every real user until they visit Profile and change it, needs to see exactly the same local-date behavior as before this column existed — an hour comparison that can never be true at the default value guarantees that without a separate "is this feature on" flag |
@@ -546,6 +662,24 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 
 ## Open questions
 
+- M-Pesa's real statement PDF text layout has never been verified against a real statement —
+  per the task's own instruction, `MpesaStatementParser`/`MpesaPdfReader` are tested only
+  against a synthetic fixture built in-test. The row-shape regex is a best-effort match for
+  the publicly-documented statement structure (receipt no., completion time, details,
+  transaction status, paid in, withdrawn, balance); if the real extracted text differs enough
+  that the regex never matches, every import will fail loudly (by design) until someone
+  checks it against a real statement and adjusts the pattern.
+- The category keyword map (`MpesaStatementParser.CATEGORY_KEYWORDS`) is a first pass, not
+  validated against real M-Pesa transaction description text — merchant names, Till/Paybill
+  numbers, and phrasing it hasn't seen will land in OTHER rather than their real category
+  until the map is extended with real examples.
+- Bank statement CSV import and a typed-in/read money-market-fund balance (both named in the
+  design reference's "Where the granary drinks from" card) aren't built — only M-Pesa and the
+  manual tap exist as sources.
+- `pause_decisions.amount`/`heard_from` are free text; there's no structured currency amount
+  or a fixed enum for "where did you hear it" (the frontend offers a fixed radio set, but the
+  backend accepts anything) — fine for the current single-field-per-pause scope, but would
+  need revisiting if this data were ever aggregated or charted.
 - No endpoint deletes a profile's data or exports it (the design reference shows "Export my
   data"/"Delete my account" buttons; not built — out of this phase's explicit scope).
 - Nothing yet calls `PUT /api/users/me/profile` except the frontend's own Profile page; no

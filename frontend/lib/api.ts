@@ -54,3 +54,19 @@ export function authenticatedBackendFetch<T>(path: string, token: string, init: 
 export function intelligenceFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return request<T>(INTELLIGENCE_SERVICE_URL, path, init);
 }
+
+// Phase 11: M-Pesa statement upload (lib/actions.ts::importMpesaStatement). No
+// "Content-Type: application/json" here — fetch sets multipart/form-data with the right
+// boundary itself from the FormData body; forcing a Content-Type header would break it.
+export async function backendFetchMultipart<T>(path: string, formData: FormData): Promise<T> {
+  const response = await fetch(`${BACKEND_URL}${path}`, {
+    method: "POST",
+    body: formData,
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new ApiError(response.status, body || response.statusText);
+  }
+  return response.json() as Promise<T>;
+}

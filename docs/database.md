@@ -177,10 +177,51 @@ pattern `reading_notes.ideas_connected`/`quoted_phrases` already use), `currency
 `EvidenceCreditService`'s local-date rule (see `backend.md`); the rest is read and written
 only through `GET`/`PUT /api/users/me/profile`, never by anything hillside- or cohort-facing.
 
+Phase 11 built via `V22__granary.sql`: `users` gains `saving_target_amount` (integer,
+nullable — null until the user sets one on the granary page). Two new tables:
+
+- `savings(id, user_id references users, amount, local_date, created_at)`, unique on
+  `(user_id, local_date)` — one saving per user per day, tapped, never more than once a day
+  regardless of how many times the button is pressed.
+- `pause_decisions(id, user_id references users, what, amount, why, heard_from, outcome
+  nullable, decided_at nullable, follow_up_24h_at, follow_up_30d_at, reflection_30d nullable,
+  created_at)`, a check constraint restricts `outcome` to `DECLINED`/`PROCEEDED`. `outcome`
+  stays null until the user actually decides; `reflection_30d` is a separate, later field,
+  filled independently of `outcome` at the 30-day look-back.
+
+Neither table is referenced by anything hillside- or cohort-facing — see `backend.md`'s
+decisions log and the privacy test that proves it.
+
+Phase 11 also built via `V23__mpesa_category_totals.sql`: `mpesa_category_totals(id, user_id
+references users, statement_month, category, amount, created_at)`, unique on
+`(user_id, statement_month, category)`. Only category totals are kept — no transaction-level
+detail at all, and the uploaded statement PDF is never written to disk, let alone to a table.
+Re-importing the same month's statement upserts (replaces) that month's totals rather than
+adding a second set of rows. Also not referenced by anything hillside- or cohort-facing.
+
+Phase 12 groundwork built via `V24__organisations_and_cohorts.sql` (data model only — see
+`backend.md`'s decisions log for why the rest of Phase 12 isn't built yet):
+- `organisations(id, name, created_at)`.
+- `organisation_admins(id, organisation_id references organisations, user_id references
+  users, created_at)`, unique on `(organisation_id, user_id)`. Who administers an
+  organisation, and therefore every cohort under it — see `backend.md` for why this is
+  organisation-scoped, not cohort-scoped.
+- `cohorts(id, organisation_id references organisations, name, starts_on, weeks,
+  created_at)`.
+- `cohort_memberships(id, cohort_id references cohorts, user_id references users,
+  joined_at)`, unique on `(cohort_id, user_id)`. A learner's seat in one cohort.
+
+None of these four tables are read by `HillsideV2Service`/`GranaryService` or vice versa —
+the two modules are simply uncoupled so far, nothing yet requires the marker-string privacy
+test Phase 10/11 needed. That test becomes necessary once a later Phase 12 part actually
+assembles a cohort dashboard response from other users' data.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-19 | `savings` is unique on `(user_id, local_date)`, no concurrency-safe upsert like `daily_credits` | Unlike a credit, a saving is only ever written by one action (the user's own tap, from a session only they control) — there's no multi-source race the way evidence events have (sync jobs, manual taps, different sources, all landing the same day). A plain find-then-insert is enough; `GranaryService.storeSaving` is idempotent by checking first |
+| 2026-10-19 | `pause_decisions.amount` is a plain string (`VARCHAR(100)`), not a structured integer | The design reference shows free text ("KSh 5,000 / week", "KSh 500 / week") that doesn't reduce to one currency-amount pair; the granary's own real financial fields (`savings.amount`, `users.saving_target_amount`) are integers precisely because those are single, well-defined numbers — a pause's "how much" is closer to a label the user writes than a number this app computes with |
 | 2026-10-18 | `day_end_hour` is `INTEGER`, not `SMALLINT`, even though it only ever holds 0-23 | Hibernate maps a Java `int` field to `INTEGER` by default and validates the schema matches at startup; `SMALLINT` (the first version of this migration) failed that check immediately (`Schema-validation: wrong column type encountered`). Caught by `./mvnw test` before this ever reached a report — a real case of a plausible-looking micro-optimisation (`SMALLINT` saves 2 bytes a row nobody will ever notice) breaking the actual running system |
 | 2026-10-17 | `users.hillside_opt_in` defaults `false`, not `true` | The hillside previously treated every user with a non-private daily log as a participant with no consent step at all; defaulting the new flag to off is the only choice consistent with calling this a real opt-in, not a relabeled version of the same behaviour |
 | 2026-10-17 | `goals.user_id` is nullable, `NULL` keeps meaning the three shared seeded goals | Same reasoning as `routine_items`/`daily_logs`'s `user_id`: adding a creation API shouldn't change what every existing reader of `GET /api/goals` already sees |

@@ -264,3 +264,49 @@ export interface EvidenceEvent {
   reason: string;
   questioned: boolean;
 }
+
+// Phase 11: the granary. Never reaches the hillside or any admin view — see
+// docs/backend.md's decisions log.
+export interface GranaryMonthSummary {
+  storedThisMonth: number;
+  targetThisMonth: number;
+  daysStored: number;
+  elapsedDays: number;
+  totalStoredEver: number;
+  jar: boolean[];
+  savingTargetAmount: number | null;
+  currency: string | null;
+}
+
+export type PauseOutcome = "DECLINED" | "PROCEEDED";
+
+export interface PauseDecision {
+  id: number;
+  what: string;
+  amount: string | null;
+  why: string | null;
+  heardFrom: string | null;
+  outcome: PauseOutcome | null;
+  decidedAt: string | null;
+  followUp24hAt: string;
+  followUp30dAt: string;
+  reflectionThirtyDay: string | null;
+  dueForTwentyFourHourFollowUp: boolean;
+  dueForThirtyDayFollowUp: boolean;
+}
+
+export type MpesaCategory =
+  | "FOOD"
+  | "TRANSPORT"
+  | "FAMILY_SUPPORT"
+  | "DATA_AND_AIRTIME"
+  | "LEARNING"
+  | "BETTING"
+  | "OVERDRAFT_FEES"
+  | "OTHER";
+
+export interface MpesaImportResponse {
+  statementMonth: string;
+  transactionsParsed: number;
+  categoryTotals: Partial<Record<MpesaCategory, number>>;
+}

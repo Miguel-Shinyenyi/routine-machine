@@ -22,6 +22,12 @@ const ICONS: Record<string, React.ReactNode> = {
   ),
   "/tally": <path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6" />,
   "/reading": <path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" />,
+  "/granary": (
+    <>
+      <path d="M8 3h8M9 3v3L6 10v9a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-9l-3-4V3" />
+      <path d="M6 13h12" />
+    </>
+  ),
   "/hillside": <path d="M2 19l7-10 4 5 3-3 6 8z" />,
   "/watering-holes": <path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z" />,
 };
@@ -32,13 +38,15 @@ const SIDEBAR_LINKS = [
   { href: "/flock", label: "Flock" },
   { href: "/tally", label: "Tally" },
   { href: "/reading", label: "Reading" },
+  { href: "/granary", label: "Granary" },
   { href: "/hillside", label: "Hillside" },
   { href: "/watering-holes", label: "Watering holes" },
 ];
 
-// The reference's phone tab bar is Today, Path, Reading, Tally, Hillside; Flock and
-// Watering holes open from Tally on phone instead (docs/design-reference/README.md).
-const PHONE_LINKS = ["/today", "/path", "/reading", "/tally", "/hillside"];
+// Matches the updated design reference's phone tab bar exactly: Today, Reading, Granary,
+// Tally, Hillside — Path moved off (its "opens from Today" cross-link isn't built, same
+// already-flagged gap as Flock/Watering holes below), now that Granary actually exists.
+const PHONE_LINKS = ["/today", "/reading", "/granary", "/tally", "/hillside"];
 
 function NavIcon({ href }: { href: string }) {
   return (

@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "./api";
-import { getSessionToken } from "./auth/session";
-import type { ReadingNoteAssessment } from "./types";
+import { authenticatedBackendFetch, ApiError, backendFetch, backendFetchMultipart, intelligenceFetch } from "./api";
+import { getSessionToken, getSessionUserId } from "./auth/session";
+import type { MpesaImportResponse, ReadingNoteAssessment } from "./types";
 
 function optionalNumber(value: FormDataEntryValue | null): number | null {
   if (value === null || value === "") return null;
@@ -199,4 +199,116 @@ export async function updateProfile(formData: FormData): Promise<void> {
 
   revalidatePath("/profile");
   revalidatePath("/today");
+}
+
+// Phase 11: the granary. userId always comes from the verified session, never from the form
+// — the same reasoning every other authenticated action here already follows.
+export async function storeSaving(): Promise<void> {
+  const userId = await getSessionUserId();
+  if (userId === null) return;
+  await backendFetch("/api/granary/savings", { method: "POST", body: JSON.stringify({ userId }) });
+  revalidatePath("/granary");
+  revalidatePath("/today");
+}
+
+export async function setSavingTargetAmount(formData: FormData): Promise<void> {
+  const userId = await getSessionUserId();
+  if (userId === null) return;
+  const amount = Number(formData.get("amount"));
+  await backendFetch("/api/granary/saving-target-amount", {
+    method: "PUT",
+    body: JSON.stringify({ userId, amount }),
+  });
+  revalidatePath("/granary");
+}
+
+export async function createPause(formData: FormData): Promise<void> {
+  const userId = await getSessionUserId();
+  if (userId === null) return;
+  await backendFetch("/api/granary/pauses", {
+    method: "POST",
+    body: JSON.stringify({
+      userId,
+      what: formData.get("what"),
+      amount: formData.get("amount") || null,
+      why: formData.get("why") || null,
+      heardFrom: formData.get("heardFrom") || null,
+    }),
+  });
+  revalidatePath("/granary");
+  revalidatePath("/today");
+}
+
+export async function decidePause(formData: FormData): Promise<void> {
+  const pauseId = formData.get("pauseId");
+  const outcome = formData.get("outcome");
+  await backendFetch(`/api/granary/pauses/${pauseId}/decide`, {
+    method: "PATCH",
+    body: JSON.stringify({ outcome }),
+  });
+  revalidatePath("/granary");
+  revalidatePath("/today");
+}
+
+export async function reflectPause(formData: FormData): Promise<void> {
+  const pauseId = formData.get("pauseId");
+  const reflection = formData.get("reflection");
+  await backendFetch(`/api/granary/pauses/${pauseId}/reflect`, {
+    method: "PATCH",
+    body: JSON.stringify({ reflection }),
+  });
+  revalidatePath("/granary");
+  revalidatePath("/today");
+}
+
+export interface MpesaImportState {
+  error: string | null;
+  needsPassword: boolean;
+}
+
+// Phase 11: the PDF's bytes go straight to the backend as multipart form data and are never
+// written to disk here either — nothing in this action persists the file. See
+// docs/backend.md's decisions log for the password-protected-PDF and format-change handling
+// this was built against.
+export async function importMpesaStatement(
+  _prevState: MpesaImportState,
+  formData: FormData,
+): Promise<MpesaImportState> {
+  const userId = await getSessionUserId();
+  if (userId === null) {
+    return { error: "You need to be signed in to import a statement.", needsPassword: false };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Choose a PDF statement to import.", needsPassword: false };
+  }
+  const password = formData.get("password");
+
+  const body = new FormData();
+  body.set("userId", String(userId));
+  body.set("file", file);
+  if (typeof password === "string" && password.trim() !== "") {
+    body.set("password", password.trim());
+  }
+
+  try {
+    await backendFetchMultipart<MpesaImportResponse>("/api/granary/mpesa-statement", body);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      try {
+        const parsed = JSON.parse(error.message) as { error?: string; type?: string };
+        return {
+          error: parsed.error ?? "Couldn't import that statement.",
+          needsPassword: parsed.type === "PASSWORD_REQUIRED",
+        };
+      } catch {
+        return { error: "Couldn't import that statement.", needsPassword: false };
+      }
+    }
+    return { error: "Couldn't import that statement.", needsPassword: false };
+  }
+
+  revalidatePath("/granary");
+  return { error: null, needsPassword: false };
 }

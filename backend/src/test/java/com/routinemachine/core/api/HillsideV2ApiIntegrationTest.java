@@ -110,4 +110,51 @@ class HillsideV2ApiIntegrationTest extends AbstractIntegrationTest {
                 .doesNotContain("a-private-learning-pref-marker")
                 .doesNotContain("PRIVMARK");
     }
+
+    // Phase 11's explicit boundary (docs/product-direction.md's granary section): "Granary
+    // data is excluded from the hillside and from admin views... Test it." Same technique as
+    // the profile privacy test above: distinctive marker strings in a pause decision, checked
+    // against the raw hillside v2 response body.
+    @Test
+    void granaryDataNeverAppearsInTheHillsideResponse() throws Exception {
+        User user = userRepository.save(new User("v2-granary-privacy@example.com", "irrelevant-hash", null, null));
+        user.optIntoHillside();
+        userRepository.save(user);
+        Goal goal = goalRepository.save(new Goal("v2-granary-privacy-goal", null));
+
+        EvidenceCreditService service =
+                new EvidenceCreditService(evidenceEventRepository, dailyCreditRepository, scoringRuleRepository);
+        LocalDate day = LocalDate.of(2026, 8, 3);
+        service.ingest(user, goal, DailyLogSource.MANUAL, "v2-granary-privacy-evt",
+                day.atStartOfDay(ZoneOffset.UTC).toInstant(), null);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/granary/pauses")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + user.getId() + ", \"what\": \"a-granary-what-marker\", "
+                                + "\"amount\": \"a-granary-amount-marker\", \"why\": \"a-granary-why-marker\", "
+                                + "\"heardFrom\": \"a-granary-heard-from-marker\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/granary/saving-target-amount")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + user.getId() + ", \"amount\": 193837}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/granary/savings")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"userId\": " + user.getId() + "}"))
+                .andExpect(status().isOk());
+
+        String body = mockMvc.perform(get("/api/hillside/v2")
+                        .param("seasonStart", "2026-08-03")
+                        .param("asUserId", user.getId().toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        org.assertj.core.api.Assertions.assertThat(body)
+                .doesNotContain("a-granary-what-marker")
+                .doesNotContain("a-granary-amount-marker")
+                .doesNotContain("a-granary-why-marker")
+                .doesNotContain("a-granary-heard-from-marker")
+                .doesNotContain("193837");
+    }
 }

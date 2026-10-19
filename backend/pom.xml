@@ -55,6 +55,14 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
+        <!-- Phase 11: M-Pesa statement import (docs/product-direction.md). Text extraction and
+             password-protected-PDF decryption only — the file itself is never written to disk
+             or persisted anywhere; see GranaryController/MpesaStatementService. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
