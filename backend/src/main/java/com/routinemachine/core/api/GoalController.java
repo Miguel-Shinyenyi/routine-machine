@@ -34,7 +34,8 @@ public class GoalController {
     // user's own goals, matching RoutineItemController/DailyLogController's pattern.
     @GetMapping
     public List<GoalResponse> list(@RequestParam Optional<Long> userId) {
-        List<Goal> goals = userId.map(goalRepository::findByUserId).orElseGet(goalRepository::findAll);
+        // Per-user scoping (docs/backend.md): userId omitted = only unowned goals, not every account's.
+        List<Goal> goals = userId.map(goalRepository::findByUserId).orElseGet(goalRepository::findByUserIsNull);
         return goals.stream().map(GoalResponse::from).toList();
     }
 

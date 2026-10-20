@@ -63,28 +63,34 @@ class UserScopedDataApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[0].name", is("User B's routine")));
     }
 
+    private long createRoutineItemFor(String name, long userId) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/routine-items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"" + name + "\", \"userId\": " + userId + "}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return Long.parseLong(result.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+    }
+
     @Test
     void dailyLogsCreatedForOneUserAreNotVisibleWhenListingAnother() throws Exception {
         long userA = registerUser("logs-a@example.com");
         long userB = registerUser("logs-b@example.com");
 
-        MvcResult itemResult = mockMvc.perform(post("/api/routine-items")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"Shared-shape item for log scoping test\"}"))
-                .andExpect(status().isCreated())
-                .andReturn();
-        long routineItemId = Long.parseLong(
-                itemResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
+        // Each user logs their own routine item: since per-user scoping part 2c, a day cannot be
+        // logged against an item owned by someone else (or by nobody) when a userId is given.
+        long itemA = createRoutineItemFor("Log scoping item A", userA);
+        long itemB = createRoutineItemFor("Log scoping item B", userB);
 
         mockMvc.perform(post("/api/daily-logs")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"logDate\": \"2026-10-17\", \"routineItemId\": " + routineItemId
+                        .content("{\"logDate\": \"2026-10-17\", \"routineItemId\": " + itemA
                                 + ", \"userId\": " + userA + "}"))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/daily-logs")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"logDate\": \"2026-10-17\", \"routineItemId\": " + routineItemId
+                        .content("{\"logDate\": \"2026-10-17\", \"routineItemId\": " + itemB
                                 + ", \"userId\": " + userB + "}"))
                 .andExpect(status().isCreated());
 

@@ -6,6 +6,7 @@ import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.GoalRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import com.routinemachine.core.repository.UserRepository;
+import com.routinemachine.core.service.Ownership;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,17 +44,19 @@ public class RoutineItemController {
     public List<RoutineItemResponse> list(@RequestParam Optional<Long> userId) {
         List<RoutineItem> items = userId
                 .map(routineItemRepository::findAllWithGoalByUserId)
-                .orElseGet(routineItemRepository::findAllWithGoal);
+                .orElseGet(routineItemRepository::findAllWithGoalUnowned);
         return items.stream().map(RoutineItemResponse::from).toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoutineItemResponse create(@Valid @RequestBody RoutineItemRequest request) {
-        Goal goal = request.goalId() == null ? null : goalRepository.findById(request.goalId())
-                .orElseThrow(() -> new IllegalArgumentException("No goal with id " + request.goalId()));
         User user = request.userId() == null ? null : userRepository.findById(request.userId())
                 .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
+        // Someone else's goal answers exactly like one that does not exist.
+        Goal goal = request.goalId() == null ? null : goalRepository.findById(request.goalId())
+                .filter(found -> Ownership.sameOwner(found.getUser(), user))
+                .orElseThrow(() -> new IllegalArgumentException("No goal with id " + request.goalId()));
 
         RoutineItem item = new RoutineItem(
                 request.name(),

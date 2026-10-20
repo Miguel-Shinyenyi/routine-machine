@@ -16,9 +16,11 @@ Phase 1 and 2 built: Spring Boot 3.5, Java 21, PostgreSQL via Flyway migrations.
 endpoints, matching the four Phase 1 entities in `database.md`:
 
 - `GET /api/goals?userId=`, `POST /api/goals`, list and create goals. The three seeded goals
-  (Phase 1) have no `user_id` and remain visible to everyone, unchanged. Phase 8 added the
-  `userId`-scoped creation path: `userId` is optional on both the query (filters the list,
-  omitted returns every goal exactly as Phase 1 did) and the create body (400 on an unknown
+  (Phase 1) have no `user_id`; until the owner claim hands them to the owner account they are
+  the "unowned" goals, which a request with no `userId` still lists (since per-user scoping
+  part 2c, *only* those, not every account's goal as it did through Phase 8). Phase 8 added the
+  `userId`-scoped creation path: `userId` is optional on both the query (filters the list;
+  omitted returns only the unowned goals) and the create body (400 on an unknown
   `userId`, matching every other foreign-key validation in this API). Goal names are unique
   per user (`UNIQUE(user_id, name)`, not a global `UNIQUE(name)` as before Phase 8); creating
   a second goal with the same name for the same `userId` is a 400.
@@ -349,8 +351,8 @@ tables that actually drive "days shown up" — the one signal needed to demo mul
 having genuinely different data, without first inventing a goals-creation API or touching
 every table in the schema. This is additive scoping, not enforced auth: `userId` is an
 optional query param on `GET /api/routine-items`/`GET /api/daily-logs` and an optional field
-on their `POST` bodies. Omitted, both behave exactly as before this change (every legacy,
-unowned row, `NULL` `user_id`) — the existing frontend and every Phase 6 sync service
+on their `POST` bodies. Omitted, both list only the legacy, unowned rows (`NULL` `user_id`;
+through Phase 8 they listed every account's) — the existing frontend and every Phase 6 sync service
 (`WakaTimeSyncService`, `HubSyncService`, etc.) are untouched and keep working against that
 same unscoped data, since none of them pass `userId`. Passed, the response is scoped to that
 one user's own rows instead. `RoutineItem.assignUser`/`DailyLog.assignUser` are plain setters
@@ -787,6 +789,16 @@ daily logs). The rule on every personal endpoint:
   purpose: hub-sync still uses the first, and moving hub-sync onto the owner account is part 5.
   Tested by `ScopedReadingAndTopicsApiIntegrationTest` (11 tests), checked by mutation: removing
   the book-ownership filter and the goal-ownership filter made two of them fail.
+- **2c (done)**: `GET /api/goals`, `/api/routine-items` and `/api/daily-logs` with no `userId`
+  list only unowned rows (they listed every account's before). A routine item cannot be created
+  under someone else's goal, and a day cannot be logged against someone else's routine item or
+  learning topic; each is rejected with the unknown-id 400. Logging a day now always assigns the
+  day to the request's user (it was the same in effect, now through one code path).
+  Tested by `ScopedGoalsItemsAndLogsApiIntegrationTest` (8 tests), checked by mutation (restoring
+  the old goal list and dropping the daily-log link check made two fail). One Phase 8 test,
+  `UserScopedDataApiIntegrationTest.dailyLogsCreatedForOneUserAreNotVisibleWhenListingAnother`,
+  logged two accounts against one shared unowned routine item, which is exactly the cross-account
+  link the new rule rejects; it now gives each user their own item and still proves the isolation.
 - **A build trap found on the way**: with VS Code's Java language server running, an edit that
   does not compile can leave Eclipse-compiled `Unresolved compilation problem` stubs in
   `target/classes`, which Maven then treats as up to date. `./mvnw -q compile` printed nothing

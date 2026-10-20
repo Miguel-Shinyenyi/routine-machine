@@ -9,6 +9,7 @@ import com.routinemachine.core.repository.DailyLogRepository;
 import com.routinemachine.core.repository.LearningTopicRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import com.routinemachine.core.repository.UserRepository;
+import com.routinemachine.core.service.Ownership;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,7 +54,8 @@ public class DailyLogController {
         } else if (userId.isPresent()) {
             logs = dailyLogRepository.findByUserId(userId.get());
         } else {
-            logs = date.map(dailyLogRepository::findByLogDate).orElseGet(dailyLogRepository::findAll);
+            // Per-user scoping (docs/backend.md): userId omitted = only unowned logs.
+            logs = date.map(dailyLogRepository::findByUserIsNullAndLogDate).orElseGet(dailyLogRepository::findByUserIsNull);
         }
         return logs.stream().map(DailyLogResponse::from).toList();
     }
@@ -66,16 +68,18 @@ public class DailyLogController {
                     "Exactly one of routineItemId or learningTopicId must be set");
         }
 
+        User owner = request.userId() == null ? null : userRepository.findById(request.userId())
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
         DailyLogSource source = request.source() == null
                 ? DailyLogSource.MANUAL
                 : DailyLogSource.fromValue(request.source());
 
         DailyLog log = request.routineItemId() != null
                 ? DailyLog.forRoutineItem(
-                        request.logDate(), findRoutineItem(request.routineItemId()), source,
+                        request.logDate(), findRoutineItem(request.routineItemId(), owner), source,
                         request.measuredMinutes())
                 : DailyLog.forLearningTopic(
-                        request.logDate(), findLearningTopic(request.learningTopicId()), source,
+                        request.logDate(), findLearningTopic(request.learningTopicId(), owner), source,
                         request.measuredMinutes());
 
         if (request.userId() != null) {
@@ -86,13 +90,17 @@ public class DailyLogController {
         return DailyLogResponse.from(dailyLogRepository.save(log));
     }
 
-    private RoutineItem findRoutineItem(Long id) {
+    // A day can only be logged against the caller's own routine items and topics; anyone else's
+    // answers exactly like one that does not exist.
+    private RoutineItem findRoutineItem(Long id, User owner) {
         return routineItemRepository.findById(id)
+                .filter(found -> Ownership.sameOwner(found.getUser(), owner))
                 .orElseThrow(() -> new IllegalArgumentException("No routine item with id " + id));
     }
 
-    private LearningTopic findLearningTopic(Long id) {
-        return learningTopicRepository.findById(id)
+    private LearningTopic findLearningTopic(Long id, User owner) {
+        return learningTopicRepository.findWithGoalAndOwnerById(id)
+                .filter(found -> Ownership.sameOwner(found.getGoal().getUser(), owner))
                 .orElseThrow(() -> new IllegalArgumentException("No learning topic with id " + id));
     }
 }
