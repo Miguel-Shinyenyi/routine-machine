@@ -239,10 +239,21 @@ doesn't cross the boundary either. That test becomes necessary once a later Phas
 surfaces anything from `savings`/`pause_decisions`/`mpesa_category_totals`/`daily_credits` on
 a cohort response.
 
+Per-user scoping, part 1, built via `V28__personal_data_ownership.sql` (ownership data only, no
+query uses the new columns yet): a nullable `user_id` (references `users`) and an index on
+`schedule_templates`, `tasks`, `books` and `current_reading_log`. `goals`, `routine_items` and
+`daily_logs` already had one (V15, V16). `learning_topics` is scoped through its goal and
+`reading_notes` through its book, so neither gets a column. `measurements` and
+`hub_sync_processed_files` deliberately get none: they hold what the owner's own integrations
+pull in (WakaTime, ActivityWatch, GitHub, RescueTime, the UMWAYI hub), which belongs to the
+deployment's owner, not to each user. Columns stay nullable: every row that existed before
+accounts has `user_id IS NULL` until `OwnerClaimService` gives it to the owner (see `backend.md`).
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-21 | The four new `user_id` columns (V28) are nullable, not `NOT NULL` | Existing rows have no owner until `OwnerClaimService` runs, and the create endpoints do not set one yet (later parts). Making them `NOT NULL` now would fail the migration on real data and break every create path. Tightening to `NOT NULL` is a later migration, once nothing writes a NULL |
 | 2026-10-19 | `savings` is unique on `(user_id, local_date)`, no concurrency-safe upsert like `daily_credits` | Unlike a credit, a saving is only ever written by one action (the user's own tap, from a session only they control) — there's no multi-source race the way evidence events have (sync jobs, manual taps, different sources, all landing the same day). A plain find-then-insert is enough; `GranaryService.storeSaving` is idempotent by checking first |
 | 2026-10-19 | `pause_decisions.amount` is a plain string (`VARCHAR(100)`), not a structured integer | The design reference shows free text ("KSh 5,000 / week", "KSh 500 / week") that doesn't reduce to one currency-amount pair; the granary's own real financial fields (`savings.amount`, `users.saving_target_amount`) are integers precisely because those are single, well-defined numbers — a pause's "how much" is closer to a label the user writes than a number this app computes with |
 | 2026-10-18 | `day_end_hour` is `INTEGER`, not `SMALLINT`, even though it only ever holds 0-23 | Hibernate maps a Java `int` field to `INTEGER` by default and validates the schema matches at startup; `SMALLINT` (the first version of this migration) failed that check immediately (`Schema-validation: wrong column type encountered`). Caught by `./mvnw test` before this ever reached a report — a real case of a plausible-looking micro-optimisation (`SMALLINT` saves 2 bytes a row nobody will ever notice) breaking the actual running system |

@@ -687,14 +687,14 @@ bar per week of `Cohort.weeks` (the pilot's stated length), matching
 - **The current week is flagged (`isCurrentWeek`) separately from being future or past.**
   Matches the reference's highlighted "now" bar, distinct styling from both completed weeks
   and the dashed weeks ahead.
-- **A real test-fragility bug found and fixed while writing this**: `CohortMembership.joinedAt`
-  is DB-generated at insert time (`now()`), not settable from a test — so any test whose
-  activation check depends on `joinedAt` has to use dates anchored to the real wall-clock
-  date, not an arbitrary historical date, or the member silently never activates. The first
-  version of `weeklyCheckInsCountsActivatedMembersWhoLoggedInEachElapsedWeek` used
-  `cohortStart = 2026-09-01` and failed for exactly this reason; fixed by anchoring the test's
-  dates to the real "today" instead, with a comment explaining why, so the same mistake isn't
-  repeated in a later Phase 12 test.
+- **A real test-fragility bug found while writing this, fixed properly on 2026-10-21**:
+  `CohortMembership.joinedAt` and `Goal.createdAt` are DB-generated at insert time (`now()`),
+  not settable through the entities, but activation is measured against them. The first fix
+  (anchor test dates to the real "today") only moved the problem: Stage 1's read-only pass
+  found `checkedInThisWeekIsOutOfActivatedMembersOnly` failing two days after it was written.
+  The tests now pin both timestamps to the date they are about with a native `UPDATE`
+  (`pinTimestamp` in `CohortDashboardServiceTest`), and `activationDoesNotDependOnTheRealDate`
+  runs the same scenario for cohorts dated 2031 and 2019.
 - **New endpoint**: `GET /api/organisations/cohorts/{id}/dashboard/weekly-check-ins`.
 - Tested with `CohortDashboardServiceTest` (the elapsed-weeks' real counts, future weeks
   reporting `null`, the current-week flag, the access-control check) and
@@ -715,10 +715,49 @@ code before:
   how `request()` already special-cases `204`, rather than loosening the frontend's parsing.
   `OrganisationApiIntegrationTest`'s assertions updated from `isOk()` to `isNoContent()`.
 
+**Per-user scoping, part 1: ownership data and the owner claim.** The app began as one
+person's tool, so most personal data was stored with no owner (`user_id IS NULL`), and every
+page showed it to every visitor, including a brand-new account. The fix is built in parts (the
+rule: more than three parts, one at a time); this is the first and changes no behaviour a user
+can see.
+
+- **What it adds**: migration V28 (a nullable `user_id` on `schedule_templates`, `tasks`,
+  `books`, `current_reading_log`; see `database.md`), the matching `user` field and `assignUser`
+  on those four entities, and `OwnerClaimService` + `OwnerClaimRunner`.
+- **The owner claim**: when the environment variable `OWNER_EMAIL` is set, the backend gives
+  every row with a NULL `user_id` in `goals`, `routine_items`, `daily_logs`, `schedule_templates`,
+  `tasks`, `books` and `current_reading_log` to that account at startup. The owner's address is
+  never in code or config files (only the variable's name, in `application.yml` and
+  `infra/docker-compose.yml`), and the log line reports counts per table, not the address.
+- **Safe by construction**: only NULL rows move, so anything already owned stays put and a
+  second run claims nothing. It is one transaction, all tables or none. An unknown email changes
+  nothing and is logged as an error, not a crash, so the app still starts. With the variable
+  unset the runner does nothing at all.
+- **A known sharp edge**: `goals` is unique on `(user_id, name)`. If the owner already has a goal
+  with the same name as an unowned one, that update fails and the whole claim rolls back (and is
+  logged). It has not happened with the data seen so far; it would need a rename, not a silent
+  merge.
+- **Integration data is owner-only, by decision**: `measurements` (WakaTime, ActivityWatch,
+  GitHub, RescueTime, health) and `hub_sync_processed_files` get no `user_id`. They come from
+  credentials set for the whole deployment, so they belong to the deployment's owner; a second
+  user has no integration of their own to read. Later parts make the Watering holes page and the
+  intelligence service respect this.
+- **Not done yet** (parts 2 to 6): no query filters on the new columns, so every page still
+  shows the same data to everyone. Backend scoping, the frontend empty start, the intelligence
+  service, owner-only integrations and cross-user tests follow. The backend still trusts a user
+  id sent in the request on several routes; closing that is the access-control stage.
+- Tested with `OwnerClaimServiceTest` (every table claimed, someone else's rows untouched, second
+  run a no-op, email match ignoring case, unknown email changes nothing) and
+  `OwnerClaimRunnerTest` (nothing without the variable, the configured address, a wrong address
+  not fatal). Checked that the tests can fail by dropping a table from the claim list: two failed.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-21 | Pre-account data is given to the owner by a startup claim driven by `OWNER_EMAIL`, not by a migration | A migration cannot know whose account is the founder's, and putting an address in a migration or a config file would publish it. The variable is read once at startup, only NULL rows move, and it is idempotent, so leaving it set is harmless |
+| 2026-10-21 | The owner claim is all-or-nothing and a failed claim is logged, not fatal | A half-claimed database (some tables owned, some not) is worse than an unclaimed one, and a typo in an environment variable should not stop the app from starting |
+| 2026-10-21 | `measurements` and `hub_sync_processed_files` are not given a `user_id` | They hold what the deployment's own integrations pull in (one set of credentials for the whole deployment). Giving each user a copy of the owner's WakaTime hours would be wrong, and per-user integrations are a separate feature |
 | 2026-10-19 | M-Pesa statement parsing uses one regex matching the whole transaction-row shape, not a general-purpose PDF table extractor | PDFBox's basic `PDFTextStripper` doesn't preserve table column boundaries reliably; a row-shape regex anchored on the structurally distinctive parts (a receipt id, an ISO-ish date/time, a status word, three trailing decimal amounts) degrades to "no match, fail loudly" when the layout differs, rather than silently misreading columns — matching the proposed "fail loudly on format changes" approach |
 | 2026-10-19 | Category classification is a fixed keyword-to-category map with an OTHER fallback, not a model or a configurable rule set | Matches `tally.py`'s own precedent for simple, stated rules over fitted parameters (Phase 2's skip-heavy threshold); a spending category guess from free text is inherently approximate, and OTHER makes that honest instead of forcing every transaction into a category it doesn't really belong to |
 | 2026-10-19 | The PDF's bytes are read into a plain `byte[]` and never touch a file on disk, rather than "save then delete" | A save-then-delete step is one more place a bug, a crash between the two steps, or a forgotten cleanup path could leave the file behind; never writing it in the first place removes that failure mode entirely instead of relying on a delete call always running |
@@ -736,7 +775,7 @@ code before:
 | 2026-10-19 | The by-group breakdown denominates by every group member, not just activated ones, unlike the cohort-wide measures | Matches the design reference's own group table ("12 of 14" where 14 is the group's full headcount) exactly, rather than silently reusing the cohort-wide measures' activated-only convention where the design doesn't ask for it |
 | 2026-10-19 | The weekly check-in chart shares one `activatedDenominator` across every bar, instead of recomputing a per-week activated count | Matches the design reference's single "of 34 activated" caption under the whole chart; a per-week denominator would also be a stranger number to explain (activation is evaluated as of now, not as of that past week) |
 | 2026-10-19 | A future week's `checkedIn` is `null`, never `0` | A week that hasn't started can't have "zero people checked in" reported about it — that would read as a real, bad result rather than "no data yet," which is what the design reference's dashed, blank bar actually means |
-| 2026-10-19 | Test dates for anything touching `CohortMembership.joinedAt`-based activation must anchor to the real wall-clock date, not an arbitrary historical one, with a comment saying why | `joinedAt` is DB-generated at insert time and isn't settable from a test; a test using a historical date like `2026-09-01` silently fails activation since `joinedAt` is really "now." Found and fixed in `weeklyCheckInsCountsActivatedMembersWhoLoggedInEachElapsedWeek` before this was merged — the comment exists so the same mistake isn't made again in a later Phase 12 test |
+| 2026-10-21 | A test whose result depends on `CohortMembership.joinedAt` or `Goal.createdAt` pins both to the date it is about, instead of using a date near the real "now" | They are DB-generated (`DEFAULT now()`) and not settable through the entities, so a test using a literal date only passes on the day it was written. The earlier rule ("anchor to the real wall-clock date") was wrong: it made the test pass that day and fail two days later (Stage 1, 2026-10-21). `activationDoesNotDependOnTheRealDate` is the regression guard |
 | 2026-10-19 | `setSeatLimit`/`submitSurveyResponse` return `204`, via `@ResponseStatus(HttpStatus.NO_CONTENT)`, not a bare `200` | Found live: the frontend's shared `request()` helper only special-cases `204` and otherwise always tries `response.json()`, so a `void` controller method's default `200`-with-empty-body threw `"Unexpected end of JSON input"` the first time either endpoint was actually called from the frontend. An honestly-empty write response should be `204`, matching the rest of this app's convention, rather than teaching the frontend to tolerate a malformed `200` |
 | 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
 | 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |

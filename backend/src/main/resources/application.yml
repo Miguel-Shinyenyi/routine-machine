@@ -17,3 +17,8 @@ auth:
   # No default: a missing secret should fail the app at startup, not run with a guessable
   # one. See docs/backend.md's decisions log.
   jwt-secret: ${AUTH_JWT_SECRET}
+
+# The account that inherits the data created before accounts existed (OwnerClaimService). Unset:
+# nothing is claimed. Never put a real address in this file; set OWNER_EMAIL in the environment.
+owner:
+  email: ${OWNER_EMAIL:}

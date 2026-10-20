@@ -30,6 +30,7 @@ services:
       # placeholder is not safe for any real deployment with real accounts. See docs/backend.md.
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-only-insecure-default-change-before-real-use-0123456789}
       AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
+      OWNER_EMAIL: ${OWNER_EMAIL:-}
     ports:
       - "8080:8080"
     depends_on:
