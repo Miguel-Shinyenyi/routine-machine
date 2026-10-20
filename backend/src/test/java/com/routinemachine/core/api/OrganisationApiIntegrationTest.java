@@ -264,7 +264,7 @@ class OrganisationApiIntegrationTest extends AbstractIntegrationTest {
         MvcResult cohortResult = mockMvc.perform(post("/api/organisations/" + organisationId + "/cohorts")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"requestingUserId\":" + admin
-                                + ",\"name\":\"Cohort 14\",\"startsOn\":\"2026-10-19\",\"weeks\":8}"))
+                                + ",\"name\":\"Cohort 14\",\"startsOn\":\"" + java.time.LocalDate.now() + "\",\"weeks\":8}"))
                 .andReturn();
         Long cohortId = Long.valueOf(
                 cohortResult.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));

@@ -23,7 +23,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
+import jakarta.persistence.EntityManager;
+
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -50,6 +53,8 @@ class CohortDashboardServiceTest extends AbstractIntegrationTest {
     private RoutineItemRepository routineItemRepository;
     @Autowired
     private DailyLogRepository dailyLogRepository;
+    @Autowired
+    private EntityManager entityManager;
 
     private CohortDashboardService service() {
         return new CohortDashboardService(
@@ -74,12 +79,31 @@ class CohortDashboardServiceTest extends AbstractIntegrationTest {
         dailyLogRepository.save(entry);
     }
 
-    private void setGoal(User user, LocalDate createdOnOrAfter) {
-        goalRepository.save(new Goal("Learn Spring", "desc", user));
+    // joined_at and goals.created_at are database-generated (DEFAULT now()) and not settable
+    // through the entities, but activation is measured against them. A test that leaves them at
+    // the real "now" only passes on the calendar day it was written, so every test that depends
+    // on activation pins them to the date it is about.
+    private void pinTimestamp(String table, Long id, String column, LocalDate date) {
+        entityManager.flush();
+        entityManager.createNativeQuery("update " + table + " set " + column + " = ?1 where id = ?2")
+                .setParameter(1, date.atTime(12, 0).atOffset(ZoneOffset.UTC))
+                .setParameter(2, id)
+                .executeUpdate();
+        entityManager.clear();
+    }
+
+    private void addMember(Cohort cohort, User user, LocalDate joinedOn) {
+        CohortMembership membership = organisationService().addCohortMember(cohort.getId(), adminIdOf(cohort), user.getId());
+        pinTimestamp("cohort_memberships", membership.getId(), "joined_at", joinedOn);
+    }
+
+    private void setGoal(User user, LocalDate createdOn) {
+        Goal goal = goalRepository.save(new Goal("Learn Spring", "desc", user));
+        pinTimestamp("goals", goal.getId(), "created_at", createdOn);
     }
 
     private Cohort setUp(LocalDate joinedDate) {
-        User admin = saveUser("admin@example.com");
+        User admin = saveUser("admin-" + joinedDate + "@example.com");
         Organisation organisation = organisationRepository.save(new Organisation("Moringa School"));
         organisationAdminRepository.save(new OrganisationAdmin(organisation.getId(), admin.getId()));
         return cohortRepository.save(new Cohort(organisation.getId(), "Cohort 14", joinedDate, 8));
@@ -91,8 +115,8 @@ class CohortDashboardServiceTest extends AbstractIntegrationTest {
         Cohort cohort = setUp(today);
         User activated = saveUser("activated@example.com");
         User notActivated = saveUser("not-activated@example.com");
-        organisationService().addCohortMember(cohort.getId(), adminIdOf(cohort), activated.getId());
-        organisationService().addCohortMember(cohort.getId(), adminIdOf(cohort), notActivated.getId());
+        addMember(cohort, activated, today);
+        addMember(cohort, notActivated, today);
         setGoal(activated, today);
         log(activated, today.plusDays(2));
         setGoal(notActivated, today);
@@ -108,7 +132,7 @@ class CohortDashboardServiceTest extends AbstractIntegrationTest {
         LocalDate today = LocalDate.of(2026, 10, 19);
         Cohort cohort = setUp(today);
         User member = saveUser("member@example.com");
-        organisationService().addCohortMember(cohort.getId(), adminIdOf(cohort), member.getId());
+        addMember(cohort, member, today);
         setGoal(member, today);
         log(member, today.plusDays(10));
 
@@ -122,7 +146,7 @@ class CohortDashboardServiceTest extends AbstractIntegrationTest {
         LocalDate today = LocalDate.of(2026, 10, 19);
         Cohort cohort = setUp(today);
         User activated = saveUser("activated@example.com");
-        organisationService().addCohortMember(cohort.getId(), adminIdOf(cohort), activated.getId());
+        addMember(cohort, activated, today);
         setGoal(activated, today);
         log(activated, today);
 
@@ -137,8 +161,8 @@ class CohortDashboardServiceTest extends AbstractIntegrationTest {
         Cohort cohort = setUp(LocalDate.of(2026, 10, 19));
         User returned = saveUser("returned@example.com");
         User neverMissed = saveUser("never-missed@example.com");
-        organisationService().addCohortMember(cohort.getId(), adminIdOf(cohort), returned.getId());
-        organisationService().addCohortMember(cohort.getId(), adminIdOf(cohort), neverMissed.getId());
+        addMember(cohort, returned, LocalDate.of(2026, 10, 19));
+        addMember(cohort, neverMissed, LocalDate.of(2026, 10, 19));
         setGoal(returned, LocalDate.of(2026, 10, 19));
         setGoal(neverMissed, LocalDate.of(2026, 10, 19));
         log(returned, LocalDate.of(2026, 10, 19));
@@ -279,14 +303,11 @@ class CohortDashboardServiceTest extends AbstractIntegrationTest {
 
     @Test
     void weeklyCheckInsCountsActivatedMembersWhoLoggedInEachElapsedWeek() {
-        // cohortStart must match the real wall-clock date: CohortMembership.joinedAt is
-        // DB-generated at insert time (now()), not settable in a test, so isActivated's
-        // 7-day window is always anchored to the real "now," not this test's chosen dates.
-        LocalDate cohortStart = LocalDate.of(2026, 10, 19);
+        LocalDate cohortStart = LocalDate.of(2026, 9, 1);
         LocalDate today = cohortStart.plusDays(15);
         Cohort cohort = setUp(cohortStart);
         User activated = saveUser("activated@example.com");
-        organisationService().addCohortMember(cohort.getId(), adminIdOf(cohort), activated.getId());
+        addMember(cohort, activated, cohortStart);
         setGoal(activated, cohortStart);
         log(activated, cohortStart);
         log(activated, cohortStart.plusDays(8));
@@ -301,6 +322,24 @@ class CohortDashboardServiceTest extends AbstractIntegrationTest {
         assertThat(chart.weeks().get(1).checkedIn()).isEqualTo(1);
         assertThat(chart.weeks().get(2).isCurrentWeek()).isTrue();
         assertThat(chart.weeks().get(2).checkedIn()).isEqualTo(0);
+    }
+
+    // Proves the activation tests no longer depend on the wall clock: the same scenario dated
+    // years from now (and, below, years ago) must give the same answer. Before the timestamps
+    // were pinned, a cohort dated away from the real "now" never activated anyone.
+    @Test
+    void activationDoesNotDependOnTheRealDate() {
+        for (LocalDate start : new LocalDate[] {LocalDate.of(2031, 3, 4), LocalDate.of(2019, 6, 10)}) {
+            Cohort cohort = setUp(start);
+            User activated = saveUser("far-" + start + "@example.com");
+            addMember(cohort, activated, start);
+            setGoal(activated, start);
+            log(activated, start.plusDays(1));
+
+            CohortDashboardSummary summary = service().summarize(cohort.getId(), adminIdOf(cohort), start.plusDays(2));
+
+            assertThat(summary.activatedWithinSevenDays()).as("cohort starting %s", start).isEqualTo(new CohortMeasure(1, 1));
+        }
     }
 
     @Test
