@@ -776,6 +776,22 @@ daily logs). The rule on every personal endpoint:
   Tested by `ScopedTasksAndTemplatesApiIntegrationTest` (10 tests), checked by mutation:
   removing the ownership filter from `TaskService.changeStatus` and the link check from
   `TaskController` made two of them fail.
+- **2b (done)**: `GET /api/books`, `/api/books/current`, `/api/current-reading`,
+  `/api/reading-notes` and `/api/learning-topics` take `userId`; `POST` on books, notes, current
+  reading and topics takes it in the body. A note belongs to whoever owns its book and a topic to
+  whoever owns its goal, so neither table got its own column. Writing a note on someone else's
+  book, or adding a topic under someone else's goal, is rejected with the unknown-id 400. A note
+  of 70% own words or more marks only the *author's* reader-notes routine item done and logs the
+  day for the author; it used to mark every account's. `BookResponse` carries `userId`.
+  `BookRepository.findCurrent()` and `CurrentReadingLogRepository.findLatest()` stay global on
+  purpose: hub-sync still uses the first, and moving hub-sync onto the owner account is part 5.
+  Tested by `ScopedReadingAndTopicsApiIntegrationTest` (11 tests), checked by mutation: removing
+  the book-ownership filter and the goal-ownership filter made two of them fail.
+- **A build trap found on the way**: with VS Code's Java language server running, an edit that
+  does not compile can leave Eclipse-compiled `Unresolved compilation problem` stubs in
+  `target/classes`, which Maven then treats as up to date. `./mvnw -q compile` printed nothing
+  and the failure only appeared at runtime. Use `./mvnw clean test` (or `clean test-compile`)
+  when sources changed while the IDE is open.
 
 ## Decisions log
 

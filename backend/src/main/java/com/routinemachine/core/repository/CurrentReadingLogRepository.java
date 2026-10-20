@@ -9,6 +9,11 @@ public interface CurrentReadingLogRepository extends JpaRepository<CurrentReadin
 
     Optional<CurrentReadingLog> findFirstByOrderByCreatedAtDescIdDesc();
 
+    // Per-user scoping (docs/backend.md): the latest entry of one user, or of nobody.
+    Optional<CurrentReadingLog> findFirstByUserIdOrderByCreatedAtDescIdDesc(Long userId);
+
+    Optional<CurrentReadingLog> findFirstByUserIsNullOrderByCreatedAtDescIdDesc();
+
     default Optional<CurrentReadingLog> findLatest() {
         return findFirstByOrderByCreatedAtDescIdDesc();
     }

@@ -2,5 +2,5 @@ package com.routinemachine.core.api;
 
 import jakarta.validation.constraints.NotBlank;
 
-public record CurrentReadingRequest(@NotBlank String title) {
+public record CurrentReadingRequest(@NotBlank String title, Long userId) {
 }

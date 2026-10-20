@@ -29,10 +29,18 @@ public class ReadingNoteController {
     }
 
     @GetMapping
-    public List<ReadingNoteResponse> list(@RequestParam Optional<Long> bookId) {
-        List<ReadingNote> notes = bookId
-                .map(readingNoteRepository::findByBookIdWithBookOrderByCreatedAtDesc)
-                .orElseGet(readingNoteRepository::findAllWithBookOrderByCreatedAtDesc);
+    public List<ReadingNoteResponse> list(@RequestParam Optional<Long> bookId, @RequestParam Optional<Long> userId) {
+        // Per-user scoping (docs/backend.md): a note belongs to whoever owns its book. userId
+        // given = that user's notes; omitted = only notes on unowned books. Asking for a
+        // specific book that is not yours simply finds nothing.
+        List<ReadingNote> notes;
+        if (userId.isPresent()) {
+            notes = bookId.map(id -> readingNoteRepository.findByBookIdAndOwnerWithBook(id, userId.get()))
+                    .orElseGet(() -> readingNoteRepository.findByOwnerWithBook(userId.get()));
+        } else {
+            notes = bookId.map(readingNoteRepository::findByBookIdAndNoOwnerWithBook)
+                    .orElseGet(readingNoteRepository::findByNoOwnerWithBook);
+        }
         return notes.stream().map(ReadingNoteResponse::from).toList();
     }
 
@@ -40,7 +48,7 @@ public class ReadingNoteController {
     @ResponseStatus(HttpStatus.CREATED)
     public ReadingNoteResponse create(@Valid @RequestBody ReadingNoteRequest request) {
         ReadingNote saved = readingNoteService.createNote(
-                request.bookId(), request.noteText(), request.chapterPlaced(), request.ownWordsPercentage(),
+                request.bookId(), request.userId(), request.noteText(), request.chapterPlaced(), request.ownWordsPercentage(),
                 request.ideasConnected(), request.quotedPhrases(), request.questionBack());
         return ReadingNoteResponse.from(saved);
     }
