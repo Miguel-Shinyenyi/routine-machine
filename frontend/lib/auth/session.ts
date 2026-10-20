@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { signSessionToken, verifySessionToken } from "./jwt";
 
 const SESSION_COOKIE = "session";
@@ -34,4 +35,15 @@ export async function getSessionUserId(): Promise<number | null> {
 export async function getSessionToken(): Promise<string | null> {
   const store = await cookies();
   return store.get(SESSION_COOKIE)?.value ?? null;
+}
+
+// For every page and action that works with a person's own data: the signed-in user's id, or a
+// redirect to /login. A signed-out visitor used to see the founder's own routine, goals and hours
+// on /today; no personal data is shown without an account any more.
+export async function requireSessionUserId(): Promise<number> {
+  const userId = await getSessionUserId();
+  if (userId === null) {
+    redirect("/login");
+  }
+  return userId;
 }

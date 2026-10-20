@@ -115,11 +115,41 @@ deliberate deviation rather than an oversight.
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
 
+## Per-user scoping, part 3: every personal page works for the signed-in user
+
+The app began as one person's tool, so every page showed the same data to everyone, including
+signed-out visitors and brand-new accounts. Part 2 made the backend answer for one user; this part
+makes the frontend ask for one.
+
+- **Signed out means no personal data.** Today, Path, Flock, Tally, Reading and Watering holes
+  now redirect to `/login`, like Granary, Profile and the cohort page already did
+  (`requireSessionUserId()` in `lib/auth/session.ts`). Before, a signed-out visitor landed on
+  `/today` showing the founder's routine, goals and hours.
+- **Every personal backend call carries the session user's id**, through `withUserId(path, userId)`
+  (`lib/scope.ts`, unit-tested, replaces a `userId` already on the path instead of sending two):
+  all the pages above, `lib/materialize.ts`, the root layout's sidebar counts, and eight Server
+  Actions (`createScheduleTemplate`, `createRoutineItem`, `createAdHocTask`, `createLearningTopic`,
+  `updateTaskStatus`, `createCurrentReading`, `createBook`, `submitReadingNote`). The layout makes
+  no personal calls at all when signed out.
+- **A new account starts empty**, with the empty states the pages already had: "Nothing
+  scheduled yet" on Today, "None yet" lists on Flock, "What are you reading?" on Reading.
+- **`materializeDay` skips a slot the backend rejects** (a `400` on creating the day's task)
+  instead of failing the whole page. The intelligence service is not yet scoped per user, so it
+  can suggest a learning topic that is not this user's; the backend now refuses that link.
+- **Still showing the founder's data (part 4):** everything fed by the intelligence service, which
+  is not yet scoped per user: Today's "Closer than yesterday", the staff card, "One sheep
+  wandered", the Tally page's numbers and chart, and the sidebar's "kept watch with you for N
+  days". The Watering holes status cards (WakaTime, ActivityWatch and so on) are deployment-wide
+  and become owner-only in part 5.
+- **Do not run the owner claim before part 4 ships** (`docs/backend.md`): the intelligence
+  service reads unowned rows, which is exactly what the claim removes.
+
 ## Current state
 
-Built: Next.js (App Router), TypeScript, Tailwind. Most of the app still talks to the backend
-unauthenticated (single-user demo mode, or the `asUserId`/`userId` query params — see
-`backend.md`), so `lib/api.ts`'s `backendFetch` is a plain server-side `fetch` wrapper. Real
+Built: Next.js (App Router), TypeScript, Tailwind. Every personal page now works for the
+signed-in user only (per-user scoping part 3, below). The backend calls themselves are still
+unauthenticated and name the user with a `userId` query parameter or body field (the backend
+trusts it; closing that is the access-control stage — see `backend.md`), so `lib/api.ts`'s `backendFetch` is a plain server-side `fetch` wrapper. Real
 password login now exists (`/login`, `/register` — see the decisions log and
 `lib/auth/jwt.ts`/`lib/auth/session.ts`), and `authenticatedBackendFetch` sends the session's
 own bearer token to the one endpoint that needs it so far, `GET /api/users/me`.
@@ -238,6 +268,8 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-21 | A signed-out visitor is redirected to `/login` from every personal page, instead of seeing the founder's data | Before per-user scoping, `/today` rendered the founder's own routine, goal names and hours for anyone. Reusing the redirect Granary and Profile already had (`requireSessionUserId`) keeps one rule for "this page is about a person" |
+| 2026-10-21 | `withUserId` is a small pure function with its own tests, and every personal call goes through it | There are over twenty personal calls across pages, a helper module and eight Server Actions; hand-building `?userId=` in each is how one gets forgotten, and a forgotten one silently shows the unowned legacy rows. The helper also replaces an existing `userId` rather than appending a second |
 | 2026-10-19 | The M-Pesa import form is a client-side `MpesaImportForm` component, not a server-rendered form always visible on the page | The real reason is `useActionState`'s need for a client component to show the import's own pending/error state (the password prompt, the "couldn't read this" message) — this is the one piece of Phase 11 that genuinely needs client-side state, unlike every other granary control, which stays server-rendered |
 | 2026-10-19 | The M-Pesa import form opens in a native `<dialog>` modal (`showModal()`), not an inline expanding card | User feedback: the inline card was "hidden" in the sense of not reading as a real dialog and shifting the page layout around it when opened. A native `<dialog>` gets a true modal with backdrop, focus handling, and Esc-to-close for free, with no extra dependency. The form closes itself automatically on a successful submit (tracked via a `submittedRef` so the initial render's `error: null` state isn't mistaken for a just-completed success) but stays open to show the inline error on failure; clicking the backdrop also closes it |
 | 2026-10-19 | `backendFetchMultipart` is a new, separate helper in `lib/api.ts`, not a flag on the existing `request()`/`backendFetch` | The existing helper always sets `Content-Type: application/json`; a multipart upload needs fetch to set its own `Content-Type` with the correct boundary from the `FormData` body, which means never setting that header manually at all — a flag that conditionally skips a header is more error-prone than a second, explicit function with a different contract |
@@ -292,7 +324,7 @@ departure from precedent.
 | 2026-10-17 | Tally's notches are grouped in fives via nested flex containers, not a single flat row | Matches the design reference's own grouping exactly, and reads better at a glance for a window that can be 28+ days |
 | 2026-10-17 | `docs/design-reference/` copied into the repo and `compare.mjs` run against the live app, per the reference's own `README.md` | Needed to actually verify the fidelity passes above against real screenshots, not just by re-reading HTML source; found and fixed three real gaps: Flock and Watering holes were listing every Phase 8 demo user's own routine items (`GET /api/routine-items` with no `userId` returns everyone's, not just the unowned/legacy ones this single-user page is for), Path was missing its "This week so far." summary card entirely, and routine-item source chips (Today, Flock, Watering holes) printed the raw `RoutineItemSource` enum value instead of a human label |
 | 2026-10-17 | A shared `lib/sourceLabels.ts` (`sourceLabel()`), not a label map duplicated per page | `TaskCard`, Flock, and Watering holes' "how each activity is counted" table all need the same `RoutineItemSource` → human label mapping; Watering holes' own `SOURCE_LABELS` for `WateringHoleStatus.source` (a different enum, `MeasurementSource`) stays separate on purpose — "Health data" and "Health Connect" are deliberately different labels for the same integration in two different contexts |
-| 2026-10-17 | Flock and Watering holes filter `routine-items` to `userId == null` before rendering | Phase 8's hillside demo users each have their own routine items now; these two pages are this single-user app's own management/status views, not multi-user views, so they only ever show the unowned (legacy, pre-Phase-8) items, same as before Phase 8 existed. Today's own fetch of the same endpoint is untouched since it's only used for an id-keyed lookup map, never listed |
+| 2026-10-17 | (Superseded 2026-10-21, see the per-user scoping rows below) Flock and Watering holes filtered `routine-items` to `userId == null` before rendering | At the time, Phase 8's hillside demo users' items came back in the same flat list, so the pages kept only the unowned ones. Since per-user scoping part 2 the list endpoint returns only the signed-in user's own items, so there is nothing left to filter and the filter would now hide a user's own routines |
 | 2026-10-17 | Path's "This week so far." card (tended/wandered counts, days shown up) was built from the same per-day template/task data the grid already fetches, not a new endpoint | The reference shows exactly this card; the grid loop already computes each day's tended/wandered status to draw its dots, so the summary is a straightforward reduction over data already in hand, not new data |
 | 2026-10-18 | Second design-fidelity pass, this time comparing the live app against the reference directly in a browser (not just screenshots), after the user reported "a lot" of remaining mismatches | Found real gaps the first screenshot-only pass missed: Flock had no table structure at all (just flat rows, no column headers, no chevron) and used initial-letter icons instead of per-routine ones; `TaskCard` still showed an extra "Start"/"Mark tended" button the reference never has, alongside the correct check circle; Tally had no "4 weeks"/"Since the start" toggle, its stat tiles used `.tile` (`--surface-2`) which is the exact same colour as the page's own canvas background, making them invisible, not just flat; `GoalHoursChart` had no axis labels or inline end-of-line goal labels, just bare lines; Reading's two sidebar cards (`How a note is read.`, `Your notes stay yours.`) used `className="card"` with no padding class, so their text touched the rounded corner; and `.chip` had no `white-space: nowrap`, so any chip with enough text (a long chapter label, for instance) wrapped mid-pill. All fixed in this pass; see the surrounding entries |
 | 2026-10-18 | `.chip` gained `display: inline-flex; align-items: center; white-space: nowrap` | Matches the design reference's own `.chip` rule; without it, a chip's text could wrap onto a second line inside the pill, found on the Reading page's "Ch. 13"-style chapter chip once real (longer) `chapterPlaced` text was tried against it |

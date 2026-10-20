@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { authenticatedBackendFetch, ApiError, backendFetch, backendFetchMultipart, intelligenceFetch } from "./api";
-import { getSessionToken, getSessionUserId } from "./auth/session";
+import { getSessionToken, getSessionUserId, requireSessionUserId } from "./auth/session";
+import { withUserId } from "./scope";
 import type { MpesaImportResponse, ReadingNoteAssessment } from "./types";
 
 function optionalNumber(value: FormDataEntryValue | null): number | null {
@@ -11,6 +12,7 @@ function optionalNumber(value: FormDataEntryValue | null): number | null {
 }
 
 export async function createScheduleTemplate(formData: FormData): Promise<void> {
+  const userId = await requireSessionUserId();
   await backendFetch("/api/schedule-templates", {
     method: "POST",
     body: JSON.stringify({
@@ -20,6 +22,7 @@ export async function createScheduleTemplate(formData: FormData): Promise<void> 
       targetDurationMinutes: Number(formData.get("targetDurationMinutes")),
       sortOrder: Number(formData.get("sortOrder")),
       label: formData.get("label"),
+      userId,
     }),
   });
 
@@ -28,6 +31,7 @@ export async function createScheduleTemplate(formData: FormData): Promise<void> 
 }
 
 export async function createRoutineItem(formData: FormData): Promise<void> {
+  const userId = await requireSessionUserId();
   await backendFetch("/api/routine-items", {
     method: "POST",
     body: JSON.stringify({
@@ -35,6 +39,7 @@ export async function createRoutineItem(formData: FormData): Promise<void> {
       description: formData.get("description") || null,
       category: formData.get("category") || null,
       goalId: optionalNumber(formData.get("goalId")),
+      userId,
     }),
   });
 
@@ -42,12 +47,14 @@ export async function createRoutineItem(formData: FormData): Promise<void> {
 }
 
 export async function createAdHocTask(formData: FormData): Promise<void> {
+  const userId = await requireSessionUserId();
   await backendFetch("/api/tasks", {
     method: "POST",
     body: JSON.stringify({
       taskDate: formData.get("taskDate"),
       label: formData.get("label"),
       routineItemId: optionalNumber(formData.get("routineItemId")),
+      userId,
     }),
   });
 
@@ -56,11 +63,13 @@ export async function createAdHocTask(formData: FormData): Promise<void> {
 }
 
 export async function createLearningTopic(formData: FormData): Promise<void> {
+  const userId = await requireSessionUserId();
   await backendFetch("/api/learning-topics", {
     method: "POST",
     body: JSON.stringify({
       name: formData.get("name"),
       goalId: Number(formData.get("goalId")),
+      userId,
     }),
   });
 
@@ -68,7 +77,8 @@ export async function createLearningTopic(formData: FormData): Promise<void> {
 }
 
 export async function updateTaskStatus(taskId: number, status: string): Promise<void> {
-  await backendFetch(`/api/tasks/${taskId}`, {
+  const userId = await requireSessionUserId();
+  await backendFetch(withUserId(`/api/tasks/${taskId}`, userId), {
     method: "PATCH",
     body: JSON.stringify({ status }),
   });
@@ -78,15 +88,17 @@ export async function updateTaskStatus(taskId: number, status: string): Promise<
 }
 
 export async function createCurrentReading(formData: FormData): Promise<void> {
+  const userId = await requireSessionUserId();
   await backendFetch("/api/current-reading", {
     method: "POST",
-    body: JSON.stringify({ title: formData.get("title") }),
+    body: JSON.stringify({ title: formData.get("title"), userId }),
   });
 
   revalidatePath("/flock");
 }
 
 export async function createBook(formData: FormData): Promise<void> {
+  const userId = await requireSessionUserId();
   await backendFetch("/api/books", {
     method: "POST",
     body: JSON.stringify({
@@ -94,6 +106,7 @@ export async function createBook(formData: FormData): Promise<void> {
       author: formData.get("author") || null,
       currentChapter: optionalNumber(formData.get("currentChapter")),
       totalChapters: optionalNumber(formData.get("totalChapters")),
+      userId,
     }),
   });
 
@@ -105,6 +118,7 @@ export async function createBook(formData: FormData): Promise<void> {
 // itself: writing the note is the user's real action, assessment is an addition to it. See
 // docs/backend.md's "assessment fields are all nullable" decision.
 export async function submitReadingNote(formData: FormData): Promise<void> {
+  const userId = await requireSessionUserId();
   const bookId = Number(formData.get("bookId"));
   const noteText = String(formData.get("noteText"));
 
@@ -127,6 +141,7 @@ export async function submitReadingNote(formData: FormData): Promise<void> {
     method: "POST",
     body: JSON.stringify({
       bookId,
+      userId,
       noteText,
       chapterPlaced: assessment?.chapterPlaced ?? null,
       ownWordsPercentage: assessment?.ownWordsPercentage ?? null,

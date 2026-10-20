@@ -1,4 +1,6 @@
 import { backendFetch } from "@/lib/api";
+import { requireSessionUserId } from "@/lib/auth/session";
+import { withUserId } from "@/lib/scope";
 import { sourceLabel } from "@/lib/sourceLabels";
 import { routineIcon } from "@/lib/routineIcons";
 import type { Goal, LearningTopic, RoutineItem, ScheduleTemplate, Task } from "@/lib/types";
@@ -29,19 +31,18 @@ const HILLSIDE_FIELD_LABELS: Record<string, string> = {
 const ROW_GRID = "minmax(150px,1.2fr) minmax(180px,1.6fr) minmax(120px,1fr) minmax(110px,.9fr) 16px";
 
 export default async function FlockPage() {
+  const userId = await requireSessionUserId();
   const [templates, allRoutineItems, learningTopics, goals, allTasks] = await Promise.all([
-    backendFetch<ScheduleTemplate[]>("/api/schedule-templates"),
-    backendFetch<RoutineItem[]>("/api/routine-items"),
-    backendFetch<LearningTopic[]>("/api/learning-topics"),
-    backendFetch<Goal[]>("/api/goals"),
-    backendFetch<Task[]>("/api/tasks"),
+    backendFetch<ScheduleTemplate[]>(withUserId("/api/schedule-templates", userId)),
+    backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)),
+    backendFetch<LearningTopic[]>(withUserId("/api/learning-topics", userId)),
+    backendFetch<Goal[]>(withUserId("/api/goals", userId)),
+    backendFetch<Task[]>(withUserId("/api/tasks", userId)),
   ]);
 
-  // GET /api/routine-items with no userId returns every legacy row AND every demo user's own
-  // items (Phase 8's hillside seed data) in one flat list — Flock is this single-user app's
-  // own management page, not a multi-user view, so it only ever shows the unowned (userId
-  // null) items, same as this page's single-user world before Phase 8 existed.
-  const routineItems = allRoutineItems.filter((item) => item.userId == null);
+  // Every list above is already this signed-in user's own (per-user scoping, docs/backend.md),
+  // so there is nothing left to filter out here. A new account's Flock is simply empty.
+  const routineItems = allRoutineItems;
   const adHocTasks = allTasks.filter((task) => task.scheduleTemplateId === null);
   const uncategorised = routineItems.filter((item) => item.category === null);
 

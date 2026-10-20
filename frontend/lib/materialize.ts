@@ -1,4 +1,5 @@
-import { backendFetch, intelligenceFetch } from "./api";
+import { ApiError, backendFetch, intelligenceFetch } from "./api";
+import { withUserId } from "./scope";
 import { dayOfWeekName, templatesNeedingMaterialization } from "./schedule";
 import type { ScheduleTemplate, Suggestion, Task } from "./types";
 
@@ -7,11 +8,13 @@ import type { ScheduleTemplate, Suggestion, Task } from "./types";
 // open question schedule.md left for implementation time, that the frontend (not the backend)
 // orchestrates the cross-service call: resolving a LEARNING_SLOT template's topic for the day
 // means asking the intelligence service, and the backend stays unaware that service exists.
-export async function materializeDay(date: string): Promise<Task[]> {
+// Per-user scoping (docs/backend.md): reads the user's own templates and tasks, and creates the
+// day's tasks as theirs.
+export async function materializeDay(date: string, userId: number): Promise<Task[]> {
   const day = dayOfWeekName(date);
   const [templates, existingTasks] = await Promise.all([
-    backendFetch<ScheduleTemplate[]>(`/api/schedule-templates?dayOfWeek=${day}`),
-    backendFetch<Task[]>(`/api/tasks?date=${date}`),
+    backendFetch<ScheduleTemplate[]>(withUserId(`/api/schedule-templates?dayOfWeek=${day}`, userId)),
+    backendFetch<Task[]>(withUserId(`/api/tasks?date=${date}`, userId)),
   ]);
 
   const toMaterialize = templatesNeedingMaterialization(templates, existingTasks);
@@ -21,7 +24,7 @@ export async function materializeDay(date: string): Promise<Task[]> {
 
   const created: Task[] = [];
   for (const template of toMaterialize) {
-    const body: Record<string, unknown> = { taskDate: date, scheduleTemplateId: template.id };
+    const body: Record<string, unknown> = { taskDate: date, scheduleTemplateId: template.id, userId };
 
     if (template.targetType === "LEARNING_SLOT") {
       const suggestion = await intelligenceFetch<Suggestion>("/suggestion").catch(() => null);
@@ -34,7 +37,14 @@ export async function materializeDay(date: string): Promise<Task[]> {
       body.learningTopicId = suggestion.topic.id;
     }
 
-    created.push(await backendFetch<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) }));
+    try {
+      created.push(await backendFetch<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) }));
+    } catch (error) {
+      // A suggested topic that is not this user's own (the intelligence service is not yet
+      // scoped per user) is rejected by the backend: skip the slot, same as no suggestion.
+      if (error instanceof ApiError && error.status === 400) continue;
+      throw error;
+    }
   }
 
   return [...existingTasks, ...created];

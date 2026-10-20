@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { backendFetch } from "@/lib/api";
+import { requireSessionUserId } from "@/lib/auth/session";
+import { withUserId } from "@/lib/scope";
 import { todayIsoDate } from "@/lib/schedule";
 import { addDays, mondayOf, weekDates } from "@/lib/weekDates";
 import type { ScheduleTemplate, Task } from "@/lib/types";
@@ -45,6 +47,7 @@ function statusDot(status: DotStatus) {
 }
 
 export default async function PathPage(props: PageProps<"/path">) {
+  const userId = await requireSessionUserId();
   const searchParams = await props.searchParams;
   const rawMonday = searchParams.monday;
   const monday = typeof rawMonday === "string" ? mondayOf(rawMonday) : mondayOf(todayIsoDate());
@@ -52,8 +55,8 @@ export default async function PathPage(props: PageProps<"/path">) {
   const dates = weekDates(monday);
 
   const [templates, ...tasksByDay] = await Promise.all([
-    backendFetch<ScheduleTemplate[]>("/api/schedule-templates"),
-    ...dates.map((date) => backendFetch<Task[]>(`/api/tasks?date=${date}`)),
+    backendFetch<ScheduleTemplate[]>(withUserId("/api/schedule-templates", userId)),
+    ...dates.map((date) => backendFetch<Task[]>(withUserId(`/api/tasks?date=${date}`, userId))),
   ]);
   const durationsNotSet = templates.some((t) => !t.targetDurationMinutes || t.targetDurationMinutes <= 0);
 

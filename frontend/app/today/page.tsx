@@ -3,7 +3,8 @@ import { materializeDay } from "@/lib/materialize";
 import { todayIsoDate } from "@/lib/schedule";
 import { formatEyebrowDate } from "@/lib/formatDate";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
-import { getSessionToken, getSessionUserId } from "@/lib/auth/session";
+import { getSessionToken, requireSessionUserId } from "@/lib/auth/session";
+import { withUserId } from "@/lib/scope";
 import { decidePause, reflectPause } from "@/lib/actions";
 import type { AnalogyResponse, Goal, Patterns, PauseDecision, Profile, RoutineItem, Suggestion, Tally } from "@/lib/types";
 import { TaskCard } from "@/components/TaskCard";
@@ -32,6 +33,7 @@ function adjacentDate(isoDate: string, deltaDays: number): string {
 
 export default async function TodayPage(props: PageProps<"/today">) {
   const searchParams = await props.searchParams;
+  const userId = await requireSessionUserId();
   const rawDate = searchParams.date;
   const date = typeof rawDate === "string" ? rawDate : todayIsoDate();
 
@@ -40,18 +42,14 @@ export default async function TodayPage(props: PageProps<"/today">) {
     ? await authenticatedBackendFetch<Profile>("/api/users/me/profile", sessionToken).catch(() => null)
     : null;
 
-  const sessionUserId = await getSessionUserId();
-
   const [tasks, routineItems, goals, suggestion, tally, patterns, duePauses] = await Promise.all([
-    materializeDay(date),
-    backendFetch<RoutineItem[]>("/api/routine-items"),
-    backendFetch<Goal[]>("/api/goals"),
+    materializeDay(date, userId),
+    backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)),
+    backendFetch<Goal[]>(withUserId("/api/goals", userId)),
     intelligenceFetch<Suggestion>("/suggestion").catch(() => null),
     intelligenceFetch<Tally>("/tally").catch(() => null),
     intelligenceFetch<Patterns>("/patterns").catch(() => null),
-    sessionUserId !== null
-      ? backendFetch<PauseDecision[]>(`/api/granary/pauses/due?userId=${sessionUserId}`).catch(() => [])
-      : Promise.resolve([]),
+    backendFetch<PauseDecision[]>(`/api/granary/pauses/due?userId=${userId}`).catch(() => []),
   ]);
 
   // Phase 10: explained through the first interest the user picked on their Profile page,

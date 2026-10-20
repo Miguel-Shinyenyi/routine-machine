@@ -799,6 +799,10 @@ daily logs). The rule on every personal endpoint:
   `UserScopedDataApiIntegrationTest.dailyLogsCreatedForOneUserAreNotVisibleWhenListingAnother`,
   logged two accounts against one shared unowned routine item, which is exactly the cross-account
   link the new rule rejects; it now gives each user their own item and still proves the isolation.
+- **Part 3 (frontend) is done** (see `frontend.md`): every personal page and Server Action now
+  sends the session user's id, so the userId-less view is no longer used by the app. It remains
+  in the API only until the access-control stage replaces `userId` with the signed token. The one
+  consumer still reading unowned rows is the intelligence service (part 4).
 - **A build trap found on the way**: with VS Code's Java language server running, an edit that
   does not compile can leave Eclipse-compiled `Unresolved compilation problem` stubs in
   `target/classes`, which Maven then treats as up to date. `./mvnw -q compile` printed nothing

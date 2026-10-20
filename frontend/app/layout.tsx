@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Shell } from "@/components/Shell";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
 import { todayIsoDate } from "@/lib/schedule";
-import { getSessionToken } from "@/lib/auth/session";
+import { getSessionToken, getSessionUserId } from "@/lib/auth/session";
+import { withUserId } from "@/lib/scope";
 import type { RoutineItem, Tally, Task, WateringHoleStatus } from "@/lib/types";
 import "./globals.css";
 
@@ -38,10 +39,18 @@ async function fetchShellContext(): Promise<{
   userEmail: string | null;
 }> {
   const sessionToken = await getSessionToken();
+  const userId = await getSessionUserId();
+  // Signed out (login, register): no personal data at all, so no personal calls either. A
+  // signed-out visitor used to see the founder's own counts in this sidebar.
   const [tasks, tally, routineItems, wateringHoles, me] = await Promise.all([
-    backendFetch<Task[]>(`/api/tasks?date=${todayIsoDate()}`).catch(() => null),
-    intelligenceFetch<Tally>("/tally").catch(() => null),
-    backendFetch<RoutineItem[]>("/api/routine-items").catch(() => null),
+    userId !== null
+      ? backendFetch<Task[]>(withUserId(`/api/tasks?date=${todayIsoDate()}`, userId)).catch(() => null)
+      : Promise.resolve(null),
+    // Still not scoped per user: the intelligence service is part 4 of per-user scoping.
+    userId !== null ? intelligenceFetch<Tally>("/tally").catch(() => null) : Promise.resolve(null),
+    userId !== null
+      ? backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)).catch(() => null)
+      : Promise.resolve(null),
     backendFetch<WateringHoleStatus[]>("/api/watering-holes").catch(() => null),
     sessionToken
       ? authenticatedBackendFetch<{ email: string }>("/api/users/me", sessionToken).catch(() => null)
@@ -51,9 +60,8 @@ async function fetchShellContext(): Promise<{
     doneCount: tasks ? tasks.filter((t) => t.status === "DONE").length : null,
     totalCount: tasks ? tasks.length : null,
     daysShownUp: tally ? tally.daysShownUpCount : null,
-    // Same unowned filter Flock itself applies — the sidebar badge should match the page it
-    // links to, not include Phase 8's hillside demo users' own items.
-    routineCount: routineItems ? routineItems.filter((item) => item.userId == null).length : null,
+    // This user's own routine items, the same list Flock shows.
+    routineCount: routineItems ? routineItems.length : null,
     // Reader's notes is always-on but isn't in /api/watering-holes (it's not a toggleable
     // external sync) — +1 matches Watering holes' own page, which always shows it connected.
     connectedCount: wateringHoles ? wateringHoles.filter((s) => s.enabled).length + 1 : null,

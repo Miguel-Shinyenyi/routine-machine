@@ -1,4 +1,6 @@
 import { backendFetch } from "@/lib/api";
+import { requireSessionUserId } from "@/lib/auth/session";
+import { withUserId } from "@/lib/scope";
 import { sourceLabel } from "@/lib/sourceLabels";
 import type { RoutineItem, WateringHoleStatus } from "@/lib/types";
 
@@ -79,18 +81,17 @@ function SourceCard({ status, feedsInto }: { status: WateringHoleStatus; feedsIn
 }
 
 export default async function WateringHolesPage() {
+  const userId = await requireSessionUserId();
   const [statuses, routineItems] = await Promise.all([
     backendFetch<WateringHoleStatus[]>("/api/watering-holes"),
-    backendFetch<RoutineItem[]>("/api/routine-items"),
+    backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)),
   ]);
 
   const connected = statuses.filter((s) => s.enabled);
   const notConnected = statuses.filter((s) => !s.enabled);
-  // Same reasoning as Flock: exclude Phase 8's hillside demo users' own items, this table is
-  // this single-user app's own "how my activity gets counted" list, not a multi-user view.
-  // Unlike an earlier version, this now includes manually-tapped items too — the reference's
-  // own table does (shown with "Tapped" as the main source), not just automatic ones.
-  const countedItems = routineItems.filter((item) => item.userId == null);
+  // This user's own routine items (per-user scoping, docs/backend.md): the "how my activity gets
+  // counted" table. Includes manually-tapped items too, as the reference's own table does.
+  const countedItems = routineItems;
 
   function feedsInto(measurementSource: string): string[] {
     const routineSource = MEASUREMENT_TO_ROUTINE_SOURCE[measurementSource];
