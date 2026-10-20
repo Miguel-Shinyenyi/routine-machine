@@ -6,10 +6,13 @@ import com.routinemachine.core.domain.ScheduleTargetType;
 import com.routinemachine.core.domain.ScheduleTemplate;
 import com.routinemachine.core.domain.Task;
 import com.routinemachine.core.domain.TaskStatus;
+import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.LearningTopicRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import com.routinemachine.core.repository.ScheduleTemplateRepository;
 import com.routinemachine.core.repository.TaskRepository;
+import com.routinemachine.core.repository.UserRepository;
+import com.routinemachine.core.service.Ownership;
 import com.routinemachine.core.service.TaskService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -36,43 +39,60 @@ public class TaskController {
     private final RoutineItemRepository routineItemRepository;
     private final LearningTopicRepository learningTopicRepository;
     private final TaskService taskService;
+    private final UserRepository userRepository;
 
     public TaskController(
             TaskRepository taskRepository,
             ScheduleTemplateRepository scheduleTemplateRepository,
             RoutineItemRepository routineItemRepository,
             LearningTopicRepository learningTopicRepository,
-            TaskService taskService) {
+            TaskService taskService,
+            UserRepository userRepository) {
         this.taskRepository = taskRepository;
         this.scheduleTemplateRepository = scheduleTemplateRepository;
         this.routineItemRepository = routineItemRepository;
         this.learningTopicRepository = learningTopicRepository;
         this.taskService = taskService;
+        this.userRepository = userRepository;
     }
 
+    // Per-user scoping (docs/backend.md): userId given = that user's tasks; omitted = only the
+    // unowned (pre-account) ones, never another user's.
     @GetMapping
-    public List<TaskResponse> list(@RequestParam Optional<LocalDate> date) {
-        List<Task> tasks = date.map(taskRepository::findByTaskDateWithTargets).orElseGet(taskRepository::findAllWithTargets);
+    public List<TaskResponse> list(@RequestParam Optional<LocalDate> date, @RequestParam Optional<Long> userId) {
+        List<Task> tasks;
+        if (userId.isPresent()) {
+            tasks = date.map(d -> taskRepository.findByTaskDateAndUserId(d, userId.get()))
+                    .orElseGet(() -> taskRepository.findByUserId(userId.get()));
+        } else {
+            tasks = date.map(taskRepository::findByTaskDateAndUserIsNull).orElseGet(taskRepository::findByUserIsNull);
+        }
         return tasks.stream().map(TaskResponse::from).toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TaskResponse create(@Valid @RequestBody TaskRequest request) {
+        User owner = request.userId() == null ? null : userRepository.findById(request.userId())
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
         Task task = request.scheduleTemplateId() != null
-                ? materializeFromTemplate(request)
-                : createAdHoc(request);
+                ? materializeFromTemplate(request, owner)
+                : createAdHoc(request, owner);
+        task.assignUser(owner);
         return TaskResponse.from(taskRepository.save(task));
     }
 
     @PatchMapping("/{id}")
-    public TaskResponse updateStatus(@PathVariable Long id, @Valid @RequestBody TaskStatusUpdateRequest request) {
+    public TaskResponse updateStatus(
+            @PathVariable Long id, @RequestParam Optional<Long> userId, @Valid @RequestBody TaskStatusUpdateRequest request) {
         TaskStatus status = parseStatus(request.status());
-        return TaskResponse.from(taskService.changeStatus(id, status));
+        return TaskResponse.from(taskService.changeStatus(id, status, userId.orElse(null)));
     }
 
-    private Task materializeFromTemplate(TaskRequest request) {
+    private Task materializeFromTemplate(TaskRequest request, User owner) {
+        // Someone else's template answers exactly like one that does not exist.
         ScheduleTemplate template = scheduleTemplateRepository.findById(request.scheduleTemplateId())
+                .filter(found -> Ownership.sameOwner(found.getUser(), owner))
                 .orElseThrow(() -> new IllegalArgumentException("No schedule template with id " + request.scheduleTemplateId()));
 
         LearningTopic resolvedTopic = null;
@@ -80,17 +100,17 @@ public class TaskController {
             if (request.learningTopicId() == null) {
                 throw new IllegalArgumentException("learningTopicId is required to materialize a LEARNING_SLOT task");
             }
-            resolvedTopic = findLearningTopic(request.learningTopicId());
+            resolvedTopic = findLearningTopic(request.learningTopicId(), owner);
         }
         return Task.fromTemplate(request.taskDate(), template, resolvedTopic);
     }
 
-    private Task createAdHoc(TaskRequest request) {
+    private Task createAdHoc(TaskRequest request, User owner) {
         if (request.label() == null || request.label().isBlank()) {
             throw new IllegalArgumentException("label is required for an ad-hoc task");
         }
-        RoutineItem routineItem = request.routineItemId() == null ? null : findRoutineItem(request.routineItemId());
-        LearningTopic learningTopic = request.learningTopicId() == null ? null : findLearningTopic(request.learningTopicId());
+        RoutineItem routineItem = request.routineItemId() == null ? null : findRoutineItem(request.routineItemId(), owner);
+        LearningTopic learningTopic = request.learningTopicId() == null ? null : findLearningTopic(request.learningTopicId(), owner);
         return Task.adHoc(request.taskDate(), request.label(), routineItem, learningTopic);
     }
 
@@ -102,13 +122,17 @@ public class TaskController {
         }
     }
 
-    private RoutineItem findRoutineItem(Long id) {
+    // A task can only point at its own owner's routine items and topics; anyone else's answers
+    // exactly like one that does not exist.
+    private RoutineItem findRoutineItem(Long id, User owner) {
         return routineItemRepository.findById(id)
+                .filter(found -> Ownership.sameOwner(found.getUser(), owner))
                 .orElseThrow(() -> new IllegalArgumentException("No routine item with id " + id));
     }
 
-    private LearningTopic findLearningTopic(Long id) {
-        return learningTopicRepository.findById(id)
+    private LearningTopic findLearningTopic(Long id, User owner) {
+        return learningTopicRepository.findWithGoalAndOwnerById(id)
+                .filter(found -> Ownership.sameOwner(found.getGoal().getUser(), owner))
                 .orElseThrow(() -> new IllegalArgumentException("No learning topic with id " + id));
     }
 }

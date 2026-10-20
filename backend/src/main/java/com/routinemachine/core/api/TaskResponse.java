@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import com.routinemachine.core.domain.Task;
+import com.routinemachine.core.service.Ownership;
 
 import java.time.LocalDate;
 
@@ -12,7 +13,8 @@ public record TaskResponse(
         Long routineItemId,
         Long learningTopicId,
         String status,
-        Long dailyLogId) {
+        Long dailyLogId,
+        Long userId) {
 
     public static TaskResponse from(Task task) {
         return new TaskResponse(
@@ -23,6 +25,7 @@ public record TaskResponse(
                 task.getRoutineItem() == null ? null : task.getRoutineItem().getId(),
                 task.getLearningTopic() == null ? null : task.getLearningTopic().getId(),
                 task.getStatus().name(),
-                task.getDailyLog() == null ? null : task.getDailyLog().getId());
+                task.getDailyLog() == null ? null : task.getDailyLog().getId(),
+                Ownership.idOf(task.getUser()));
     }
 }

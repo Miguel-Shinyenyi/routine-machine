@@ -9,5 +9,6 @@ public record TaskRequest(
         Long scheduleTemplateId,
         String label,
         Long routineItemId,
-        Long learningTopicId) {
+        Long learningTopicId,
+        Long userId) {
 }

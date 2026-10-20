@@ -751,10 +751,38 @@ can see.
   `OwnerClaimRunnerTest` (nothing without the variable, the configured address, a wrong address
   not fatal). Checked that the tests can fail by dropping a table from the claim list: two failed.
 
+**Per-user scoping, part 2: the backend answers for exactly one user.** Built in three slices
+(2a tasks and schedule templates, 2b reading and learning topics, 2c goals, routine items and
+daily logs). The rule on every personal endpoint:
+
+- **`userId` given**: exactly that user's rows. Creates are owned by that user.
+- **`userId` omitted**: only *unowned* (pre-account) rows, never a real user's. This tightens the
+  Phase 8 behaviour, where omitted meant "everything", so the userId-less view can no longer
+  leak another account. It stays only so the app works until part 3 moves every page onto the
+  session user; the access-control stage then removes it.
+- **A row can only link to rows with the same owner.** A task, template or topic that points at
+  someone else's routine item, template or goal is rejected with the same 400 an unknown id
+  gets, so a foreign id reveals nothing.
+- **Changing a row you do not own answers 404**, exactly like one that does not exist.
+- **Shared helper**: `service/Ownership` (`idOf`, `ownedBy`, `sameOwner`). `idOf` reads the id off
+  a lazy proxy without loading it, which matters because `open-in-view` is off.
+- **2a (done)**: `GET /api/tasks`, `GET /api/schedule-templates` take `userId`; `POST` on both
+  takes `userId` in the body; `PATCH /api/tasks/{id}` takes `userId` as a query parameter.
+  `TaskResponse` and `ScheduleTemplateResponse` now carry `userId`. Marking a task done creates a
+  daily log owned by the task's user (it used to create an unowned one, which would have put a
+  new user's day into nobody's, then the owner's, history). New derived queries use
+  `@EntityGraph` for the same lazy-loading reason as the older fetch-join queries, which stay
+  because repository tests and hub-sync use them.
+  Tested by `ScopedTasksAndTemplatesApiIntegrationTest` (10 tests), checked by mutation:
+  removing the ownership filter from `TaskService.changeStatus` and the link check from
+  `TaskController` made two of them fail.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-21 | A request with no `userId` sees only unowned rows, instead of everything | "Omitted means everything" was the Phase 8 compromise to keep the single-user app working, but it means the userId-less view shows every account's data. Unowned rows are the founder's pre-account data, which the owner claim hands to the owner account, so after the claim the userId-less view is empty. It is kept only until part 3 moves the frontend onto the session user |
+| 2026-10-21 | Someone else's task, template or routine item answers exactly like one that does not exist (404 or the same 400) | A different answer for "exists but is not yours" would let anyone probe which ids exist and how many rows other accounts have |
 | 2026-10-21 | Pre-account data is given to the owner by a startup claim driven by `OWNER_EMAIL`, not by a migration | A migration cannot know whose account is the founder's, and putting an address in a migration or a config file would publish it. The variable is read once at startup, only NULL rows move, and it is idempotent, so leaving it set is harmless |
 | 2026-10-21 | The owner claim is all-or-nothing and a failed claim is logged, not fatal | A half-claimed database (some tables owned, some not) is worse than an unclaimed one, and a typo in an environment variable should not stop the app from starting |
 | 2026-10-21 | `measurements` and `hub_sync_processed_files` are not given a `user_id` | They hold what the deployment's own integrations pull in (one set of credentials for the whole deployment). Giving each user a copy of the owner's WakaTime hours would be wrong, and per-user integrations are a separate feature |

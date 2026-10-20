@@ -25,7 +25,16 @@ public class TaskService {
 
     @Transactional
     public Task changeStatus(Long taskId, TaskStatus newStatus) {
+        return changeStatus(taskId, newStatus, null);
+    }
+
+    // userId is who is asking (null = the legacy, userId-less view, which can only touch unowned
+    // tasks). Someone else's task answers exactly like one that does not exist, so the id of a
+    // task you do not own tells you nothing.
+    @Transactional
+    public Task changeStatus(Long taskId, TaskStatus newStatus, Long userId) {
         Task task = taskRepository.findById(taskId)
+                .filter(found -> Ownership.ownedBy(found.getUser(), userId))
                 .orElseThrow(() -> new NoSuchElementException("No task with id " + taskId));
 
         if (newStatus == TaskStatus.DONE) {
@@ -46,12 +55,16 @@ public class TaskService {
     }
 
     private Optional<DailyLog> createDailyLogFor(Task task) {
+        DailyLog log = null;
         if (task.getRoutineItem() != null) {
-            return Optional.of(DailyLog.forRoutineItem(task.getTaskDate(), task.getRoutineItem(), DailyLogSource.SCHEDULE));
+            log = DailyLog.forRoutineItem(task.getTaskDate(), task.getRoutineItem(), DailyLogSource.SCHEDULE);
+        } else if (task.getLearningTopic() != null) {
+            log = DailyLog.forLearningTopic(task.getTaskDate(), task.getLearningTopic(), DailyLogSource.SCHEDULE);
         }
-        if (task.getLearningTopic() != null) {
-            return Optional.of(DailyLog.forLearningTopic(task.getTaskDate(), task.getLearningTopic(), DailyLogSource.SCHEDULE));
+        if (log != null) {
+            // The day is logged for whoever owns the task, never for nobody.
+            log.assignUser(task.getUser());
         }
-        return Optional.empty();
+        return Optional.ofNullable(log);
     }
 }
