@@ -1,5 +1,6 @@
 package com.routinemachine.core.hubsync;
 
+import com.routinemachine.core.observability.SyncMetrics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -46,6 +47,7 @@ public class GitHubContentClientImpl implements GitHubContentClient {
             HttpResponse<String> response = get("https://api.github.com/repos/" + repoSlug + "/contents/" + path);
             if (response.statusCode() != 200) {
                 log.info("hub-sync: listing {} returned HTTP {}", path, response.statusCode());
+                SyncMetrics.failure("hub");
                 return List.of();
             }
             JsonNode items = objectMapper.readTree(response.body());
@@ -57,12 +59,14 @@ public class GitHubContentClientImpl implements GitHubContentClient {
                     }
                 }
             }
+            SyncMetrics.success("hub");
             return files;
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             log.info("hub-sync: failed to list {}: {}", path, e.getClass().getSimpleName());
+            SyncMetrics.failure("hub");
             return List.of();
         }
     }

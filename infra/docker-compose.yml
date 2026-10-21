@@ -42,6 +42,9 @@ services:
     environment:
       BACKEND_BASE_URL: http://backend:8080
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # Optional prices (USD per million tokens) for the assessment cost metric; empty means 0.
+      ANTHROPIC_INPUT_USD_PER_MTOK: ${ANTHROPIC_INPUT_USD_PER_MTOK:-}
+      ANTHROPIC_OUTPUT_USD_PER_MTOK: ${ANTHROPIC_OUTPUT_USD_PER_MTOK:-}
     ports:
       - "8000:8000"
     depends_on:

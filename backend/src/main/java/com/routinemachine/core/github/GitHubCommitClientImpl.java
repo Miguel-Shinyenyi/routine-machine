@@ -1,5 +1,6 @@
 package com.routinemachine.core.github;
 
+import com.routinemachine.core.observability.SyncMetrics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -63,14 +64,17 @@ public class GitHubCommitClientImpl implements GitHubCommitClient {
                     "https://api.github.com/users/" + username + "/events/public?per_page=100");
             if (response.statusCode() != 200) {
                 log.info("github-sync: fetching public events returned HTTP {}", response.statusCode());
+                SyncMetrics.failure("github");
                 return List.of();
             }
+            SyncMetrics.success("github");
             return countPushedCommitsByDay(response.body(), start, end);
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             log.info("github-sync: failed to fetch public events: {}", e.getClass().getSimpleName());
+            SyncMetrics.failure("github");
             return List.of();
         }
     }

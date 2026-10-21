@@ -12,6 +12,7 @@ import com.routinemachine.core.repository.UserRepository;
 import com.routinemachine.core.service.EvidenceCreditService;
 import com.routinemachine.core.service.Ownership;
 import jakarta.validation.Valid;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -38,10 +39,12 @@ public class EvidenceEventController {
     private final UserRepository userRepository;
     private final GoalRepository goalRepository;
     private final EvidenceCreditService evidenceCreditService;
+    private final MeterRegistry meterRegistry;
 
     public EvidenceEventController(
             EvidenceEventRepository evidenceEventRepository, UserRepository userRepository,
-            GoalRepository goalRepository, EvidenceCreditService evidenceCreditService) {
+            GoalRepository goalRepository, EvidenceCreditService evidenceCreditService, MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
         this.evidenceEventRepository = evidenceEventRepository;
         this.userRepository = userRepository;
         this.goalRepository = goalRepository;
@@ -83,7 +86,11 @@ public class EvidenceEventController {
                 .filter(found -> Ownership.ownedBy(found.getUser(), TokenUser.idOf(jwt)))
                 .orElseThrow(() -> new NoSuchElementException("No evidence event with id " + id));
         Goal goal = event.getGoal();
+        boolean firstTime = event.getQuestionedAt() == null;
         event.question(Instant.now());
+        if (firstTime) {
+            meterRegistry.counter("credits.questioned").increment();
+        }
         return EvidenceEventResponse.from(evidenceEventRepository.save(event), goal);
     }
 }

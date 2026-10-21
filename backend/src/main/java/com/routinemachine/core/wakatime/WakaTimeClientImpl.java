@@ -1,5 +1,6 @@
 package com.routinemachine.core.wakatime;
 
+import com.routinemachine.core.observability.SyncMetrics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -57,14 +58,17 @@ public class WakaTimeClientImpl implements WakaTimeClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
                 log.info("wakatime-sync: summaries request returned HTTP {}", response.statusCode());
+                SyncMetrics.failure("wakatime");
                 return List.of();
             }
+            SyncMetrics.success("wakatime");
             return parseDailyTotals(response.body());
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             log.info("wakatime-sync: failed to fetch summaries: {}", e.getClass().getSimpleName());
+            SyncMetrics.failure("wakatime");
             return List.of();
         }
     }

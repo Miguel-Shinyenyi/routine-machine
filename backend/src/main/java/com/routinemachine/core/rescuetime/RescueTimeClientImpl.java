@@ -1,5 +1,6 @@
 package com.routinemachine.core.rescuetime;
 
+import com.routinemachine.core.observability.SyncMetrics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -58,14 +59,17 @@ public class RescueTimeClientImpl implements RescueTimeClient {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
                 log.info("rescuetime-sync: data request returned HTTP {}", response.statusCode());
+                SyncMetrics.failure("rescuetime");
                 return List.of();
             }
+            SyncMetrics.success("rescuetime");
             return sumSecondsByDay(response.body());
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             log.info("rescuetime-sync: failed to fetch data: {}", e.getClass().getSimpleName());
+            SyncMetrics.failure("rescuetime");
             return List.of();
         }
     }

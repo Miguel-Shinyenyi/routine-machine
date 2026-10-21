@@ -10,6 +10,9 @@ import com.routinemachine.core.repository.DailyCreditRepository;
 import com.routinemachine.core.repository.EvidenceEventRepository;
 import com.routinemachine.core.repository.ScoringRuleRepository;
 import org.springframework.dao.DataIntegrityViolationException;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -30,12 +33,23 @@ public class EvidenceCreditService {
     private final DailyCreditRepository dailyCreditRepository;
     private final ScoringRuleRepository scoringRuleRepository;
 
+    private final MeterRegistry meterRegistry;
+
+    // Without a registry (most tests build the service by hand), counts go to a throwaway one.
     public EvidenceCreditService(
             EvidenceEventRepository evidenceEventRepository, DailyCreditRepository dailyCreditRepository,
             ScoringRuleRepository scoringRuleRepository) {
+        this(evidenceEventRepository, dailyCreditRepository, scoringRuleRepository, new SimpleMeterRegistry());
+    }
+
+    @Autowired
+    public EvidenceCreditService(
+            EvidenceEventRepository evidenceEventRepository, DailyCreditRepository dailyCreditRepository,
+            ScoringRuleRepository scoringRuleRepository, MeterRegistry meterRegistry) {
         this.evidenceEventRepository = evidenceEventRepository;
         this.dailyCreditRepository = dailyCreditRepository;
         this.scoringRuleRepository = scoringRuleRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     public EvidenceEvent ingest(
@@ -73,6 +87,11 @@ public class EvidenceCreditService {
                     .findByUserIdAndSourceAndSourceEventId(user.getId(), source, sourceEventId)
                     .orElseThrow(() -> e);
         }
+
+        // Counted once per new piece of evidence, by what was decided and by which published rule
+        // version decided it. Never by user or goal.
+        meterRegistry.counter("credits.events",
+                "status", qualification.status().name(), "rule_version", String.valueOf(qualification.ruleVersion())).increment();
 
         if (saved.earnsCredit()) {
             dailyCreditRepository.awardCreditIfAbsent(user.getId(), goal.getId(), localDate, saved.getId());

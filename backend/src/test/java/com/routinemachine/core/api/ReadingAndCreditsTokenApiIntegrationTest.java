@@ -122,6 +122,26 @@ class ReadingAndCreditsTokenApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Autowired
+    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
+
+    @Test
+    void questioningACreditIsCountedOnceEvenIfAskedTwice() throws Exception {
+        User a = saveUser("rc-token-m@example.com");
+        Goal goal = goalRepository.save(new Goal("rc-M-goal", null, a));
+        long event = create("/api/evidence-events", a.getId(), "{\"goalId\": " + goal.getId()
+                + ", \"source\": \"MANUAL\", \"sourceEventId\": \"rc-q\", \"occurredAt\": \"2034-03-02T12:00:00Z\"}");
+        var counter = meterRegistry.counter("credits.questioned");
+        double before = counter.count();
+
+        mockMvc.perform(patch("/api/evidence-events/" + event + "/question").with(asUser(a.getId())))
+                .andExpect(status().isOk());
+        mockMvc.perform(patch("/api/evidence-events/" + event + "/question").with(asUser(a.getId())))
+                .andExpect(status().isOk());
+
+        assertThat(counter.count() - before).isEqualTo(1);
+    }
+
     @Test
     void creditForAnotherUsersGoalIsRefused() throws Exception {
         User a = saveUser("rc-token-g@example.com");

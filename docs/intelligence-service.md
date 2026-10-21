@@ -163,3 +163,7 @@ rows of the person in the forwarded token. A `userId` in the request is not read
 
 A request id (`X-Request-Id`, reused if plain, else generated) goes on every response, every log line and every call to the backend. One JSON `request completed` line per request (no query string). Request metrics on port 9000 (`METRICS_PORT`), not the API port, not published by Compose. `observability.py` holds all of it; details, what is recorded and how to turn it off are in `docs/observability.md`.
 
+## Observability, part 3
+
+`POST /reading-notes/assess` reports `assessment_requests_total{outcome}`, `assessment_duration_seconds`, `assessment_tokens_total{direction}` and `assessment_estimated_cost_usd_total` (prices from `ANTHROPIC_INPUT_USD_PER_MTOK` / `ANTHROPIC_OUTPUT_USD_PER_MTOK`, 0 if unset). Never the note or the book. See `docs/observability.md`.
+

@@ -1,4 +1,5 @@
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import date
 
@@ -6,8 +7,8 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from observability import (
-    HEADER as REQUEST_ID_HEADER, RequestObservabilityMiddleware, configure_logging, request_id_var,
-    start_metrics_server,
+    ASSESSMENT_DURATION, ASSESSMENT_REQUESTS, HEADER as REQUEST_ID_HEADER, RequestObservabilityMiddleware,
+    configure_logging, record_assessment_usage, request_id_var, start_metrics_server,
 )
 from pydantic import BaseModel
 
@@ -271,38 +272,49 @@ def tally(
 def assess_reading_note(request: ReadingNoteAssessmentRequest):
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
+        ASSESSMENT_REQUESTS.labels("unavailable").inc()
         raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not set, reading note assessment is unavailable")
 
     user_message = build_user_message(
         request.noteText, request.bookTitle, request.currentChapter, request.totalChapters)
 
-    with httpx.Client(base_url=ANTHROPIC_BASE_URL, timeout=30.0) as client:
-        response = client.post(
-            "/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": ANTHROPIC_MODEL,
-                "max_tokens": 1024,
-                "system": ASSESSMENT_SYSTEM_PROMPT,
-                "messages": [{"role": "user", "content": user_message}],
-            },
-        )
+    outcome = "upstream_error"
+    started = time.perf_counter()
     try:
-        response.raise_for_status()
-    except httpx.HTTPStatusError as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Anthropic API request failed: {response.status_code} {response.text}",
-        ) from exc
-    raw_text = "".join(block["text"] for block in response.json()["content"] if block["type"] == "text")
+        with httpx.Client(base_url=ANTHROPIC_BASE_URL, timeout=30.0) as client:
+            response = client.post(
+                "/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": ANTHROPIC_MODEL,
+                    "max_tokens": 1024,
+                    "system": ASSESSMENT_SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": user_message}],
+                },
+            )
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=502, detail=f"Anthropic API request failed: {response.status_code} {response.text}",
+            ) from exc
+        body = response.json()
+        record_assessment_usage(body.get("usage"))
+        raw_text = "".join(block["text"] for block in body["content"] if block["type"] == "text")
 
-    try:
-        result = parse_assessment_response(raw_text)
-    except AssessmentParseError as exc:
-        raise HTTPException(status_code=502, detail=f"could not parse the assessment: {exc}") from exc
+        outcome = "unparseable"
+        try:
+            result = parse_assessment_response(raw_text)
+        except AssessmentParseError as exc:
+            raise HTTPException(status_code=502, detail=f"could not parse the assessment: {exc}") from exc
+        outcome = "success"
+    finally:
+        ASSESSMENT_REQUESTS.labels(outcome).inc()
+        ASSESSMENT_DURATION.observe(time.perf_counter() - started)
 
     return ReadingNoteAssessmentResponse(
         chapterPlaced=result.chapter_placed,

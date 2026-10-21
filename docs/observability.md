@@ -9,13 +9,13 @@ differs and why. Built in parts; this file describes only what exists.
 
 ## Current state
 
-Staged Prompt 3 is built in five parts. **Parts 1 and 2 are done: the backend and the intelligence service.** The rest is not built.
+Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done: the backend, the intelligence service and the custom metrics.** The rest is not built.
 
 | Part | What | State |
 |---|---|---|
 | 1 | Backend: request id, JSON logs, metrics endpoint on its own port | Done |
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
-| 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Not built |
+| 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
 | 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | Not built |
 | 5 | Owner-only operations page in the frontend (working name `/watchtower`) | Not built |
 
@@ -57,7 +57,29 @@ Staged Prompt 3 is built in five parts. **Parts 1 and 2 are done: the backend an
   cannot create unlimited series. `/metrics` is not served on the API port (404). Compose does not publish
   9000.
 - uvicorn's access logger is kept handler-free (`--no-access-log` alone is not enough once the root logger has a handler: uvicorn re-enables it), and `httpx`'s per-call URL logging is set to WARNING.
-- Tests: `test_observability.py` (11), written first.
+- Tests: `test_observability.py` (16), written first.
+
+### Part 3: the custom metrics
+
+| Metric | Where | Tags | Meaning |
+|---|---|---|---|
+| `credits_events_total` | backend, `EvidenceCreditService` | `status` (ACCEPTED, REJECTED, PENDING, SELF_REPORTED), `rule_version` | Each new piece of evidence, by what was decided and by which published rule version (0 = no rule). A duplicate is not counted again |
+| `credits_questioned_total` | backend, `EvidenceEventController` | none | The first time a credit is questioned (asking again does not count) |
+| `sync_runs_total` | backend, each integration's client (`SyncMetrics`) | `source` (hub, wakatime, activitywatch, github, rescuetime), `outcome` (success, failure) | One count per fetch from that source. A missing API key is neither (the source is simply off). Hub counts directory listings only |
+| `sync_consecutive_failures` | backend, `SyncMetrics` | `source` | Failures in a row, back to 0 on a success: what the "failing three runs in a row" alert reads |
+| `sync_last_success_timestamp_seconds` | backend, `SyncMetrics` | `source` | When the source last succeeded |
+| `assessment_requests_total` | intelligence service | `outcome` (success, unavailable, upstream_error, unparseable) | Reading-note assessments by how they ended |
+| `assessment_duration_seconds` | intelligence service | none | How long an assessment takes (histogram) |
+| `assessment_tokens_total` | intelligence service | `direction` (input, output) | Model tokens, from the model's own usage report |
+| `assessment_estimated_cost_usd_total` | intelligence service | none | Tokens times the prices you set in `ANTHROPIC_INPUT_USD_PER_MTOK` and `ANTHROPIC_OUTPUT_USD_PER_MTOK` (USD per million tokens). **0 until you set them**: no price is assumed |
+
+No tag is a user, goal, book or note. Tests assert that on the credit and sync meters and that no assessment
+metric or log line carries the note text.
+
+Known limitation: the sync clients swallow failures into an empty result, so the metric is recorded where each
+client already logs the failure. Their HTTP calls have fixed URLs and no tests, so that wiring is verified by
+running the stack, not by unit tests. In Docker there is no local ActivityWatch server, so that source counts a
+failure on every poll; the alerts in part 4 must account for sources that are not expected to be up.
 
 ## What it records about people
 
