@@ -9,14 +9,14 @@ differs and why. Built in parts; this file describes only what exists.
 
 ## Current state
 
-Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is two thirds done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs).** Grafana, Jaeger and tracing, and the page, are not built.
+Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is mostly done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing).** Grafana and its dashboards, metric exemplars, and the page are not built.
 
 | Part | What | State |
 |---|---|---|
 | 1 | Backend: request id, JSON logs, metrics endpoint on its own port | Done |
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
-| 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done.** 4c Grafana, Jaeger and OpenTelemetry tracing: not built |
+| 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and dashboards: not built |
 | 5 | Owner-only operations page in the frontend (working name `/watchtower`) | Not built |
 
 ### Part 1: the backend
@@ -127,6 +127,36 @@ does not start them). Files are in `infra/observability/`.
 - Cost, measured idle: Loki about 97 MB, Alloy about 110 MB, the socket proxy about 28 MB of memory. Images:
   Loki 191 MB, Alloy 928 MB (large), proxy 67 MB. Log data about 0.2 MB after a few minutes.
 
+### Part 4c-i: traces in Jaeger
+
+- **Off by default.** `TRACING_ENABLED=true` turns it on (for example
+  `TRACING_ENABLED=true docker compose --profile observability up -d`). Off, no agent is loaded and nothing is
+  exported; the request id, JSON logs and metrics all work as before.
+- **Backend**: the OpenTelemetry Java agent (2.32.0), downloaded in the Dockerfile and **checked against the
+  SHA-256 Maven Central publishes**, so a changed download fails the build. `backend/entrypoint.sh` attaches it
+  only when tracing is on. It traces HTTP, repository calls and JDBC. It also puts `trace_id` and `span_id` in
+  the log MDC, so they appear on the JSON log lines with no code.
+- **Intelligence service**: `opentelemetry-instrument` (auto-instrumentation 0.66b1, SDK 1.45.1) around uvicorn,
+  covering FastAPI and the outbound httpx calls to the backend; `traceId` is added to its JSON log lines
+  (`observability.py`, tested). W3C `traceparent` carries the trace from the intelligence service into the
+  backend, so one request is one trace.
+- **Jaeger v2** (`jaegertracing/jaeger:2.22.0`, in-memory storage, so traces do not survive a restart) receives
+  OTLP over gRPC on port 4317 inside the Compose network; UI at `http://localhost:16686`, bound to this machine.
+  Traces only: the metrics and logs exporters are off, those have their own pipelines.
+- **Check**: `infra/observability/verify-traces.sh` (stack running with tracing on): the intelligence service's
+  log line carries a trace id, the backend's log line carries the same one, Jaeger has one trace with spans from
+  both services, and the trace contains no bearer token or authorization header.
+- **What a trace records**: operation names, timings, status codes, the **URL of each request including its
+  query string**, and the SQL text with parameters as `?` (never the values). No headers, no bodies. The query
+  string is the part to watch: today the API's query strings hold dates and ids only, but a future route that
+  put a note or an amount in one would put it in the trace; keep such values in bodies.
+- Cost, measured idle with tracing on: the backend about 445 MB against 327 MB off (about 120 MB more), the
+  intelligence service about 55 MB against 42 MB, Jaeger about 20 MB; Jaeger's image 164 MB.
+- **Not done: the trace id on a metric.** The staged prompt asks to show the trace id in the metric, the log line
+  and the trace. Log line and trace are done. A metric carries it only as a Prometheus *exemplar*, which needs
+  Prometheus's exemplar storage and OpenMetrics scraping plus a tracer bridge in each service. That is a
+  separate step (see the report).
+
 ## What it records about people
 
 - Logs: method, path, status, duration, request id, and the application's own messages. No query
@@ -154,6 +184,9 @@ does not start them). Files are in `infra/observability/`.
 |------|----------|--------|
 | 2026-10-21 | Spring Boot's built-in structured logging (`logstash` format) instead of `logstash-logback-encoder` | The latest encoder (9.0) needs Jackson 3, and Spring Boot 3.5 uses Jackson 2; Boot 3.4 and later emit the same Logstash JSON with the MDC included and no extra dependency. Differs from the staged prompt, which named the library |
 | 2026-10-21 | Metrics on a separate management port (8081), not published to the host, instead of exposing `/actuator/**` on the API port and relying on routing | The staged prompt requires it never share the port the browser talks to. Following the reference's lesson: an endpoint that is never served on the public port cannot be reached through an auth mistake there |
+| 2026-10-21 | Jaeger v2 (`jaegertracing/jaeger:2.22.0`), not the reference's v1 all-in-one | v2 images are published now (the reference had to use 1.x because 2.x tags were missing) and v1 is end-of-life. Differs from the reference |
+| 2026-10-21 | Tracing is opt-in with `TRACING_ENABLED`, not always on | The agent adds about 120 MB to the backend and exports to a collector that only exists under the profile; a plain `docker compose up` stays light and quiet |
+| 2026-10-21 | The OpenTelemetry Java agent is pinned and checksum-verified in the Dockerfile | It runs inside the backend's JVM with full access; a downloaded jar must be exactly the one published |
 | 2026-10-21 | Grafana Alloy instead of Promtail for log shipping | Promtail is deprecated and its last release was May 2026; Alloy (v1.21.0, October 2026) is Grafana's maintained replacement. Differs from the reference and the staged prompt, which named Promtail |
 | 2026-10-21 | The log shipper reads Docker through a read-only socket proxy, not the raw socket | Anything holding `/var/run/docker.sock` can control the host; the proxy allows only reading containers and networks |
 | 2026-10-21 | Only `backend` and `intelligence-service` logs are shipped; Postgres and the frontend are not | Postgres error lines can contain row values (emails); the frontend's server logs are not covered by the no-personal-data rule. An allow-list can only grow on purpose |

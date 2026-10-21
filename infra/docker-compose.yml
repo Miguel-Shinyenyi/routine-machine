@@ -31,6 +31,15 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env (see .env.example)}
       AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
       OWNER_EMAIL: ${OWNER_EMAIL:-}
+      # Tracing (docs/observability.md): off unless TRACING_ENABLED=true. Traces only; metrics and logs have
+      # their own pipelines, so those exporters are off.
+      TRACING_ENABLED: ${TRACING_ENABLED:-false}
+      OTEL_SERVICE_NAME: routine-machine-backend
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     ports:
       - "8080:8080"
     depends_on:
@@ -45,6 +54,15 @@ services:
       # Optional prices (USD per million tokens) for the assessment cost metric; empty means 0.
       ANTHROPIC_INPUT_USD_PER_MTOK: ${ANTHROPIC_INPUT_USD_PER_MTOK:-}
       ANTHROPIC_OUTPUT_USD_PER_MTOK: ${ANTHROPIC_OUTPUT_USD_PER_MTOK:-}
+      # Tracing (docs/observability.md): off unless TRACING_ENABLED=true. Traces only; metrics and logs have
+      # their own pipelines, so those exporters are off.
+      TRACING_ENABLED: ${TRACING_ENABLED:-false}
+      OTEL_SERVICE_NAME: routine-machine-intelligence
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     ports:
       - "8000:8000"
     depends_on:
@@ -137,6 +155,13 @@ services:
     depends_on:
       - loki
       - socket-proxy
+
+  jaeger:
+    profiles: ["observability"]
+    image: jaegertracing/jaeger:2.22.0
+    ports:
+      - "127.0.0.1:16686:16686"
+    mem_limit: 512m
 
 volumes:
   routine_machine_postgres_data:

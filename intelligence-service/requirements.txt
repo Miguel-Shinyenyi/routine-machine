@@ -3,3 +3,8 @@ uvicorn[standard]==0.51.0
 pydantic==2.13.4
 httpx==0.28.1
 prometheus-client==0.26.0
+# Tracing (docs/observability.md): one coherent set, installed always, used only when TRACING_ENABLED=true.
+opentelemetry-distro==0.66b1
+opentelemetry-exporter-otlp-proto-grpc==1.45.1
+opentelemetry-instrumentation-fastapi==0.66b1
+opentelemetry-instrumentation-httpx==0.66b1

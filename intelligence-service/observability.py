@@ -55,6 +55,16 @@ def new_request_id(incoming: str | None) -> str:
     return str(uuid.uuid4())
 
 
+def _current_trace_id() -> str | None:
+    # Set only while a traced request is running (tracing is off unless TRACING_ENABLED=true).
+    try:
+        from opentelemetry import trace
+    except ImportError:
+        return None
+    context = trace.get_current_span().get_span_context()
+    return format(context.trace_id, "032x") if context.is_valid else None
+
+
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         data = {
@@ -66,6 +76,9 @@ class JsonFormatter(logging.Formatter):
         request_id = getattr(record, "requestId", None) or request_id_var.get()
         if request_id:
             data["requestId"] = request_id
+        trace_id = _current_trace_id()
+        if trace_id:
+            data["traceId"] = trace_id
         for field in _ALLOWED_FIELDS:
             if hasattr(record, field):
                 data[field] = getattr(record, field)

@@ -209,3 +209,22 @@ def test_no_metric_or_log_line_carries_the_note_text(monkeypatch, caplog):
 
     exposed = generate_latest().decode() + " ".join(str(r.__dict__) + r.getMessage() for r in caplog.records)
     assert "mum" not in exposed and "5000 shillings" not in exposed and "Some Book" not in exposed
+
+
+# --- Observability, part 4c: when tracing is on, the trace id is on every log line of the traced request, so a
+# log line leads to its trace in Jaeger. Off (no active span), the field is simply absent.
+
+def test_a_log_line_inside_a_trace_carries_the_trace_id_and_outside_one_does_not():
+    from opentelemetry.sdk.trace import TracerProvider
+
+    tracer = TracerProvider().get_tracer("test")
+    record = logging.LogRecord("some.logger", logging.INFO, __file__, 1, "hello", (), None)
+
+    assert "traceId" not in json.loads(JsonFormatter().format(record))
+
+    with tracer.start_as_current_span("work") as span:
+        line = json.loads(JsonFormatter().format(record))
+        expected = format(span.get_span_context().trace_id, "032x")
+
+    assert line["traceId"] == expected
+    assert len(line["traceId"]) == 32
