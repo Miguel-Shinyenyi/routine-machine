@@ -15,6 +15,7 @@ Claude Code reads this file at the start of every task. Practices that apply to 
 | Pattern detection, suggestions (`intelligence-service/`) | `docs/intelligence-service.md` |
 | Reading the UMWAYI hub | `docs/hub-sync.md` |
 | Dashboard (`frontend/`) | `docs/frontend.md`, then `frontend/AGENTS.md` |
+| Metrics, logs, traces, alerts, the owner-only operations page | `docs/observability.md` |
 | Tests | `docs/testing.md` |
 
 ## Rules that already apply

@@ -1135,3 +1135,12 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
   existing. Whether JWTs should carry a shorter expiry Next.js actively refreshes, and what
   that refresh looks like across the frontend/backend boundary, isn't decided; nothing
   exercises refresh behavior yet, since nothing refreshes.
+
+## Observability, part 1
+
+Every request gets an `X-Request-Id` (`RequestIdFilter`, before Spring Security), logged on one
+`request completed` line per request; logs are JSON; `/actuator/health` and `/actuator/prometheus` are
+on port 8081 only (`MANAGEMENT_PORT`), never on 8080 and not published by Compose. Details, what is
+recorded about people, and how to turn it off: `docs/observability.md`. The route sweep
+(`EveryRouteNeedsATokenTest`) covers only `/api/**`; the management port is a separate server.
+

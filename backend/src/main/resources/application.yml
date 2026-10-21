@@ -22,3 +22,23 @@ auth:
 # nothing is claimed. Never put a real address in this file; set OWNER_EMAIL in the environment.
 owner:
   email: ${OWNER_EMAIL:}
+
+# Observability (docs/observability.md). Metrics and health are served on their own port, which
+# docker-compose never publishes to the host and the browser never talks to; only the two endpoints
+# listed are exposed. Logs are one JSON object per line (Spring Boot's built-in structured logging,
+# Logstash format), and every line of a request carries its requestId from the MDC.
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  structured:
+    format:
+      console: logstash
