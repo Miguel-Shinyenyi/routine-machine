@@ -849,12 +849,11 @@ Who sees what, by route group (all rules also hold for creates: the new row belo
 | Routes | `userId` given | `userId` omitted | Someone else's row |
 |---|---|---|---|
 | `/api/goals`, `/routine-items`, `/learning-topics`, `/schedule-templates`, `/tasks`, `/daily-logs` (**token**, access control part 2) | The token's user only; a `userId` in the request is not read | 401 | Linking to it is 400; changing a task is 404 |
-| `/api/books`, `/reading-notes`, `/current-reading`, `/books/current` | That user's rows only | Unowned (pre-account) rows only | Linking to it is 400 |
+| `/api/books`, `/reading-notes`, `/current-reading`, `/books/current` (**token**, access control part 3) | The token's user only | 401 | A note on another user's book is 400 |
 | `/api/granary/summary`, `/pauses`, `/pauses/due`, `/savings`, `/saving-target-amount` (**token**, access control part 1) | The token's user only | 401 | Not reachable |
 | `/api/granary/pauses/{id}/decide`, `/reflect` (**token**) | Must own the row | 401 | 404 |
-| `/api/evidence-events/{id}/question` | Must own the row | 400 (required) | 404 |
-| `GET /api/evidence-events` (ledger) | That user's | 400 (required) | Not reachable |
-| `/api/watering-holes` | Real status for the owner, all sources off for anyone else | Real status (legacy view) | Not applicable |
+| `/api/evidence-events` (ingest, ledger) and `/{id}/question` (**token**) | The token's user; a goal must be the user's own | 401 | Question: 404; goal: 400 |
+| `/api/watering-holes` (**token**) | Real status for the owner, all sources off for anyone else (and for everyone when no owner is configured) | 401 | Not applicable |
 | `/api/organisations/cohorts/{id}/...` | `requestingUserId` must belong to the cohort's organisation as the route requires | 400 (required) | An outsider gets 403 |
 
 `CrossUserIsolationApiIntegrationTest` (17 tests) creates data for two accounts on every personal
@@ -893,7 +892,21 @@ Their `userId` query parameter and request-body field are gone, and one sent any
   `/api/tasks/**` and `/api/goals/**` from the protected chain made the new test error out.
 - **Rollback**: revert the commit. No migration, no data change.
 
-Rows in the table marked **token** are done. The others still take a claimed `userId`.
+**Access control, part 3: reading, Watering holes and credits take their user from the token.**
+Books, reading notes, current reading, `GET /api/watering-holes` and the evidence routes (ingest,
+ledger, question) join the JWT filter chain. No token is 401, and a `userId` in the request is not
+read (`BookRequest`, `ReadingNoteRequest`, `CurrentReadingRequest` and `EvidenceEventRequest` lost
+the field).
+- Watering holes: the owner (from `OWNER_EMAIL`) sees the real status; every other account sees all
+  sources off. With no owner configured nobody is the owner, so everyone sees all sources off. The
+  old no-`userId` view, which showed the real status to anyone, is gone.
+- Tests: `ReadingAndCreditsTokenApiIntegrationTest` (5). The "unowned books" test for the removed
+  view rule was deleted. Removing `/api/books/**` and `/api/evidence-events/**` from the protected
+  chain made the new test error out.
+- **Rollback**: revert the commit. No migration, no data change.
+
+Rows in the table marked **token** are done. The cohort and organisation routes still take a claimed
+`requestingUserId` (part 4).
 
 **Still open**: outside the Granary, the user id is claimed by the caller, not proven by a token. Anyone who can reach
 the backend can send any `userId`. That is the access-control stage.

@@ -67,7 +67,7 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
 
     private static final java.util.Set<String> TOKEN_ROUTES = java.util.Set.of(
             "/api/goals", "/api/routine-items", "/api/learning-topics", "/api/schedule-templates",
-            "/api/tasks", "/api/daily-logs");
+            "/api/tasks", "/api/daily-logs", "/api/books", "/api/reading-notes");
 
     private String json(String path, String... params) throws Exception {
         var request = get(path);
@@ -102,15 +102,15 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
                     + "\"targetDurationMinutes\":30,\"sortOrder\":1,\"label\":\"" + s + "-template\"}");
             task[i] = create("/api/tasks", u, "{\"taskDate\":\"2033-03-0" + (i + 1) + "\",\"label\":\"" + s + "-task\"}");
             create("/api/daily-logs", u, "{\"logDate\":\"2033-03-0" + (i + 1) + "\",\"routineItemId\":" + routine[i] + "}");
-            book[i] = create("/api/books", u, "{\"title\":\"" + s + "-book\",\"userId\":" + u + "}");
-            create("/api/reading-notes", u, "{\"bookId\":" + book[i] + ",\"noteText\":\"" + s + "-note\",\"userId\":" + u + "}");
-            create("/api/current-reading", u, "{\"title\":\"" + s + "-reading\",\"userId\":" + u + "}");
+            book[i] = create("/api/books", u, "{\"title\":\"" + s + "-book\"}");
+            create("/api/reading-notes", u, "{\"bookId\":" + book[i] + ",\"noteText\":\"" + s + "-note\"}");
+            create("/api/current-reading", u, "{\"title\":\"" + s + "-reading\"}");
             send(put("/api/granary/saving-target-amount").with(asUser(u)).contentType(H)
                     .content("{\"amount\":" + (i == 0 ? 111 : 222) + "}"), 200);
             send(post("/api/granary/savings").with(asUser(u)), 200);
             pause[i] = idOf(send(post("/api/granary/pauses").with(asUser(u)).contentType(H)
                     .content("{\"what\":\"" + s + "-pause\"}"), 200));
-            evidence[i] = create("/api/evidence-events", u, "{\"userId\":" + u + ",\"goalId\":" + goal[i] + ",\"source\":\"MANUAL\","
+            evidence[i] = create("/api/evidence-events", u, "{\"goalId\":" + goal[i] + ",\"source\":\"MANUAL\","
                     + "\"sourceEventId\":\"" + s + "-evt\",\"occurredAt\":\"2033-03-02T12:00:00Z\"}");
             long org = idOf(send(post("/api/organisations").contentType(H)
                     .content("{\"name\":\"" + s + "-org\",\"foundingAdminUserId\":" + u + "}"), 200));
@@ -191,8 +191,8 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
     void currentBookAndCurrentReadingAreIsolated() throws Exception {
         for (int i = 0; i < 2; i++) {
             long me = i == 0 ? a : b;
-            assertThat(json("/api/books/current", "userId", String.valueOf(me))).contains(seed(i)).doesNotContain(seed(1 - i) + "-");
-            assertThat(json("/api/current-reading", "userId", String.valueOf(me))).contains(seed(i)).doesNotContain(seed(1 - i) + "-");
+            assertThat(asToken("/api/books/current", me)).contains(seed(i)).doesNotContain(seed(1 - i) + "-");
+            assertThat(asToken("/api/current-reading", me)).contains(seed(i)).doesNotContain(seed(1 - i) + "-");
         }
     }
 
@@ -210,8 +210,8 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
     void theCreditLedgerIsIsolated() throws Exception {
         for (int i = 0; i < 2; i++) {
             long me = i == 0 ? a : b;
-            String body = json("/api/evidence-events", "userId", String.valueOf(me),
-                    "seasonStart", "2033-02-28", "seasonEnd", "2033-03-06");
+            String body = send(get("/api/evidence-events").with(asUser(me))
+                    .param("seasonStart", "2033-02-28").param("seasonEnd", "2033-03-06"), 200).getResponse().getContentAsString();
             assertThat(body).contains(seed(i)).doesNotContain(seed(1 - i) + "-");
         }
     }
@@ -236,8 +236,8 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void anAccountCannotQuestionAnotherAccountsCredit() throws Exception {
-        send(patch("/api/evidence-events/" + evidence[0] + "/question").param("userId", String.valueOf(b)), 404);
-        send(patch("/api/evidence-events/" + evidence[0] + "/question").param("userId", String.valueOf(a)), 200);
+        send(patch("/api/evidence-events/" + evidence[0] + "/question").with(asUser(b)), 404);
+        send(patch("/api/evidence-events/" + evidence[0] + "/question").with(asUser(a)), 200);
     }
 
     @Test
@@ -248,8 +248,8 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
         send(post("/api/daily-logs").with(asUser(b)).contentType(H).content("{\"logDate\":\"2033-04-04\",\"routineItemId\":" + routine[0] + "}"), 400);
         send(post("/api/tasks").with(asUser(b)).contentType(H).content("{\"taskDate\":\"2033-04-04\",\"scheduleTemplateId\":" + template[0] + "}"), 400);
         send(post("/api/tasks").with(asUser(b)).contentType(H).content("{\"taskDate\":\"2033-04-04\",\"label\":\"x\",\"routineItemId\":" + routine[0] + "}"), 400);
-        send(post("/api/reading-notes").contentType(H).content("{\"bookId\":" + book[0] + ",\"noteText\":\"x\",\"userId\":" + b + "}"), 400);
-        send(post("/api/evidence-events").contentType(H).content("{\"userId\":" + b + ",\"goalId\":" + goal[0] + ",\"source\":\"MANUAL\","
+        send(post("/api/reading-notes").with(asUser(b)).contentType(H).content("{\"bookId\":" + book[0] + ",\"noteText\":\"x\"}"), 400);
+        send(post("/api/evidence-events").with(asUser(b)).contentType(H).content("{\"goalId\":" + goal[0] + ",\"source\":\"MANUAL\","
                 + "\"sourceEventId\":\"intruder\",\"occurredAt\":\"2033-03-02T12:00:00Z\"}"), 400);
     }
 
@@ -269,6 +269,6 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void theWateringHolesOfTheDeploymentAreNotConnectedForAnAccountThatIsNotTheOwner() throws Exception {
-        assertThat(json("/api/watering-holes", "userId", String.valueOf(a))).doesNotContain("\"enabled\":true");
+        assertThat(asToken("/api/watering-holes", a)).doesNotContain("\"enabled\":true");
     }
 }

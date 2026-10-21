@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { authenticatedBackendFetch, ApiError, backendFetch, backendFetchMultipart, intelligenceFetch } from "./api";
 import { getSessionToken, getSessionUserId, requireSessionUserId } from "./auth/session";
-import { withUserId } from "./scope";
 import type { MpesaImportResponse, ReadingNoteAssessment } from "./types";
 
 function optionalNumber(value: FormDataEntryValue | null): number | null {
@@ -84,17 +83,17 @@ export async function updateTaskStatus(taskId: number, status: string): Promise<
 }
 
 export async function createCurrentReading(formData: FormData): Promise<void> {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   await backendFetch("/api/current-reading", {
     method: "POST",
-    body: JSON.stringify({ title: formData.get("title"), userId }),
+    body: JSON.stringify({ title: formData.get("title") }),
   });
 
   revalidatePath("/flock");
 }
 
 export async function createBook(formData: FormData): Promise<void> {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   await backendFetch("/api/books", {
     method: "POST",
     body: JSON.stringify({
@@ -102,7 +101,6 @@ export async function createBook(formData: FormData): Promise<void> {
       author: formData.get("author") || null,
       currentChapter: optionalNumber(formData.get("currentChapter")),
       totalChapters: optionalNumber(formData.get("totalChapters")),
-      userId,
     }),
   });
 
@@ -114,7 +112,7 @@ export async function createBook(formData: FormData): Promise<void> {
 // itself: writing the note is the user's real action, assessment is an addition to it. See
 // docs/backend.md's "assessment fields are all nullable" decision.
 export async function submitReadingNote(formData: FormData): Promise<void> {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   const bookId = Number(formData.get("bookId"));
   const noteText = String(formData.get("noteText"));
 
@@ -137,7 +135,6 @@ export async function submitReadingNote(formData: FormData): Promise<void> {
     method: "POST",
     body: JSON.stringify({
       bookId,
-      userId,
       noteText,
       chapterPlaced: assessment?.chapterPlaced ?? null,
       ownWordsPercentage: assessment?.ownWordsPercentage ?? null,
@@ -169,9 +166,9 @@ export async function setHillsideOptIn(formData: FormData): Promise<void> {
 // "Question a credit" — records the request, nothing more (see
 // docs/product-direction.md's Hillside v2 transparency bullet).
 export async function questionCredit(formData: FormData): Promise<void> {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   const eventId = formData.get("eventId");
-  await backendFetch(withUserId(`/api/evidence-events/${eventId}/question`, userId), { method: "PATCH" });
+  await backendFetch(`/api/evidence-events/${eventId}/question`, { method: "PATCH" });
   revalidatePath("/hillside");
 }
 

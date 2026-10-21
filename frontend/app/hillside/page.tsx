@@ -81,7 +81,7 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
     me ? backendFetch<Goal[]>("/api/goals").catch(() => []) : Promise.resolve([]),
     me
       ? backendFetch<EvidenceEvent[]>(
-          `/api/evidence-events?userId=${me.id}&seasonStart=${seasonStart}&seasonEnd=${seasonEnd}`,
+          `/api/evidence-events?seasonStart=${seasonStart}&seasonEnd=${seasonEnd}`,
         ).catch(() => [])
       : Promise.resolve([]),
   ]);

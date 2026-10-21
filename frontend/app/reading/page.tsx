@@ -1,6 +1,5 @@
 import { ApiError, backendFetch } from "@/lib/api";
 import { requireSessionUserId } from "@/lib/auth/session";
-import { withUserId } from "@/lib/scope";
 import { markQuotes } from "@/lib/markQuotes";
 import type { Book, ReadingNote } from "@/lib/types";
 import { NewBookForm } from "@/components/NewBookForm";
@@ -11,9 +10,9 @@ import { ReadingNoteForm } from "@/components/ReadingNoteForm";
 // rather than guessing. If that constant ever changes, this must change with it.
 const OWN_WORDS_THRESHOLD = 70;
 
-async function fetchCurrentBook(userId: number): Promise<Book | null> {
+async function fetchCurrentBook(): Promise<Book | null> {
   try {
-    return await backendFetch<Book>(withUserId("/api/books/current", userId));
+    return await backendFetch<Book>("/api/books/current");
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null;
     throw error;
@@ -42,9 +41,9 @@ function noteStatusLabel(note: ReadingNote): string {
 }
 
 export default async function ReadingPage() {
-  const userId = await requireSessionUserId();
-  const book = await fetchCurrentBook(userId);
-  const notes = book ? await backendFetch<ReadingNote[]>(withUserId(`/api/reading-notes?bookId=${book.id}`, userId)) : [];
+  await requireSessionUserId();
+  const book = await fetchCurrentBook();
+  const notes = book ? await backendFetch<ReadingNote[]>(`/api/reading-notes?bookId=${book.id}`) : [];
   const [latestNote, ...earlierNotes] = notes;
 
   return (

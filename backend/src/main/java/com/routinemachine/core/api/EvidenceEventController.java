@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.EvidenceEvent;
 import com.routinemachine.core.domain.Goal;
 import com.routinemachine.core.domain.User;
@@ -47,9 +50,10 @@ public class EvidenceEventController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public EvidenceEventResponse ingest(@Valid @RequestBody EvidenceEventRequest request) {
-        User user = userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
+    public EvidenceEventResponse ingest(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody EvidenceEventRequest request) {
+        Long userId = TokenUser.idOf(jwt);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
         Goal goal = goalRepository.findById(request.goalId())
                 .filter(found -> Ownership.sameOwner(found.getUser(), user))
                 .orElseThrow(() -> new IllegalArgumentException("No goal with id " + request.goalId()));
@@ -65,8 +69,8 @@ public class EvidenceEventController {
     // self-reported.
     @GetMapping
     public List<EvidenceEventResponse> ledger(
-            @RequestParam Long userId, @RequestParam LocalDate seasonStart, @RequestParam LocalDate seasonEnd) {
-        return evidenceEventRepository.findLedgerForUser(userId, seasonStart, seasonEnd).stream()
+            @AuthenticationPrincipal Jwt jwt, @RequestParam LocalDate seasonStart, @RequestParam LocalDate seasonEnd) {
+        return evidenceEventRepository.findLedgerForUser(TokenUser.idOf(jwt), seasonStart, seasonEnd).stream()
                 .map(EvidenceEventResponse::from)
                 .toList();
     }
@@ -74,9 +78,9 @@ public class EvidenceEventController {
     // "Question a credit": records the request, nothing more — see
     // docs/product-direction.md's Hillside v2 transparency bullet.
     @PatchMapping("/{id}/question")
-    public EvidenceEventResponse question(@PathVariable Long id, @RequestParam Long userId) {
+    public EvidenceEventResponse question(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
         EvidenceEvent event = evidenceEventRepository.findWithGoalById(id)
-                .filter(found -> Ownership.ownedBy(found.getUser(), userId))
+                .filter(found -> Ownership.ownedBy(found.getUser(), TokenUser.idOf(jwt)))
                 .orElseThrow(() -> new NoSuchElementException("No evidence event with id " + id));
         Goal goal = event.getGoal();
         event.question(Instant.now());

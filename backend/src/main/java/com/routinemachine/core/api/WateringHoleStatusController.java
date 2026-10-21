@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.HubSyncProcessedFile;
 import com.routinemachine.core.domain.Measurement;
 import com.routinemachine.core.domain.MeasurementSource;
@@ -61,12 +64,12 @@ public class WateringHoleStatusController {
 
     // Per-user scoping, part 5: these are the deployment's own integrations, run on credentials set
     // for the whole deployment, so they are connected for the owner account and for nobody else.
-    // userId given and not the owner: every source reads "not connected" with no activity, which
-    // is true for that account. userId omitted: the real status (the legacy view).
+    // Anyone but the owner: every source reads "not connected" with no activity, which is true for
+    // that account. With no owner configured nobody is the owner.
     @GetMapping
-    public List<WateringHoleStatusResponse> list(@RequestParam Optional<Long> userId) {
+    public List<WateringHoleStatusResponse> list(@AuthenticationPrincipal Jwt jwt) {
         List<WateringHoleStatusResponse> statuses = allSources();
-        if (userId.isPresent() && !ownerAccount.isOwner(userId.get())) {
+        if (!ownerAccount.isOwner(TokenUser.idOf(jwt))) {
             return statuses.stream()
                     .map(status -> new WateringHoleStatusResponse(status.source(), false, null, status.description()))
                     .toList();

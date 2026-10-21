@@ -429,3 +429,10 @@ templates no longer carry `userId` (pages, `lib/materialize.ts` and the create a
 Server Actions). Books, notes, Watering holes and credits still do, and so do the intelligence
 calls (`/suggestion`, `/tally`, `/patterns`).
 
+## Access control, part 3
+
+Reading (books, notes, current book), Watering holes and credits calls (the Hillside ledger and
+"question a credit") no longer carry `userId`: the backend reads the user from the session token. The
+only `userId` left is on the intelligence calls (`/suggestion`, `/tally`, `/patterns`) and the
+cohort pages' `requestingUserId` (part 4).
+

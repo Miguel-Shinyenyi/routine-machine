@@ -7,7 +7,6 @@ import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 
 public record EvidenceEventRequest(
-        @NotNull Long userId,
         @NotNull Long goalId,
         @NotNull DailyLogSource source,
         @NotBlank String sourceEventId,

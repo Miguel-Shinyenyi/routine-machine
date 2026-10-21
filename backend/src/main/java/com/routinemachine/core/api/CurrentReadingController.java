@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.CurrentReadingLog;
 import com.routinemachine.core.domain.ReadingSource;
 import com.routinemachine.core.repository.CurrentReadingLogRepository;
@@ -31,25 +34,19 @@ public class CurrentReadingController {
     }
 
     @GetMapping
-    public CurrentReadingResponse latest(@RequestParam Optional<Long> userId) {
-        // Per-user scoping (docs/backend.md): the latest entry of that user, or — userId
-        // omitted — of nobody.
-        Optional<CurrentReadingLog> latest = userId.isPresent()
-                ? currentReadingLogRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(userId.get())
-                : currentReadingLogRepository.findFirstByUserIsNullOrderByCreatedAtDescIdDesc();
-        return latest
+    public CurrentReadingResponse latest(@AuthenticationPrincipal Jwt jwt) {
+        return currentReadingLogRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(TokenUser.idOf(jwt))
                 .map(CurrentReadingResponse::from)
                 .orElseThrow(() -> new NoSuchElementException("No current reading logged yet"));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public CurrentReadingResponse create(@Valid @RequestBody CurrentReadingRequest request) {
+    public CurrentReadingResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CurrentReadingRequest request) {
+        Long userId = TokenUser.idOf(jwt);
         CurrentReadingLog entry = new CurrentReadingLog(request.title(), ReadingSource.MANUAL);
-        if (request.userId() != null) {
-            entry.assignUser(userRepository.findById(request.userId())
-                    .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId())));
-        }
+        entry.assignUser(userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId)));
         return CurrentReadingResponse.from(currentReadingLogRepository.save(entry));
     }
 }

@@ -52,7 +52,8 @@ public class SecurityConfig {
         http
                 .securityMatcher(
                         "/api/users/**", "/api/granary/**", "/api/goals/**", "/api/routine-items/**",
-                        "/api/learning-topics/**", "/api/daily-logs/**", "/api/tasks/**", "/api/schedule-templates/**")
+                        "/api/learning-topics/**", "/api/daily-logs/**", "/api/tasks/**", "/api/schedule-templates/**", "/api/books/**", "/api/reading-notes/**",
+                        "/api/current-reading/**", "/api/watering-holes/**", "/api/evidence-events/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())

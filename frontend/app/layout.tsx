@@ -54,7 +54,7 @@ async function fetchShellContext(): Promise<{
       : Promise.resolve(null),
     // Owner-only integrations (docs/backend.md): anyone else gets every source "not connected".
     userId !== null
-      ? backendFetch<WateringHoleStatus[]>(withUserId("/api/watering-holes", userId)).catch(() => null)
+      ? backendFetch<WateringHoleStatus[]>("/api/watering-holes").catch(() => null)
       : Promise.resolve(null),
     sessionToken
       ? authenticatedBackendFetch<{ email: string }>("/api/users/me", sessionToken).catch(() => null)

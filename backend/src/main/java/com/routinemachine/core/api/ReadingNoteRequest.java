@@ -14,6 +14,5 @@ public record ReadingNoteRequest(
         @Min(0) @Max(100) Integer ownWordsPercentage,
         List<String> ideasConnected,
         List<String> quotedPhrases,
-        String questionBack,
-        Long userId) {
+        String questionBack) {
 }

@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.everyItem;
@@ -51,7 +52,7 @@ class WateringHolesOwnerOnlyApiTest extends AbstractIntegrationTest {
         measurementRepository.save(new Measurement(
                 MeasurementSource.WAKATIME, "coding_minutes", LocalDate.of(2026, 10, 17), new BigDecimal("30")));
 
-        mockMvc.perform(get("/api/watering-holes").param("userId", String.valueOf(owner)))
+        mockMvc.perform(get("/api/watering-holes").with(asUser(owner)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.source=='HUB')].enabled").value(true))
                 .andExpect(jsonPath("$[?(@.source=='WAKATIME')].enabled").value(true))
@@ -62,18 +63,11 @@ class WateringHolesOwnerOnlyApiTest extends AbstractIntegrationTest {
     void anyoneElseSeesEverySourceAsNotConnectedWithNoActivity() throws Exception {
         long someoneElse = saveUser("wh-other@example.com");
 
-        mockMvc.perform(get("/api/watering-holes").param("userId", String.valueOf(someoneElse)))
+        mockMvc.perform(get("/api/watering-holes").with(asUser(someoneElse)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(6)))
                 .andExpect(jsonPath("$[*].enabled", everyItem(is(false))))
                 .andExpect(jsonPath("$[*].lastActivityAt", everyItem(nullValue())))
                 .andExpect(jsonPath("$[*].source", hasItem("WAKATIME")));
-    }
-
-    @Test
-    void withNoUserIdTheLegacyViewStillShowsTheRealStatus() throws Exception {
-        mockMvc.perform(get("/api/watering-holes"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.source=='WAKATIME')].enabled").value(true));
     }
 }

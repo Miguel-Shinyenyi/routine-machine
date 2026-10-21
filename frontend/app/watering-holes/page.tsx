@@ -1,6 +1,5 @@
 import { backendFetch } from "@/lib/api";
 import { requireSessionUserId } from "@/lib/auth/session";
-import { withUserId } from "@/lib/scope";
 import { sourceLabel } from "@/lib/sourceLabels";
 import type { RoutineItem, WateringHoleStatus } from "@/lib/types";
 
@@ -81,9 +80,9 @@ function SourceCard({ status, feedsInto }: { status: WateringHoleStatus; feedsIn
 }
 
 export default async function WateringHolesPage() {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   const [statuses, routineItems] = await Promise.all([
-    backendFetch<WateringHoleStatus[]>(withUserId("/api/watering-holes", userId)),
+    backendFetch<WateringHoleStatus[]>("/api/watering-holes"),
     backendFetch<RoutineItem[]>("/api/routine-items"),
   ]);
 

@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -22,10 +23,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ReadingNoteApiIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
+    private com.routinemachine.core.repository.UserRepository meRepository;
+
+    private com.routinemachine.core.domain.User me;
+
+    @org.junit.jupiter.api.BeforeEach
+    void signInAsANewUser() {
+        me = meRepository.save(new com.routinemachine.core.domain.User(
+                "ReadingNoteApiIntegrationTest-" + System.nanoTime() + "@example.com", "irrelevant-hash", null, null));
+    }
+
+    @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private BookRepository bookRepository;
+
+    private Book saveMine(Book book) {
+        book.assignUser(me);
+        return bookRepository.save(book);
+    }
 
     // One test, not several: @SpringBootTest methods here share one Postgres instance per
     // class with no per-method rollback (see testing.md's decisions log on BookApiIntegrationTest
@@ -33,10 +50,10 @@ class ReadingNoteApiIntegrationTest extends AbstractIntegrationTest {
     // on what this one already wrote.
     @Test
     void postingANoteStoresItAndListsItByBookOrAcrossAllBooks() throws Exception {
-        Book book = bookRepository.save(new Book("Atomic Habits", null, 3, 20, ReadingSource.MANUAL));
-        Book otherBook = bookRepository.save(new Book("Sapiens", null, null, null, ReadingSource.MANUAL));
+        Book book = saveMine(new Book("Atomic Habits", null, 3, 20, ReadingSource.MANUAL));
+        Book otherBook = saveMine(new Book("Sapiens", null, null, null, ReadingSource.MANUAL));
 
-        mockMvc.perform(post("/api/reading-notes")
+        mockMvc.perform(post("/api/reading-notes").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -55,7 +72,7 @@ class ReadingNoteApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.ownWordsPercentage", is(80)))
                 .andExpect(jsonPath("$.quotedPhrases[0]", is("the plateau of latent potential")));
 
-        mockMvc.perform(post("/api/reading-notes")
+        mockMvc.perform(post("/api/reading-notes").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"bookId": %d, "noteText": "An unassessed note."}
@@ -63,21 +80,21 @@ class ReadingNoteApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.ownWordsPercentage").doesNotExist());
 
-        mockMvc.perform(get("/api/reading-notes").param("bookId", book.getId().toString()))
+        mockMvc.perform(get("/api/reading-notes").with(asUser(me.getId())).param("bookId", book.getId().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()", is(1)))
                 .andExpect(jsonPath("$[0].bookTitle", is("Atomic Habits")));
 
-        mockMvc.perform(get("/api/reading-notes"))
+        mockMvc.perform(get("/api/reading-notes").with(asUser(me.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()", is(2)));
     }
 
     @Test
     void rejectsABlankNoteText() throws Exception {
-        Book book = bookRepository.save(new Book("Some Book", ReadingSource.MANUAL));
+        Book book = saveMine(new Book("Some Book", ReadingSource.MANUAL));
 
-        mockMvc.perform(post("/api/reading-notes")
+        mockMvc.perform(post("/api/reading-notes").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"bookId": %d, "noteText": ""}
@@ -87,7 +104,7 @@ class ReadingNoteApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void rejectsAnUnknownBookId() throws Exception {
-        mockMvc.perform(post("/api/reading-notes")
+        mockMvc.perform(post("/api/reading-notes").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"bookId": 999999, "noteText": "Some note."}
@@ -97,9 +114,9 @@ class ReadingNoteApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void rejectsAnOwnWordsPercentageOutOfRange() throws Exception {
-        Book book = bookRepository.save(new Book("Some Book", ReadingSource.MANUAL));
+        Book book = saveMine(new Book("Some Book", ReadingSource.MANUAL));
 
-        mockMvc.perform(post("/api/reading-notes")
+        mockMvc.perform(post("/api/reading-notes").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"bookId": %d, "noteText": "Some note.", "ownWordsPercentage": 150}

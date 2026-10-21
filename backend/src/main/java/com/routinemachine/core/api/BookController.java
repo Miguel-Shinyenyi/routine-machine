@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.Book;
 import com.routinemachine.core.domain.ReadingSource;
 import com.routinemachine.core.domain.Book;
@@ -32,35 +35,27 @@ public class BookController {
     }
 
     @GetMapping
-    public List<BookResponse> list(@RequestParam Optional<Long> userId) {
-        // Per-user scoping (docs/backend.md): userId given = that user's books; omitted = only
-        // the unowned (pre-account) ones, never another user's.
-        List<Book> books = userId.isPresent()
-                ? bookRepository.findByUserIdOrderByCreatedAtDesc(userId.get())
-                : bookRepository.findByUserIsNullOrderByCreatedAtDesc();
+    public List<BookResponse> list(@AuthenticationPrincipal Jwt jwt) {
+        List<Book> books = bookRepository.findByUserIdOrderByCreatedAtDesc(TokenUser.idOf(jwt));
         return books.stream().map(BookResponse::from).toList();
     }
 
     @GetMapping("/current")
-    public BookResponse current(@RequestParam Optional<Long> userId) {
-        Optional<Book> latest = userId.isPresent()
-                ? bookRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(userId.get())
-                : bookRepository.findFirstByUserIsNullOrderByCreatedAtDescIdDesc();
-        return latest
+    public BookResponse current(@AuthenticationPrincipal Jwt jwt) {
+        return bookRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(TokenUser.idOf(jwt))
                 .map(BookResponse::from)
                 .orElseThrow(() -> new NoSuchElementException("No book logged yet"));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public BookResponse create(@Valid @RequestBody BookRequest request) {
+    public BookResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody BookRequest request) {
+        Long userId = TokenUser.idOf(jwt);
         Book book = new Book(
                 request.title(), request.author(), request.currentChapter(), request.totalChapters(),
                 ReadingSource.MANUAL);
-        if (request.userId() != null) {
-            book.assignUser(userRepository.findById(request.userId())
-                    .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId())));
-        }
+        book.assignUser(userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId)));
         return BookResponse.from(bookRepository.save(book));
     }
 }

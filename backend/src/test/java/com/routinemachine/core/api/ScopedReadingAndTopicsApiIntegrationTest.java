@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // Per-user scoping, part 2b: books, reading notes, current reading and learning topics answer
-// for exactly one user. userId given = that user's rows; omitted = only unowned rows.
+// for exactly one user: the one in the signed token.
 // Titles and names are unique to each test: the database is shared across this class.
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -42,13 +42,9 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         return Long.parseLong(result.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
     }
 
-    private String userField(Long userId) {
-        return userId == null ? "" : ", \"userId\": " + userId;
-    }
-
     private long createBook(String title, Long userId) throws Exception {
-        return idOf(mockMvc.perform(post("/api/books").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"title\": \"" + title + "\"" + userField(userId) + "}"))
+        return idOf(mockMvc.perform(post("/api/books").with(asUser(userId)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\": \"" + title + "\"}"))
                 .andExpect(status().isCreated()).andReturn());
     }
 
@@ -65,7 +61,7 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         createBook("book-A-only", a);
         createBook("book-B-only", b);
 
-        mockMvc.perform(get("/api/books").param("userId", String.valueOf(a)))
+        mockMvc.perform(get("/api/books").with(asUser(a)))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].title", is("book-A-only")))
                 .andExpect(jsonPath("$[0].userId", is((int) a)));
@@ -76,9 +72,9 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         long newcomer = saveUser("book-new@example.com");
         createBook("book-someone-elses", saveUser("book-other@example.com"));
 
-        mockMvc.perform(get("/api/books").param("userId", String.valueOf(newcomer)))
+        mockMvc.perform(get("/api/books").with(asUser(newcomer)))
                 .andExpect(jsonPath("$", hasSize(0)));
-        mockMvc.perform(get("/api/books/current").param("userId", String.valueOf(newcomer)))
+        mockMvc.perform(get("/api/books/current").with(asUser(newcomer)))
                 .andExpect(status().isNotFound());
     }
 
@@ -90,21 +86,11 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         createBook("book-C-second", a);
         createBook("book-D-newest-overall", b);
 
-        mockMvc.perform(get("/api/books/current").param("userId", String.valueOf(a)))
+        mockMvc.perform(get("/api/books/current").with(asUser(a)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title", is("book-C-second")));
     }
 
-    @Test
-    void omittingUserIdShowsOnlyUnownedBooks() throws Exception {
-        long a = saveUser("book-e@example.com");
-        createBook("book-owned-by-E", a);
-        createBook("book-unowned", null);
-
-        String body = mockMvc.perform(get("/api/books")).andReturn().getResponse().getContentAsString();
-
-        assertThat(body).contains("book-unowned").doesNotContain("book-owned-by-E");
-    }
 
     @Test
     void readingNotesAreListedOnlyForTheirOwnersAndCannotBeWrittenOnSomeoneElsesBook() throws Exception {
@@ -113,21 +99,21 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         long asBook = createBook("note-As-book", a);
         long bsBook = createBook("note-Bs-book", b);
 
-        mockMvc.perform(post("/api/reading-notes").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"bookId\": " + asBook + ", \"noteText\": \"note-A-text\", \"userId\": " + a + "}"))
+        mockMvc.perform(post("/api/reading-notes").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bookId\": " + asBook + ", \"noteText\": \"note-A-text\"}"))
                 .andExpect(status().isCreated());
-        mockMvc.perform(post("/api/reading-notes").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"bookId\": " + bsBook + ", \"noteText\": \"note-B-text\", \"userId\": " + b + "}"))
+        mockMvc.perform(post("/api/reading-notes").with(asUser(b)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bookId\": " + bsBook + ", \"noteText\": \"note-B-text\"}"))
                 .andExpect(status().isCreated());
         // A tries to write on B's book.
-        mockMvc.perform(post("/api/reading-notes").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"bookId\": " + bsBook + ", \"noteText\": \"note-intruder\", \"userId\": " + a + "}"))
+        mockMvc.perform(post("/api/reading-notes").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"bookId\": " + bsBook + ", \"noteText\": \"note-intruder\"}"))
                 .andExpect(status().isBadRequest());
 
-        String listedForA = mockMvc.perform(get("/api/reading-notes").param("userId", String.valueOf(a)))
+        String listedForA = mockMvc.perform(get("/api/reading-notes").with(asUser(a)))
                 .andReturn().getResponse().getContentAsString();
         assertThat(listedForA).contains("note-A-text").doesNotContain("note-B-text").doesNotContain("note-intruder");
-        String listedForB = mockMvc.perform(get("/api/reading-notes").param("userId", String.valueOf(b)))
+        String listedForB = mockMvc.perform(get("/api/reading-notes").with(asUser(b)))
                 .andReturn().getResponse().getContentAsString();
         assertThat(listedForB).contains("note-B-text").doesNotContain("note-intruder");
     }
@@ -137,10 +123,10 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         long a = saveUser("note-c@example.com");
         long b = saveUser("note-d@example.com");
         long bsBook = createBook("note-Ds-book", b);
-        mockMvc.perform(post("/api/reading-notes").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"bookId\": " + bsBook + ", \"noteText\": \"note-D-private\", \"userId\": " + b + "}"));
+        mockMvc.perform(post("/api/reading-notes").with(asUser(b)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"bookId\": " + bsBook + ", \"noteText\": \"note-D-private\"}"));
 
-        mockMvc.perform(get("/api/reading-notes").param("userId", String.valueOf(a)).param("bookId", String.valueOf(bsBook)))
+        mockMvc.perform(get("/api/reading-notes").with(asUser(a)).param("bookId", String.valueOf(bsBook)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
     }
@@ -156,9 +142,9 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         }
         long asBook = createBook("note-Es-book", a);
 
-        mockMvc.perform(post("/api/reading-notes").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/api/reading-notes").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"bookId\": " + asBook + ", \"noteText\": \"in my own words\", "
-                                + "\"ownWordsPercentage\": 90, \"userId\": " + a + "}"))
+                                + "\"ownWordsPercentage\": 90}"))
                 .andExpect(status().isCreated());
 
         String today = LocalDate.now().toString();
@@ -174,14 +160,14 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         long a = saveUser("cur-a@example.com");
         long b = saveUser("cur-b@example.com");
         long newcomer = saveUser("cur-c@example.com");
-        mockMvc.perform(post("/api/current-reading").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"title\": \"cur-A-title\", \"userId\": " + a + "}")).andExpect(status().isCreated());
-        mockMvc.perform(post("/api/current-reading").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"title\": \"cur-B-title\", \"userId\": " + b + "}")).andExpect(status().isCreated());
+        mockMvc.perform(post("/api/current-reading").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\": \"cur-A-title\"}")).andExpect(status().isCreated());
+        mockMvc.perform(post("/api/current-reading").with(asUser(b)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"title\": \"cur-B-title\"}")).andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/current-reading").param("userId", String.valueOf(a)))
+        mockMvc.perform(get("/api/current-reading").with(asUser(a)))
                 .andExpect(jsonPath("$.title", is("cur-A-title")));
-        mockMvc.perform(get("/api/current-reading").param("userId", String.valueOf(newcomer)))
+        mockMvc.perform(get("/api/current-reading").with(asUser(newcomer)))
                 .andExpect(status().isNotFound());
     }
 

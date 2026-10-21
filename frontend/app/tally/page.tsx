@@ -17,9 +17,9 @@ function meterLabel(ratio: number): { label: string; chipClass: string } {
   return { label: "Wandering", chipClass: "chip-tint" };
 }
 
-async function fetchCurrentBook(userId: number): Promise<Book | null> {
+async function fetchCurrentBook(): Promise<Book | null> {
   try {
-    return await backendFetch<Book>(withUserId("/api/books/current", userId));
+    return await backendFetch<Book>("/api/books/current");
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null;
     throw error;
@@ -39,7 +39,7 @@ export default async function TallyPage(props: PageProps<"/tally">) {
     intelligenceFetch<Tally>(withUserId(`/tally?windowDays=${windowDays}&sinceStart=${sinceStart}`, userId)),
     intelligenceFetch<Patterns>(withUserId("/patterns", userId)),
     backendFetch<Goal[]>("/api/goals"),
-    fetchCurrentBook(userId),
+    fetchCurrentBook(),
   ]);
 
   const latestWeekStartByGoal = new Map<number, string>();
