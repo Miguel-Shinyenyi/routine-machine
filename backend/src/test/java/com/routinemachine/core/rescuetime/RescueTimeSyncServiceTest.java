@@ -9,6 +9,8 @@ import com.routinemachine.core.domain.RoutineItemSource;
 import com.routinemachine.core.repository.DailyLogRepository;
 import com.routinemachine.core.repository.MeasurementRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
+import com.routinemachine.core.repository.UserRepository;
+import com.routinemachine.core.service.OwnerAccount;
 import com.routinemachine.core.service.MeasurementService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,10 +32,12 @@ class RescueTimeSyncServiceTest extends AbstractIntegrationTest {
 
     @Autowired
     private MeasurementRepository measurementRepository;
+    @Autowired
+    private UserRepository userRepository;
 
     private RescueTimeSyncService service(RescueTimeClient client) {
         return new RescueTimeSyncService(
-                client, routineItemRepository, dailyLogRepository, new MeasurementService(measurementRepository), true);
+                client, routineItemRepository, dailyLogRepository, new MeasurementService(measurementRepository), new OwnerAccount(userRepository, ""), true);
     }
 
     private static class FakeRescueTimeClient implements RescueTimeClient {
@@ -121,7 +125,7 @@ class RescueTimeSyncServiceTest extends AbstractIntegrationTest {
     void theFeatureFlagDefaultsToDisabledSoSyncOnceIsNeverCalledByTheScheduler() {
         RescueTimeSyncService defaultService = new RescueTimeSyncService(
                 new FakeRescueTimeClient(List.of(new RescueTimeDailyTotal(LocalDate.of(2026, 10, 17), 5400))),
-                routineItemRepository, dailyLogRepository, new MeasurementService(measurementRepository));
+                routineItemRepository, dailyLogRepository, new MeasurementService(measurementRepository), new OwnerAccount(userRepository, ""));
 
         defaultService.scheduledSync();
 

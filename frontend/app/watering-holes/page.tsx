@@ -83,7 +83,7 @@ function SourceCard({ status, feedsInto }: { status: WateringHoleStatus; feedsIn
 export default async function WateringHolesPage() {
   const userId = await requireSessionUserId();
   const [statuses, routineItems] = await Promise.all([
-    backendFetch<WateringHoleStatus[]>("/api/watering-holes"),
+    backendFetch<WateringHoleStatus[]>(withUserId("/api/watering-holes", userId)),
     backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)),
   ]);
 

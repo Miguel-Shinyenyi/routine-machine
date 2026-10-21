@@ -52,7 +52,10 @@ async function fetchShellContext(): Promise<{
     userId !== null
       ? backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)).catch(() => null)
       : Promise.resolve(null),
-    backendFetch<WateringHoleStatus[]>("/api/watering-holes").catch(() => null),
+    // Owner-only integrations (docs/backend.md): anyone else gets every source "not connected".
+    userId !== null
+      ? backendFetch<WateringHoleStatus[]>(withUserId("/api/watering-holes", userId)).catch(() => null)
+      : Promise.resolve(null),
     sessionToken
       ? authenticatedBackendFetch<{ email: string }>("/api/users/me", sessionToken).catch(() => null)
       : Promise.resolve(null),

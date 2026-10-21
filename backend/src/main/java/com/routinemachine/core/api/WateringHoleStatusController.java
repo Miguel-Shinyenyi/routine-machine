@@ -5,13 +5,16 @@ import com.routinemachine.core.domain.Measurement;
 import com.routinemachine.core.domain.MeasurementSource;
 import com.routinemachine.core.repository.HubSyncProcessedFileRepository;
 import com.routinemachine.core.repository.MeasurementRepository;
+import com.routinemachine.core.service.OwnerAccount;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 // GET /api/watering-holes: status of every source Phase 6 names, for the frontend's watering
 // holes page. "enabled" reflects each sync's own feature flag (read the same way the sync
@@ -27,6 +30,7 @@ public class WateringHoleStatusController {
 
     private final HubSyncProcessedFileRepository hubSyncProcessedFileRepository;
     private final MeasurementRepository measurementRepository;
+    private final OwnerAccount ownerAccount;
     private final boolean hubSyncEnabled;
     private final boolean wakaTimeEnabled;
     private final boolean activityWatchEnabled;
@@ -37,6 +41,7 @@ public class WateringHoleStatusController {
     public WateringHoleStatusController(
             HubSyncProcessedFileRepository hubSyncProcessedFileRepository,
             MeasurementRepository measurementRepository,
+            OwnerAccount ownerAccount,
             @Value("${hub-sync.enabled:true}") boolean hubSyncEnabled,
             @Value("${wakatime-sync.enabled:true}") boolean wakaTimeEnabled,
             @Value("${activitywatch-sync.enabled:true}") boolean activityWatchEnabled,
@@ -45,6 +50,7 @@ public class WateringHoleStatusController {
             @Value("${health-ingest.token:}") String healthIngestToken) {
         this.hubSyncProcessedFileRepository = hubSyncProcessedFileRepository;
         this.measurementRepository = measurementRepository;
+        this.ownerAccount = ownerAccount;
         this.hubSyncEnabled = hubSyncEnabled;
         this.wakaTimeEnabled = wakaTimeEnabled;
         this.activityWatchEnabled = activityWatchEnabled;
@@ -53,8 +59,22 @@ public class WateringHoleStatusController {
         this.healthIngestConfigured = !healthIngestToken.isBlank();
     }
 
+    // Per-user scoping, part 5: these are the deployment's own integrations, run on credentials set
+    // for the whole deployment, so they are connected for the owner account and for nobody else.
+    // userId given and not the owner: every source reads "not connected" with no activity, which
+    // is true for that account. userId omitted: the real status (the legacy view).
     @GetMapping
-    public List<WateringHoleStatusResponse> list() {
+    public List<WateringHoleStatusResponse> list(@RequestParam Optional<Long> userId) {
+        List<WateringHoleStatusResponse> statuses = allSources();
+        if (userId.isPresent() && !ownerAccount.isOwner(userId.get())) {
+            return statuses.stream()
+                    .map(status -> new WateringHoleStatusResponse(status.source(), false, null, status.description()))
+                    .toList();
+        }
+        return statuses;
+    }
+
+    private List<WateringHoleStatusResponse> allSources() {
         return List.of(
                 new WateringHoleStatusResponse(
                         "HUB", hubSyncEnabled, lastHubSyncActivity(),

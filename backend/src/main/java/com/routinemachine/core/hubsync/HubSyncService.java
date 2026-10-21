@@ -7,10 +7,12 @@ import com.routinemachine.core.domain.HubSyncFileKind;
 import com.routinemachine.core.domain.HubSyncProcessedFile;
 import com.routinemachine.core.domain.ReadingSource;
 import com.routinemachine.core.domain.RoutineItem;
+import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.BookRepository;
 import com.routinemachine.core.repository.DailyLogRepository;
 import com.routinemachine.core.repository.HubSyncProcessedFileRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
+import com.routinemachine.core.service.OwnerAccount;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,10 +21,12 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * hub-sync Phase 1: lists UMWAYI's journal entries and essays over the public GitHub API and
@@ -50,6 +54,7 @@ public class HubSyncService {
     private final DailyLogRepository dailyLogRepository;
     private final HubSyncProcessedFileRepository processedFileRepository;
     private final BookRepository bookRepository;
+    private final OwnerAccount ownerAccount;
     private final boolean enabled;
 
     @Autowired
@@ -60,6 +65,7 @@ public class HubSyncService {
             DailyLogRepository dailyLogRepository,
             HubSyncProcessedFileRepository processedFileRepository,
             BookRepository bookRepository,
+            OwnerAccount ownerAccount,
             @Value("${hub-sync.enabled:true}") boolean enabled) {
         this.gitHubContentClient = gitHubContentClient;
         this.hubJournalReader = hubJournalReader;
@@ -67,6 +73,7 @@ public class HubSyncService {
         this.dailyLogRepository = dailyLogRepository;
         this.processedFileRepository = processedFileRepository;
         this.bookRepository = bookRepository;
+        this.ownerAccount = ownerAccount;
         this.enabled = enabled;
     }
 
@@ -78,9 +85,10 @@ public class HubSyncService {
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
             HubSyncProcessedFileRepository processedFileRepository,
-            BookRepository bookRepository) {
+            BookRepository bookRepository,
+            OwnerAccount ownerAccount) {
         this(gitHubContentClient, hubJournalReader, routineItemRepository, dailyLogRepository,
-                processedFileRepository, bookRepository, true);
+                processedFileRepository, bookRepository, ownerAccount, true);
     }
 
     // Default 15 minutes; override with HUB_SYNC_POLL_INTERVAL_MS. Polling (not a manual
@@ -132,9 +140,12 @@ public class HubSyncService {
     }
 
     private void recordAndMaybeLog(GitHubFile file, HubSyncFileKind kind, LocalDate date, String routineItemName) {
-        Optional<RoutineItem> routineItem = routineItemRepository.findFirstByNameIgnoreCase(routineItemName);
+        Optional<RoutineItem> routineItem = findIntegrationTarget(routineItemName);
         if (routineItem.isPresent()) {
-            dailyLogRepository.save(DailyLog.forRoutineItem(date, routineItem.get(), DailyLogSource.HUB_SYNC));
+            DailyLog entry = DailyLog.forRoutineItem(date, routineItem.get(), DailyLogSource.HUB_SYNC);
+            // The day belongs to whoever owns the item, never to nobody.
+            entry.assignUser(routineItem.get().getUser());
+            dailyLogRepository.save(entry);
         } else {
             log.info("hub-sync: no routine item named '{}', recording the file as seen but logging nothing",
                     routineItemName);
@@ -144,12 +155,36 @@ public class HubSyncService {
         processedFileRepository.save(new HubSyncProcessedFile(file.path(), file.sha(), kind, date));
     }
 
+    // The hub is the owner's own journal, so it may only log into the owner's routine item (or an
+    // unowned, pre-account one). It used to take the first item with that name from any account,
+    // so a new user's "journaling" item could receive the owner's journal entries.
+    private Optional<RoutineItem> findIntegrationTarget(String routineItemName) {
+        List<RoutineItem> targets = ownerAccount.integrationTargets(
+                routineItemRepository.findByNameIgnoreCase(routineItemName));
+        return targets.stream().filter(item -> item.getUser() != null).findFirst()
+                .or(() -> targets.stream().findFirst());
+    }
+
     private void syncCurrentBook() {
         hubJournalReader.readCurrentBook().ifPresent(title -> {
-            Optional<Book> current = bookRepository.findCurrent();
+            Optional<User> owner = ownerAccount.owner();
+            Optional<Book> current = currentBookOf(owner);
             if (current.isEmpty() || !current.get().getTitle().equals(title)) {
-                bookRepository.save(new Book(title, ReadingSource.HUB_SYNC));
+                Book book = new Book(title, ReadingSource.HUB_SYNC);
+                owner.ifPresent(book::assignUser);
+                bookRepository.save(book);
             }
         });
+    }
+
+    // The latest of the owner's books and the unowned (pre-account) ones, never another user's:
+    // this used to be the latest book of anyone, so a new user adding a book made the sync think
+    // the current book had changed.
+    private Optional<Book> currentBookOf(Optional<User> owner) {
+        Optional<Book> unowned = bookRepository.findFirstByUserIsNullOrderByCreatedAtDescIdDesc();
+        Optional<Book> owned = owner.flatMap(o -> bookRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(o.getId()));
+        return Stream.of(owned, unowned)
+                .flatMap(Optional::stream)
+                .max(Comparator.comparing(Book::getCreatedAt).thenComparing(Book::getId));
     }
 }

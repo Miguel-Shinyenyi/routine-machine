@@ -8,6 +8,7 @@ import com.routinemachine.core.domain.RoutineItemSource;
 import com.routinemachine.core.repository.DailyLogRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import com.routinemachine.core.service.MeasurementService;
+import com.routinemachine.core.service.OwnerAccount;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -34,6 +35,7 @@ public class RescueTimeSyncService {
     private final RoutineItemRepository routineItemRepository;
     private final DailyLogRepository dailyLogRepository;
     private final MeasurementService measurementService;
+    private final OwnerAccount ownerAccount;
     private final boolean enabled;
 
     @Autowired
@@ -42,11 +44,13 @@ public class RescueTimeSyncService {
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
             MeasurementService measurementService,
+            OwnerAccount ownerAccount,
             @Value("${rescuetime-sync.enabled:false}") boolean enabled) {
         this.rescueTimeClient = rescueTimeClient;
         this.routineItemRepository = routineItemRepository;
         this.dailyLogRepository = dailyLogRepository;
         this.measurementService = measurementService;
+        this.ownerAccount = ownerAccount;
         this.enabled = enabled;
     }
 
@@ -57,8 +61,9 @@ public class RescueTimeSyncService {
             RescueTimeClient rescueTimeClient,
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
-            MeasurementService measurementService) {
-        this(rescueTimeClient, routineItemRepository, dailyLogRepository, measurementService, false);
+            MeasurementService measurementService,
+            OwnerAccount ownerAccount) {
+        this(rescueTimeClient, routineItemRepository, dailyLogRepository, measurementService, ownerAccount, false);
     }
 
     @Scheduled(fixedDelayString = "${rescuetime-sync.poll-interval-ms:900000}")
@@ -73,7 +78,7 @@ public class RescueTimeSyncService {
         LocalDate today = LocalDate.now();
         List<RescueTimeDailyTotal> totals =
                 rescueTimeClient.fetchDailyActiveTotals(today.minusDays(SYNC_WINDOW_DAYS), today);
-        List<RoutineItem> rescueTimeRoutineItems = routineItemRepository.findBySource(RoutineItemSource.RESCUETIME);
+        List<RoutineItem> rescueTimeRoutineItems = ownerAccount.integrationTargets(routineItemRepository.findBySource(RoutineItemSource.RESCUETIME));
 
         for (RescueTimeDailyTotal total : totals) {
             if (total.activeSeconds() <= 0) {
@@ -85,8 +90,11 @@ public class RescueTimeSyncService {
 
             for (RoutineItem routineItem : rescueTimeRoutineItems) {
                 if (!dailyLogRepository.existsByRoutineItemIdAndLogDate(routineItem.getId(), total.date())) {
-                    dailyLogRepository.save(DailyLog.forRoutineItem(
-                            total.date(), routineItem, DailyLogSource.RESCUETIME_SYNC, minutes.intValueExact()));
+                    DailyLog syncedLog = DailyLog.forRoutineItem(
+                            total.date(), routineItem, DailyLogSource.RESCUETIME_SYNC, minutes.intValueExact());
+                    // The day belongs to whoever owns the item, never to nobody.
+                    syncedLog.assignUser(routineItem.getUser());
+                    dailyLogRepository.save(syncedLog);
                 }
             }
         }

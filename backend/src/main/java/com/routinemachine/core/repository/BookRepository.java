@@ -11,8 +11,8 @@ public interface BookRepository extends JpaRepository<Book, Long> {
     List<Book> findAllByOrderByCreatedAtDesc();
 
     // Per-user scoping (docs/backend.md): a user's own books, or — userId omitted — only the
-    // unowned ones. findCurrent() above stays global on purpose: hub-sync still uses it, and
-    // moving hub-sync onto the owner account is part 5.
+    // unowned ones. findCurrent() above is the latest book of anyone and is no longer used by
+    // the app: hub-sync now looks at the owner's books and the unowned ones only.
     List<Book> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     List<Book> findByUserIsNullOrderByCreatedAtDesc();

@@ -803,6 +803,32 @@ daily logs). The rule on every personal endpoint:
   sends the session user's id, so the userId-less view is no longer used by the app. It remains
   in the API only until the access-control stage replaces `userId` with the signed token. The one
   consumer still reading unowned rows is the intelligence service (part 4).
+- **Part 5 (integrations are the owner's) is done.** The integrations run on credentials set for
+  the whole deployment, so what they pull in belongs to the deployment's owner. New
+  `service/OwnerAccount` resolves the owner from `OWNER_EMAIL` (the same variable the owner claim
+  uses): `owner()`, `isOwner(id)`, `isIntegrationTarget(itemOwner)`. With no owner configured, or
+  no account registered with that email yet, there is no owner and integrations write only to
+  unowned rows, which is what they have always written to.
+  - **WakaTime, ActivityWatch, GitHub, RescueTime** now log only into routine items owned by the
+    owner or by nobody, and the log belongs to the item's owner. They used to log into *every*
+    routine item with their source whoever owned it (any account could create an item with source
+    `WAKATIME` and receive the owner's coding hours), and the log they created belonged to nobody,
+    so after the owner claim a new synced day would not have shown on the owner's pages.
+  - **Hub-sync** looked up the "journaling" and "writing" items by name across every account, so a
+    new user's "journaling" item could receive the owner's journal entries. It now picks the
+    owner's item (or an unowned one), assigns the log to the item's owner, and keeps the
+    hub-synced current book on the owner's side: the latest of the owner's books and the unowned
+    ones, never another user's, so a new user adding a book no longer makes it write a duplicate.
+  - **`GET /api/watering-holes?userId=`**: the owner (and the userId-less legacy view) get the real
+    status; any other account gets every source "not connected" with no activity, which is true
+    for it.
+  - **Measurements and hub-file records stay global.** Only the Watering holes status page reads
+    them. Health ingest is unchanged (token-protected, writes measurements only).
+  - Tested by `OwnerAccountTest` (4), `IntegrationOwnershipTest` (6, covering all four sync
+    services), four new `HubSyncServiceTest` cases and `WateringHolesOwnerOnlyApiTest` (3); three
+    deliberate breaks (WakaTime writing to every item, hub-sync ignoring ownership, Watering
+    holes ignoring the user) each made tests fail. The existing sync tests construct the services
+    with no owner configured, so they still prove the pre-account behaviour.
 - **A build trap found on the way**: with VS Code's Java language server running, an edit that
   does not compile can leave Eclipse-compiled `Unresolved compilation problem` stubs in
   `target/classes`, which Maven then treats as up to date. `./mvnw -q compile` printed nothing
@@ -813,6 +839,9 @@ daily logs). The rule on every personal endpoint:
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-21 | The owner account is defined once (`OwnerAccount`, from `OWNER_EMAIL`) and used by the claim, every integration and the Watering holes status | The same address answers "whose data does the deployment's own credentials produce" everywhere; three separate readings of the variable would let the claim and the integrations disagree about who the owner is |
+| 2026-10-21 | An integration may write to the owner's items and to unowned items, nobody else's | Unowned items are the pre-account data the integrations have always written to, so they must keep working before the owner claim runs; the owner's items are what that data becomes after it. A rule of "owner's items only" would stop every integration in the gap between deploying this and running the claim |
+| 2026-10-21 | Another account sees every watering hole as "not connected", not an error or a hidden page | It is true: that account has no integration of its own. Per-user integrations (each person's own WakaTime key) would be a separate feature |
 | 2026-10-21 | A request with no `userId` sees only unowned rows, instead of everything | "Omitted means everything" was the Phase 8 compromise to keep the single-user app working, but it means the userId-less view shows every account's data. Unowned rows are the founder's pre-account data, which the owner claim hands to the owner account, so after the claim the userId-less view is empty. It is kept only until part 3 moves the frontend onto the session user |
 | 2026-10-21 | Someone else's task, template or routine item answers exactly like one that does not exist (404 or the same 400) | A different answer for "exists but is not yours" would let anyone probe which ids exist and how many rows other accounts have |
 | 2026-10-21 | Pre-account data is given to the owner by a startup claim driven by `OWNER_EMAIL`, not by a migration | A migration cannot know whose account is the founder's, and putting an address in a migration or a config file would publish it. The variable is read once at startup, only NULL rows move, and it is idempotent, so leaving it set is harmless |

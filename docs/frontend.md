@@ -140,9 +140,10 @@ makes the frontend ask for one.
   the Tally page, the sidebar's "kept watch with you for N days" and `materializeDay`'s suggestion
   all send the session user's id (`withUserId`), so a new account's Today and Tally are empty:
   "No hours logged yet", "No learning topics to suggest yet", "0 notches in 28 days".
-- **Not yet owner-only (part 5):** the Watering holes status cards (WakaTime, ActivityWatch and so
-  on) are deployment-wide, and the sync services still write unowned rows, so after the owner
-  claim new synced data would not show on the owner's pages until part 5.
+- **Watering holes are owner-only (part 5, done)**: the page and the sidebar badge send the user id
+  to `/api/watering-holes`; the owner sees the real status of each source, any other account sees
+  every source under "Not connected yet". The sync services now log into the owner's items for the
+  owner, so after the owner claim new synced data shows on the owner's pages.
 
 ## Current state
 

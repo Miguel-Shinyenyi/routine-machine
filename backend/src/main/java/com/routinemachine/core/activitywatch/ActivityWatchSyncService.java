@@ -8,6 +8,7 @@ import com.routinemachine.core.domain.RoutineItemSource;
 import com.routinemachine.core.repository.DailyLogRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import com.routinemachine.core.service.MeasurementService;
+import com.routinemachine.core.service.OwnerAccount;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -33,6 +34,7 @@ public class ActivityWatchSyncService {
     private final RoutineItemRepository routineItemRepository;
     private final DailyLogRepository dailyLogRepository;
     private final MeasurementService measurementService;
+    private final OwnerAccount ownerAccount;
     private final boolean enabled;
 
     @Autowired
@@ -41,11 +43,13 @@ public class ActivityWatchSyncService {
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
             MeasurementService measurementService,
+            OwnerAccount ownerAccount,
             @Value("${activitywatch-sync.enabled:true}") boolean enabled) {
         this.activityWatchClient = activityWatchClient;
         this.routineItemRepository = routineItemRepository;
         this.dailyLogRepository = dailyLogRepository;
         this.measurementService = measurementService;
+        this.ownerAccount = ownerAccount;
         this.enabled = enabled;
     }
 
@@ -55,8 +59,9 @@ public class ActivityWatchSyncService {
             ActivityWatchClient activityWatchClient,
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
-            MeasurementService measurementService) {
-        this(activityWatchClient, routineItemRepository, dailyLogRepository, measurementService, true);
+            MeasurementService measurementService,
+            OwnerAccount ownerAccount) {
+        this(activityWatchClient, routineItemRepository, dailyLogRepository, measurementService, ownerAccount, true);
     }
 
     @Scheduled(fixedDelayString = "${activitywatch-sync.poll-interval-ms:900000}")
@@ -71,7 +76,7 @@ public class ActivityWatchSyncService {
         LocalDate today = LocalDate.now();
         List<ActivityWatchDailyTotal> totals =
                 activityWatchClient.fetchDailyActiveTotals(today.minusDays(SYNC_WINDOW_DAYS), today);
-        List<RoutineItem> activityWatchRoutineItems = routineItemRepository.findBySource(RoutineItemSource.ACTIVITYWATCH);
+        List<RoutineItem> activityWatchRoutineItems = ownerAccount.integrationTargets(routineItemRepository.findBySource(RoutineItemSource.ACTIVITYWATCH));
 
         for (ActivityWatchDailyTotal total : totals) {
             if (total.activeSeconds() <= 0) {
@@ -83,8 +88,11 @@ public class ActivityWatchSyncService {
 
             for (RoutineItem routineItem : activityWatchRoutineItems) {
                 if (!dailyLogRepository.existsByRoutineItemIdAndLogDate(routineItem.getId(), total.date())) {
-                    dailyLogRepository.save(DailyLog.forRoutineItem(
-                            total.date(), routineItem, DailyLogSource.ACTIVITYWATCH_SYNC, minutes.intValueExact()));
+                    DailyLog syncedLog = DailyLog.forRoutineItem(
+                            total.date(), routineItem, DailyLogSource.ACTIVITYWATCH_SYNC, minutes.intValueExact());
+                    // The day belongs to whoever owns the item, never to nobody.
+                    syncedLog.assignUser(routineItem.getUser());
+                    dailyLogRepository.save(syncedLog);
                 }
             }
         }
