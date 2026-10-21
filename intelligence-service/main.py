@@ -1,9 +1,14 @@
 import os
+from contextlib import asynccontextmanager
 from datetime import date
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
+from observability import (
+    HEADER as REQUEST_ID_HEADER, RequestObservabilityMiddleware, configure_logging, request_id_var,
+    start_metrics_server,
+)
 from pydantic import BaseModel
 
 from analogy import Analogy, AnalogyParseError, ANALOGY_SYSTEM_PROMPT
@@ -20,7 +25,17 @@ ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic
 # rather than a code change if that stops being true.
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 
-app = FastAPI(title="Routine Machine Intelligence Service")
+configure_logging()
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    start_metrics_server()
+    yield
+
+
+app = FastAPI(title="Routine Machine Intelligence Service", lifespan=lifespan)
+app.add_middleware(RequestObservabilityMiddleware)
 
 
 class GoalView(BaseModel):
@@ -151,7 +166,14 @@ def _backend_refused(request, exc: httpx.HTTPStatusError):
 def _backend_headers(authorization: str | None) -> dict:
     # Access control, part 2 (docs/intelligence-service.md): the backend learns who is asking from
     # the caller's signed token, so this service passes on the one it was given and never makes one.
-    return {} if not authorization else {"Authorization": authorization}
+    headers = {}
+    request_id = request_id_var.get()
+    if request_id:
+        # So one request can be followed from here into the backend's logs.
+        headers[REQUEST_ID_HEADER] = request_id
+    if authorization:
+        headers["Authorization"] = authorization
+    return headers
 
 
 @app.get("/suggestion", response_model=SuggestionResponse)

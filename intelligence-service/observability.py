@@ -1,0 +1,135 @@
+import json
+import logging
+import os
+import re
+import time
+import uuid
+from contextvars import ContextVar
+from datetime import datetime, timezone
+
+from prometheus_client import Counter, Histogram, start_http_server
+
+# Observability, part 2 (docs/observability.md): a request id on every log line and on the response,
+# one JSON log object per line, request metrics served on their own port. The same rules as the backend.
+
+HEADER = "X-Request-Id"
+_SAFE_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
+
+request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
+
+REQUESTS = Counter("http_requests_total", "Requests served", ["method", "route", "status"])
+DURATION = Histogram("http_request_duration_seconds", "Request duration in seconds", ["method", "route"])
+
+_request_log = logging.getLogger("request")
+
+# The only extra fields a log record may carry into the JSON line. Anything else (a note, an amount, a
+# name) is dropped, so a careless logger.info(..., extra={...}) cannot leak it.
+_ALLOWED_FIELDS = ("method", "path", "status", "durationMs")
+
+
+def new_request_id(incoming: str | None) -> str:
+    # An incoming id is reused only if short and plain; anything else could forge or break a log line.
+    if incoming and _SAFE_ID.fullmatch(incoming):
+        return incoming
+    return str(uuid.uuid4())
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        data = {
+            "@timestamp": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        request_id = getattr(record, "requestId", None) or request_id_var.get()
+        if request_id:
+            data["requestId"] = request_id
+        for field in _ALLOWED_FIELDS:
+            if hasattr(record, field):
+                data[field] = getattr(record, field)
+        if record.exc_info:
+            data["exception"] = self.formatException(record.exc_info)
+        return json.dumps(data)
+
+
+def _install_record_factory() -> None:
+    # Stamp the current request id on every record when it is created, so it stays on the record after
+    # the request has ended (and for any handler, not just ours).
+    previous = logging.getLogRecordFactory()
+
+    def factory(*args, **kwargs):
+        record = previous(*args, **kwargs)
+        record.requestId = request_id_var.get()
+        return record
+
+    logging.setLogRecordFactory(factory)
+
+
+def configure_logging() -> None:
+    _install_record_factory()
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(logging.INFO)
+    # uvicorn installs its own plain-text handlers; route its lines through ours instead. Its access log
+    # (which prints the query string) is switched off with --no-access-log in the Dockerfile.
+    for name in ("uvicorn", "uvicorn.error"):
+        logger = logging.getLogger(name)
+        logger.handlers = []
+        logger.propagate = True
+    # The access logger must have no handler anywhere up the chain, or uvicorn turns it back on even
+    # with --no-access-log: so it neither keeps its own handlers nor propagates to the root.
+    access = logging.getLogger("uvicorn.access")
+    access.handlers = []
+    access.propagate = False
+    # httpx logs every call's full URL at INFO; the request line above already says what happened.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+def start_metrics_server() -> None:
+    # Own port, never the API port. METRICS_PORT unset or 0 means off (tests, local runs).
+    port = int(os.environ.get("METRICS_PORT", "0") or 0)
+    if port:
+        start_http_server(port)
+
+
+class RequestObservabilityMiddleware:
+    """Pure ASGI middleware: request id in, request id out, one log line, request metrics."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        incoming = next((v.decode("latin-1") for k, v in scope["headers"] if k == b"x-request-id"), None)
+        request_id = new_request_id(incoming)
+        token = request_id_var.set(request_id)
+        started = time.perf_counter()
+        status = {"code": 500}
+
+        async def send_with_id(message):
+            if message["type"] == "http.response.start":
+                status["code"] = message["status"]
+                message.setdefault("headers", []).append((HEADER.lower().encode(), request_id.encode()))
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_id)
+        finally:
+            elapsed = time.perf_counter() - started
+            route = scope.get("route")
+            # The route template, never the raw path: one series per route, not one per id.
+            label = getattr(route, "path", None) or "unmatched"
+            REQUESTS.labels(scope["method"], label, str(status["code"])).inc()
+            DURATION.labels(scope["method"], label).observe(elapsed)
+            _request_log.info(
+                "request completed",
+                extra={"method": scope["method"], "path": scope["path"], "status": status["code"],
+                       "durationMs": int(elapsed * 1000)},
+            )
+            request_id_var.reset(token)

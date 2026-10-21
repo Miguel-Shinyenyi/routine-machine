@@ -159,3 +159,7 @@ never makes or checks a token itself. With no header it sends none, and when the
 There is no `userId` parameter (removed in part 5) and no row filter: the backend returns only the
 rows of the person in the forwarded token. A `userId` in the request is not read and never sent on.
 
+## Observability, part 2
+
+A request id (`X-Request-Id`, reused if plain, else generated) goes on every response, every log line and every call to the backend. One JSON `request completed` line per request (no query string). Request metrics on port 9000 (`METRICS_PORT`), not the API port, not published by Compose. `observability.py` holds all of it; details, what is recorded and how to turn it off are in `docs/observability.md`.
+
