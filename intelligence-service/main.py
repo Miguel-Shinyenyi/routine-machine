@@ -139,21 +139,28 @@ def health():
     return {"status": "ok"}
 
 
-def _unowned(records: list[dict]) -> list[dict]:
-    # This service has no concept of "current user" (see docs/intelligence-service.md): it
-    # computes suggestions/patterns/tally for the one legacy, single-user world, the same
-    # unowned (userId None) data Flock and Watering holes already restrict themselves to.
-    # Without this filter, Phase 8's hillside demo users' routine items/daily logs would get
-    # mixed into every computation here too.
-    return [r for r in records if r.get("userId") is None]
+def _scoped(records: list[dict], user_id: int | None) -> list[dict]:
+    # Per-user scoping, part 4 (docs/intelligence-service.md). With a userId the backend already
+    # returns only that user's rows; this keeps only rows owned by them anyway, so a backend
+    # that ever returned someone else's row could not leak it into a computation. Without a
+    # userId (None) it keeps only the unowned, pre-account rows — which is what this service
+    # computed for everyone before accounts existed, and still keeps Phase 8's hillside demo
+    # users' rows out of that view.
+    return [r for r in records if r.get("userId") == user_id]
+
+
+def _user_params(user_id: int | None) -> dict:
+    return {} if user_id is None else {"userId": user_id}
 
 
 @app.get("/suggestion", response_model=SuggestionResponse)
-def suggestion():
+def suggestion(userId: int | None = None):
+    params = _user_params(userId)
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
-        goals = _unowned(client.get("/api/goals").raise_for_status().json())
-        topics = client.get("/api/learning-topics").raise_for_status().json()
-        logs = _unowned(client.get("/api/daily-logs").raise_for_status().json())
+        goals = _scoped(client.get("/api/goals", params=params).raise_for_status().json(), userId)
+        # A topic belongs to whoever owns its goal; the backend scopes it, the rows carry no userId.
+        topics = client.get("/api/learning-topics", params=params).raise_for_status().json()
+        logs = _scoped(client.get("/api/daily-logs", params=params).raise_for_status().json(), userId)
 
     try:
         result = choose_suggestion(goals, topics, logs)
@@ -169,10 +176,11 @@ def suggestion():
 
 
 @app.get("/patterns", response_model=PatternsResponse)
-def patterns():
+def patterns(userId: int | None = None):
+    params = _user_params(userId)
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
-        routine_items = _unowned(client.get("/api/routine-items").raise_for_status().json())
-        logs = _unowned(client.get("/api/daily-logs").raise_for_status().json())
+        routine_items = _scoped(client.get("/api/routine-items", params=params).raise_for_status().json(), userId)
+        logs = _scoped(client.get("/api/daily-logs", params=params).raise_for_status().json(), userId)
 
     result = compute_patterns(routine_items, logs, today=date.today())
 
@@ -208,11 +216,12 @@ def patterns():
 
 
 @app.get("/tally", response_model=TallyResponse)
-def tally(windowDays: int = 28, sinceStart: bool = False):
+def tally(windowDays: int = 28, sinceStart: bool = False, userId: int | None = None):
+    params = _user_params(userId)
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
-        routine_items = _unowned(client.get("/api/routine-items").raise_for_status().json())
-        learning_topics = client.get("/api/learning-topics").raise_for_status().json()
-        logs = _unowned(client.get("/api/daily-logs").raise_for_status().json())
+        routine_items = _scoped(client.get("/api/routine-items", params=params).raise_for_status().json(), userId)
+        learning_topics = client.get("/api/learning-topics", params=params).raise_for_status().json()
+        logs = _scoped(client.get("/api/daily-logs", params=params).raise_for_status().json(), userId)
 
     result = compute_tally(
         routine_items, learning_topics, logs, today=date.today(), window_days=windowDays,

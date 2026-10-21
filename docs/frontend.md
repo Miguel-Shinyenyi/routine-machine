@@ -136,13 +136,13 @@ makes the frontend ask for one.
 - **`materializeDay` skips a slot the backend rejects** (a `400` on creating the day's task)
   instead of failing the whole page. The intelligence service is not yet scoped per user, so it
   can suggest a learning topic that is not this user's; the backend now refuses that link.
-- **Still showing the founder's data (part 4):** everything fed by the intelligence service, which
-  is not yet scoped per user: Today's "Closer than yesterday", the staff card, "One sheep
-  wandered", the Tally page's numbers and chart, and the sidebar's "kept watch with you for N
-  days". The Watering holes status cards (WakaTime, ActivityWatch and so on) are deployment-wide
-  and become owner-only in part 5.
-- **Do not run the owner claim before part 4 ships** (`docs/backend.md`): the intelligence
-  service reads unowned rows, which is exactly what the claim removes.
+- **Intelligence calls carry the user too (part 4, done)**: Today's suggestion, tally and patterns,
+  the Tally page, the sidebar's "kept watch with you for N days" and `materializeDay`'s suggestion
+  all send the session user's id (`withUserId`), so a new account's Today and Tally are empty:
+  "No hours logged yet", "No learning topics to suggest yet", "0 notches in 28 days".
+- **Not yet owner-only (part 5):** the Watering holes status cards (WakaTime, ActivityWatch and so
+  on) are deployment-wide, and the sync services still write unowned rows, so after the owner
+  claim new synced data would not show on the owner's pages until part 5.
 
 ## Current state
 

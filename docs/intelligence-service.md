@@ -95,6 +95,22 @@ request and got a real account-billing error back, handled as a clean 502 rather
 the same billing issue `/reading-notes/assess` already hit during Phase 7's own verification
 (see `testing.md`).
 
+Per-user scoping, part 4 built: `GET /suggestion`, `/patterns` and `/tally` take an optional
+`userId` query parameter (the frontend sends the signed-in user's id on every call).
+
+- **`userId` given**: each backend read (`/api/goals`, `/api/learning-topics`,
+  `/api/routine-items`, `/api/daily-logs`) is made with `?userId=` so the backend returns only
+  that user's rows, and the service keeps only rows whose `userId` equals the caller's anyway
+  (`_scoped`), so a backend that ever returned someone else's row could not leak it into a
+  computation. A new account therefore gets an empty tally, an empty patterns response and a
+  404 suggestion ("no learning topics yet"), never someone else's.
+- **`userId` omitted**: only the unowned (pre-account) rows are used, exactly as before. This
+  is the founder's data until the owner claim (`backend.md`) hands it to the owner account.
+- Learning topics carry no `userId` of their own (a topic belongs to whoever owns its goal), so
+  they are scoped by the backend alone.
+- Still unscoped, deliberately: `POST /reading-notes/assess` and `POST /analogy` take text in and
+  return text out; they read no stored data of anyone's.
+
 ## Decisions log
 
 | Date | Decision | Reason |
@@ -102,7 +118,9 @@ the same billing issue `/reading-notes/assess` already hit during Phase 7's own 
 | 2026-10-18 | `/analogy`'s cache is a plain process-lifetime `dict`, not persisted to the backend or any external store | The result is fully reproducible from its own inputs (same topic, same interest → deterministic enough a prompt not to need the exact same wording stored); nothing is lost on a restart that matters, and adding storage for a cache would need its own invalidation story for no real benefit at this service's current scale |
 | 2026-10-18 | The cache key normalises case and surrounding whitespace (`.strip().lower()`) | "idempotency keys"/"Idempotency Keys"/" idempotency keys " typed on different occasions should hit the same cache entry; without normalising, a trivial difference in how the frontend or a future caller phrases the same request would silently double the API calls and the cost |
 | 2026-10-18 | `compute_tally` gained `since_start: bool`, windowing from the earliest real log date instead of `today - window_days` | Tally's reference design has a "Since the start" toggle; a first attempt faked it from the frontend with a very large fixed `windowDays` (years), which made `days_shown_up` generate one entry per day back to a date nothing ever happened — thousands of meaningless notches. Computing the real earliest log date in `tally.py` itself is the honest version of what "since the start" means. 2 new tests |
-| 2026-10-17 | `/suggestion`, `/patterns`, and `/tally` each filter the backend's goals/routine-items/daily-logs to `userId is None` (a private `_unowned()` helper in `main.py`) before computing anything | This service has no "current user" concept — it has always computed for the one single-user world (see `backend.md`'s decisions log). Phase 8's hillside demo users each have their own goals/routine items/daily logs now; without this filter, their data silently mixed into every suggestion/pattern/tally computation, found via the design-reference comparison (Tally's per-routine meters listed every demo user's own items). Regression test: `test_suggestion_ignores_goals_and_logs_owned_by_a_hillside_demo_user` |
+| 2026-10-17 | (Superseded 2026-10-21, see the per-user scoping rows below) `/suggestion`, `/patterns`, and `/tally` each filtered the backend's goals/routine-items/daily-logs to `userId is None` (a private `_unowned()` helper) | The service had no "current user" concept, and Phase 8's hillside demo users' data silently mixed into every computation. The same protection now comes from `_scoped(records, user_id)`, which with no `userId` keeps exactly the unowned rows, and with a `userId` keeps exactly that user's |
+| 2026-10-21 | The service takes an optional `userId` and passes it through to the backend, instead of being told which rows to use | The backend already answers for one user (per-user scoping part 2); asking it for that user's rows keeps the rule in one place. The service also re-filters (`_scoped`), because a computation that trusted the transport alone would turn any future backend mistake into a cross-account leak |
+| 2026-10-21 | `userId` stays optional, and omitted means the unowned rows | The service must keep working for the data that existed before accounts until the owner claim has run, and the old behaviour is exactly "unowned only". Making it required would break the founder's own Today and Tally in the gap |
 | 2026-10-17 | `POST /reading-notes/assess` calls Anthropic's API directly with `httpx`, not the `anthropic` Python SDK | Matches every other external call this service already makes (backend reads, and now Anthropic) — one HTTP client pattern, one dependency surface, no new SDK to track for a single endpoint |
 | 2026-10-17 | The system prompt instructs the model to return only a JSON object, parsed by a dedicated pure function with its own test file | Keeps the hard-to-get-right part (parsing a real but imperfect LLM response: stray prose, a missing field, a percentage out of range) testable with plain strings, no network, same separation `choose_suggestion`/`compute_patterns`/`compute_tally` already use for their own hard-to-get-right logic |
 | 2026-10-17 | An Anthropic API error (4xx/5xx) is caught and re-raised as a 502 with the real message, not left to bubble into FastAPI's default 500 | Found by actually calling the real API with a real (but over-budget) key during manual verification: the unhandled `httpx.HTTPStatusError` produced an opaque 500 with no useful detail. A real upstream failure should be visibly different from a bug in this service's own code |

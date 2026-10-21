@@ -46,9 +46,9 @@ export default async function TodayPage(props: PageProps<"/today">) {
     materializeDay(date, userId),
     backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)),
     backendFetch<Goal[]>(withUserId("/api/goals", userId)),
-    intelligenceFetch<Suggestion>("/suggestion").catch(() => null),
-    intelligenceFetch<Tally>("/tally").catch(() => null),
-    intelligenceFetch<Patterns>("/patterns").catch(() => null),
+    intelligenceFetch<Suggestion>(withUserId("/suggestion", userId)).catch(() => null),
+    intelligenceFetch<Tally>(withUserId("/tally", userId)).catch(() => null),
+    intelligenceFetch<Patterns>(withUserId("/patterns", userId)).catch(() => null),
     backendFetch<PauseDecision[]>(`/api/granary/pauses/due?userId=${userId}`).catch(() => []),
   ]);
 

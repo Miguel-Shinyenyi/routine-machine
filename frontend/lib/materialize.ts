@@ -27,7 +27,7 @@ export async function materializeDay(date: string, userId: number): Promise<Task
     const body: Record<string, unknown> = { taskDate: date, scheduleTemplateId: template.id, userId };
 
     if (template.targetType === "LEARNING_SLOT") {
-      const suggestion = await intelligenceFetch<Suggestion>("/suggestion").catch(() => null);
+      const suggestion = await intelligenceFetch<Suggestion>(withUserId("/suggestion", userId)).catch(() => null);
       if (suggestion === null) {
         // No learning topics configured yet, or the intelligence service is unreachable: skip
         // this slot for today rather than failing the whole board. It'll be retried on the next
@@ -40,8 +40,8 @@ export async function materializeDay(date: string, userId: number): Promise<Task
     try {
       created.push(await backendFetch<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) }));
     } catch (error) {
-      // A suggested topic that is not this user's own (the intelligence service is not yet
-      // scoped per user) is rejected by the backend: skip the slot, same as no suggestion.
+      // The backend refuses a topic that is not this user's own; the suggestion is now scoped to
+      // the user too, so this should not happen, but a refused slot is skipped, not fatal.
       if (error instanceof ApiError && error.status === 400) continue;
       throw error;
     }

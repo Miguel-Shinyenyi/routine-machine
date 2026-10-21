@@ -156,6 +156,132 @@ def test_tally_calls_the_backend_and_returns_computed_statistics():
     assert body["routineShownUp"][0]["shownUpDays"] == 1
 
 
+# --- Per-user scoping, part 4 (docs/intelligence-service.md): /suggestion, /patterns and /tally
+# take an optional userId. Given, every backend read carries it and only that user's rows count;
+# omitted, only the unowned (pre-account) rows do, exactly as before.
+
+def _mock_backend_for_user(user_id, goals=None, topics=None, items=None, logs=None):
+    routes = {
+        "goals": respx.get(f"{BACKEND_BASE_URL}/api/goals").mock(
+            return_value=httpx.Response(200, json=goals or [])),
+        "topics": respx.get(f"{BACKEND_BASE_URL}/api/learning-topics").mock(
+            return_value=httpx.Response(200, json=topics or [])),
+        "items": respx.get(f"{BACKEND_BASE_URL}/api/routine-items").mock(
+            return_value=httpx.Response(200, json=items or [])),
+        "logs": respx.get(f"{BACKEND_BASE_URL}/api/daily-logs").mock(
+            return_value=httpx.Response(200, json=logs or [])),
+    }
+    return routes
+
+
+def _asked_for_user(route, user_id):
+    return route.called and all(call.request.url.params.get("userId") == str(user_id) for call in route.calls)
+
+
+@respx.mock
+def test_suggestion_asks_the_backend_for_that_user_and_ignores_rows_of_anyone_else():
+    routes = _mock_backend_for_user(
+        5,
+        goals=[
+            {"id": 1, "name": "mine", "description": None, "userId": 5},
+            {"id": 2, "name": "someone elses", "description": None, "userId": 7},
+        ],
+        topics=[{"id": 10, "name": "my topic", "goalId": 1, "goalName": "mine"}],
+        logs=[
+            {"id": 1, "logDate": "2026-09-10", "routineItemId": None, "learningTopicId": 10,
+             "source": "manual", "userId": 5},
+            {"id": 2, "logDate": "2026-10-16", "routineItemId": None, "learningTopicId": 10,
+             "source": "manual", "userId": 7},
+        ],
+    )
+
+    response = client.get("/suggestion", params={"userId": 5})
+
+    assert response.status_code == 200
+    assert response.json()["goal"]["name"] == "mine"
+    assert response.json()["lastLoggedOn"] == "2026-09-10"
+    for name in ("goals", "topics", "logs"):
+        assert _asked_for_user(routes[name], 5), name
+
+
+@respx.mock
+def test_suggestion_for_a_new_user_with_no_topics_is_a_404_not_someone_elses_topic():
+    _mock_backend_for_user(9, goals=[], topics=[], logs=[])
+
+    response = client.get("/suggestion", params={"userId": 9})
+
+    assert response.status_code == 404
+
+
+@respx.mock
+def test_patterns_asks_the_backend_for_that_user_and_ignores_rows_of_anyone_else():
+    today = date.today()
+    routes = _mock_backend_for_user(
+        5,
+        items=[
+            {"id": 1, "name": "mine", "userId": 5, "createdAt": f"{today}T08:00:00Z"},
+            {"id": 2, "name": "someone elses", "userId": 7, "createdAt": f"{today}T08:00:00Z"},
+        ],
+        logs=[
+            {"id": 1, "logDate": today.isoformat(), "routineItemId": 1, "learningTopicId": None,
+             "source": "manual", "userId": 5},
+            {"id": 2, "logDate": today.isoformat(), "routineItemId": 2, "learningTopicId": None,
+             "source": "manual", "userId": 7},
+        ],
+    )
+
+    response = client.get("/patterns", params={"userId": 5})
+
+    assert response.status_code == 200
+    assert [r["name"] for r in response.json()["completionRates"]] == ["mine"]
+    for name in ("items", "logs"):
+        assert _asked_for_user(routes[name], 5), name
+
+
+@respx.mock
+def test_tally_for_a_new_user_is_empty():
+    _mock_backend_for_user(9, items=[], topics=[], logs=[])
+
+    response = client.get("/tally", params={"userId": 9})
+
+    assert response.status_code == 200
+    assert response.json()["daysShownUpCount"] == 0
+    assert response.json()["goalWeekHours"] == []
+
+
+@respx.mock
+def test_tally_asks_the_backend_for_that_user_and_ignores_rows_of_anyone_else():
+    today = date.today()
+    routes = _mock_backend_for_user(
+        5,
+        items=[{"id": 1, "name": "mine", "userId": 5, "createdAt": f"{today}T08:00:00Z"}],
+        topics=[],
+        logs=[
+            {"id": 1, "logDate": today.isoformat(), "routineItemId": 1, "learningTopicId": None,
+             "source": "manual", "userId": 5},
+            {"id": 2, "logDate": (today - timedelta(days=1)).isoformat(), "routineItemId": 1,
+             "learningTopicId": None, "source": "manual", "userId": 7},
+        ],
+    )
+
+    response = client.get("/tally", params={"userId": 5})
+
+    assert response.status_code == 200
+    # Only user 5's log of today counts; user 7's log of yesterday would make this 2.
+    assert [r["shownUpDays"] for r in response.json()["routineShownUp"]] == [1]
+    for name in ("items", "topics", "logs"):
+        assert _asked_for_user(routes[name], 5), name
+
+
+@respx.mock
+def test_without_a_user_id_the_backend_is_not_asked_for_one():
+    routes = _mock_backend_for_user(None, items=[], topics=[], logs=[])
+
+    client.get("/tally")
+
+    assert all("userId" not in call.request.url.params for call in routes["logs"].calls)
+
+
 @respx.mock
 def test_assess_reading_note_calls_claude_and_returns_the_parsed_assessment(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")

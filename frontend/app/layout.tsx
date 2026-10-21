@@ -46,8 +46,9 @@ async function fetchShellContext(): Promise<{
     userId !== null
       ? backendFetch<Task[]>(withUserId(`/api/tasks?date=${todayIsoDate()}`, userId)).catch(() => null)
       : Promise.resolve(null),
-    // Still not scoped per user: the intelligence service is part 4 of per-user scoping.
-    userId !== null ? intelligenceFetch<Tally>("/tally").catch(() => null) : Promise.resolve(null),
+    userId !== null
+      ? intelligenceFetch<Tally>(withUserId("/tally", userId)).catch(() => null)
+      : Promise.resolve(null),
     userId !== null
       ? backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)).catch(() => null)
       : Promise.resolve(null),
