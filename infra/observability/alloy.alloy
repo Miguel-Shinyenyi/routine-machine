@@ -1,0 +1,61 @@
+// Grafana Alloy ships this project's application logs to Loki (docs/observability.md). Promtail, which the
+// reference used, is deprecated; Alloy is its maintained replacement.
+//
+// Scope, on purpose:
+//  - only containers of the Compose project "infra" (the folder name of infra/docker-compose.yml), so
+//    another project's container that is also called "backend" is never read;
+//  - only the two services that write the scrubbed JSON logs. Postgres is left out because an error line
+//    can contain row values such as an email address, and the frontend because its server logs are not
+//    covered by the no-personal-data rule yet.
+// Docker is reached through a read-only socket proxy (containers and networks only), never the raw socket.
+
+discovery.docker "containers" {
+  host = "tcp://socket-proxy:2375"
+
+  filter {
+    name   = "label"
+    values = ["com.docker.compose.project=infra"]
+  }
+}
+
+discovery.relabel "services" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["service"]
+    regex         = "backend|intelligence-service"
+    action        = "keep"
+  }
+}
+
+loki.source.docker "app" {
+  host       = "tcp://socket-proxy:2375"
+  targets    = discovery.relabel.services.output
+  forward_to = [loki.process.json.receiver]
+}
+
+// The services write one JSON object per line. Only the level becomes a label (few values); the request id
+// stays in the line and is found with `| json | requestId="..."`, because a label per request would explode
+// the index.
+loki.process "json" {
+  stage.json {
+    expressions = { level = "level" }
+  }
+
+  stage.labels {
+    values = { level = "" }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

@@ -9,14 +9,14 @@ differs and why. Built in parts; this file describes only what exists.
 
 ## Current state
 
-Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is half done (4a: Prometheus, Alertmanager and the alert rules).** Loki, Promtail, Grafana, Jaeger and tracing, and the page, are not built.
+Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is two thirds done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs).** Grafana, Jaeger and tracing, and the page, are not built.
 
 | Part | What | State |
 |---|---|---|
 | 1 | Backend: request id, JSON logs, metrics endpoint on its own port | Done |
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
-| 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done.** 4b Loki and Promtail: not built. 4c Grafana, Jaeger and OpenTelemetry tracing: not built |
+| 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done.** 4c Grafana, Jaeger and OpenTelemetry tracing: not built |
 | 5 | Owner-only operations page in the frontend (working name `/watchtower`) | Not built |
 
 ### Part 1: the backend
@@ -99,9 +99,33 @@ does not start them). Files are in `infra/observability/`.
   `unparseable` for 15 minutes; a missing key and no traffic at all are not failures).
 - **Tests first**: `alerts_test.yml` is a `promtool` unit test of each rule (down, recovery, thresholds, the
   exceptions, the no-traffic case). `infra/observability/check.sh` validates both configs and runs it.
+- Logs reach Loki only through Alloy; see part 4b.
 - Metrics and both UIs are not reachable from the browser-facing frontend: the backend's metrics port is
   8081 and unpublished, the intelligence service's is 9000 and unpublished, and Prometheus and Alertmanager
   bind to 127.0.0.1.
+
+### Part 4b: logs in Loki
+
+- **Loki** (`grafana/loki:3.7.9`, single binary, filesystem storage, 7 days kept, 512 MB cap) at
+  `http://localhost:3100`, bound to this machine only.
+- **Grafana Alloy** (`grafana/alloy:v1.21.0`) ships the logs. The reference used Promtail, which is deprecated
+  (its last release was May 2026); Alloy is its maintained replacement.
+- **Scope, on purpose** (`alloy.alloy`): only containers of the Compose project `infra` (the folder name of
+  `infra/docker-compose.yml`, so another project's container also called `backend` is never read), and only the
+  two services that write the scrubbed JSON logs, `backend` and `intelligence-service`. **Postgres is left
+  out** because an error line can contain row values such as an email address; the **frontend is left out**
+  because its server logs are not covered by the no-personal-data rule yet.
+- **Docker access is read-only and narrow.** Alloy talks to Docker through `tecnativa/docker-socket-proxy`
+  (v0.5.0) allowing only containers and networks, no writes. The raw `/var/run/docker.sock` is mounted into
+  that proxy and nowhere else.
+- **Labels**: `service` and `level` only. The request id stays in the line (a label per request would explode the
+  index). Find a request with `{service=~".+"} | json | requestId="<id>"`: one id returns the backend lines and
+  the intelligence service's line for the same request.
+- **Check**: `infra/observability/verify-logs.sh` against the running stack: the request id is found in Loki,
+  only the two services appear, no Postgres or frontend line, and no `secret-words` (a query-string value),
+  `@gmail.com` or `password` in anything shipped. `check.sh` also validates `loki.yml` and `alloy.alloy`.
+- Cost, measured idle: Loki about 97 MB, Alloy about 110 MB, the socket proxy about 28 MB of memory. Images:
+  Loki 191 MB, Alloy 928 MB (large), proxy 67 MB. Log data about 0.2 MB after a few minutes.
 
 ## What it records about people
 
@@ -122,7 +146,7 @@ does not start them). Files are in `infra/observability/`.
   to drop the Prometheus endpoint.
 - JSON logs: set `LOGGING_STRUCTURED_FORMAT_CONSOLE=` (empty) to return to plain text lines.
 - The request id and the completion line have no switch; removing `RequestIdFilter` removes both.
-- The cost of the whole stack is stated when part 4 is finished. So far (4a, measured on this machine with the services idle): Prometheus about 97 MB of memory and Alertmanager about 38 MB, under 1% CPU each; images 335 MB and 114 MB on disk; Prometheus data about 0.1 MB after a few minutes, growing at roughly that rate for the 7 days it keeps.
+- The cost of the whole stack is stated when part 4 is finished. So far (4a and 4b, measured on this machine with the services idle): Prometheus about 50 to 97 MB, Alertmanager 13 to 38 MB, Loki 97 MB, Alloy 110 MB and the socket proxy 28 MB of memory, 1 to 3% CPU each; images about 335 + 114 + 191 + 928 + 67 MB = 1.6 GB on disk; data a fraction of a MB after a few minutes, growing for the 7 days kept.
 
 ## Decisions log
 
@@ -130,6 +154,9 @@ does not start them). Files are in `infra/observability/`.
 |------|----------|--------|
 | 2026-10-21 | Spring Boot's built-in structured logging (`logstash` format) instead of `logstash-logback-encoder` | The latest encoder (9.0) needs Jackson 3, and Spring Boot 3.5 uses Jackson 2; Boot 3.4 and later emit the same Logstash JSON with the MDC included and no extra dependency. Differs from the staged prompt, which named the library |
 | 2026-10-21 | Metrics on a separate management port (8081), not published to the host, instead of exposing `/actuator/**` on the API port and relying on routing | The staged prompt requires it never share the port the browser talks to. Following the reference's lesson: an endpoint that is never served on the public port cannot be reached through an auth mistake there |
+| 2026-10-21 | Grafana Alloy instead of Promtail for log shipping | Promtail is deprecated and its last release was May 2026; Alloy (v1.21.0, October 2026) is Grafana's maintained replacement. Differs from the reference and the staged prompt, which named Promtail |
+| 2026-10-21 | The log shipper reads Docker through a read-only socket proxy, not the raw socket | Anything holding `/var/run/docker.sock` can control the host; the proxy allows only reading containers and networks |
+| 2026-10-21 | Only `backend` and `intelligence-service` logs are shipped; Postgres and the frontend are not | Postgres error lines can contain row values (emails); the frontend's server logs are not covered by the no-personal-data rule. An allow-list can only grow on purpose |
 | 2026-10-21 | Alert rules are unit-tested with `promtool test rules` before they were written | An alert that has never been shown to fire (and to stay quiet when it should) is a guess. The tests cover firing, the `for` delay, recovery and the deliberate exceptions |
 | 2026-10-21 | `SyncSourceFailing` skips ActivityWatch and alerts hub at 9, not 3 | ActivityWatch has no server in the Docker stack and fails every poll by design; hub counts three listing calls per run, so 3 is one failed run, not three |
 | 2026-10-21 | Prometheus and Alertmanager UIs bound to 127.0.0.1, behind a compose profile | Operations data is for the owner on this machine; a plain `docker compose up` stays light |

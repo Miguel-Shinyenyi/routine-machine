@@ -98,7 +98,49 @@ services:
       - "127.0.0.1:9093:9093"
     mem_limit: 128m
 
+  loki:
+    profiles: ["observability"]
+    image: grafana/loki:3.7.9
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./observability/loki.yml:/etc/loki/loki.yml:ro
+      - observability_loki_data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    mem_limit: 512m
+
+  # Read-only view of Docker for the log shipper: containers and networks only, no writes. The raw
+  # /var/run/docker.sock is mounted here and nowhere else.
+  socket-proxy:
+    profiles: ["observability"]
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    mem_limit: 64m
+
+  alloy:
+    profiles: ["observability"]
+    image: grafana/alloy:v1.21.0
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --disable-reporting
+    volumes:
+      - ./observability/alloy.alloy:/etc/alloy/config.alloy:ro
+      - observability_alloy_data:/var/lib/alloy/data
+    mem_limit: 256m
+    depends_on:
+      - loki
+      - socket-proxy
+
 volumes:
   routine_machine_postgres_data:
   observability_prometheus_data:
   observability_alertmanager_data:
+  observability_loki_data:
+  observability_alloy_data:
