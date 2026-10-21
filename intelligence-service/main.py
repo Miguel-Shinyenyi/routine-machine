@@ -2,7 +2,8 @@ import os
 from datetime import date
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from analogy import Analogy, AnalogyParseError, ANALOGY_SYSTEM_PROMPT
@@ -149,14 +150,28 @@ def _scoped(records: list[dict], user_id: int | None) -> list[dict]:
     return [r for r in records if r.get("userId") == user_id]
 
 
+@app.exception_handler(httpx.HTTPStatusError)
+def _backend_refused(request, exc: httpx.HTTPStatusError):
+    # The backend said no to the token (or to its absence). Say the same, not "server error".
+    if exc.response.status_code in (401, 403):
+        return JSONResponse(status_code=exc.response.status_code, content={"detail": "Not signed in"})
+    return JSONResponse(status_code=502, content={"detail": "The backend answered with an error"})
+
+
 def _user_params(user_id: int | None) -> dict:
     return {} if user_id is None else {"userId": user_id}
 
 
+def _backend_headers(authorization: str | None) -> dict:
+    # Access control, part 2 (docs/intelligence-service.md): the backend learns who is asking from
+    # the caller's signed token, so this service passes on the one it was given and never makes one.
+    return {} if not authorization else {"Authorization": authorization}
+
+
 @app.get("/suggestion", response_model=SuggestionResponse)
-def suggestion(userId: int | None = None):
+def suggestion(userId: int | None = None, authorization: str | None = Header(default=None)):
     params = _user_params(userId)
-    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
+    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
         goals = _scoped(client.get("/api/goals", params=params).raise_for_status().json(), userId)
         # A topic belongs to whoever owns its goal; the backend scopes it, the rows carry no userId.
         topics = client.get("/api/learning-topics", params=params).raise_for_status().json()
@@ -176,9 +191,9 @@ def suggestion(userId: int | None = None):
 
 
 @app.get("/patterns", response_model=PatternsResponse)
-def patterns(userId: int | None = None):
+def patterns(userId: int | None = None, authorization: str | None = Header(default=None)):
     params = _user_params(userId)
-    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
+    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
         routine_items = _scoped(client.get("/api/routine-items", params=params).raise_for_status().json(), userId)
         logs = _scoped(client.get("/api/daily-logs", params=params).raise_for_status().json(), userId)
 
@@ -216,9 +231,12 @@ def patterns(userId: int | None = None):
 
 
 @app.get("/tally", response_model=TallyResponse)
-def tally(windowDays: int = 28, sinceStart: bool = False, userId: int | None = None):
+def tally(
+    windowDays: int = 28, sinceStart: bool = False, userId: int | None = None,
+    authorization: str | None = Header(default=None),
+):
     params = _user_params(userId)
-    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
+    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
         routine_items = _scoped(client.get("/api/routine-items", params=params).raise_for_status().json(), userId)
         learning_topics = client.get("/api/learning-topics", params=params).raise_for_status().json()
         logs = _scoped(client.get("/api/daily-logs", params=params).raise_for_status().json(), userId)

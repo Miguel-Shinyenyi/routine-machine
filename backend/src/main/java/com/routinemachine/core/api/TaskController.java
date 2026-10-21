@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.LearningTopic;
 import com.routinemachine.core.domain.RoutineItem;
 import com.routinemachine.core.domain.ScheduleTargetType;
@@ -59,22 +62,19 @@ public class TaskController {
     // Per-user scoping (docs/backend.md): userId given = that user's tasks; omitted = only the
     // unowned (pre-account) ones, never another user's.
     @GetMapping
-    public List<TaskResponse> list(@RequestParam Optional<LocalDate> date, @RequestParam Optional<Long> userId) {
-        List<Task> tasks;
-        if (userId.isPresent()) {
-            tasks = date.map(d -> taskRepository.findByTaskDateAndUserId(d, userId.get()))
-                    .orElseGet(() -> taskRepository.findByUserId(userId.get()));
-        } else {
-            tasks = date.map(taskRepository::findByTaskDateAndUserIsNull).orElseGet(taskRepository::findByUserIsNull);
-        }
+    public List<TaskResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<LocalDate> date) {
+        Long userId = TokenUser.idOf(jwt);
+        List<Task> tasks = date.map(d -> taskRepository.findByTaskDateAndUserId(d, userId))
+                .orElseGet(() -> taskRepository.findByUserId(userId));
         return tasks.stream().map(TaskResponse::from).toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public TaskResponse create(@Valid @RequestBody TaskRequest request) {
-        User owner = request.userId() == null ? null : userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
+    public TaskResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody TaskRequest request) {
+        Long userId = TokenUser.idOf(jwt);
+        User owner = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
         Task task = request.scheduleTemplateId() != null
                 ? materializeFromTemplate(request, owner)
                 : createAdHoc(request, owner);
@@ -84,9 +84,9 @@ public class TaskController {
 
     @PatchMapping("/{id}")
     public TaskResponse updateStatus(
-            @PathVariable Long id, @RequestParam Optional<Long> userId, @Valid @RequestBody TaskStatusUpdateRequest request) {
+            @AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @Valid @RequestBody TaskStatusUpdateRequest request) {
         TaskStatus status = parseStatus(request.status());
-        return TaskResponse.from(taskService.changeStatus(id, status, userId.orElse(null)));
+        return TaskResponse.from(taskService.changeStatus(id, status, TokenUser.idOf(jwt)));
     }
 
     private Task materializeFromTemplate(TaskRequest request, User owner) {

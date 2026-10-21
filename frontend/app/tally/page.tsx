@@ -38,7 +38,7 @@ export default async function TallyPage(props: PageProps<"/tally">) {
   const [tally, patterns, goals, book] = await Promise.all([
     intelligenceFetch<Tally>(withUserId(`/tally?windowDays=${windowDays}&sinceStart=${sinceStart}`, userId)),
     intelligenceFetch<Patterns>(withUserId("/patterns", userId)),
-    backendFetch<Goal[]>(withUserId("/api/goals", userId)),
+    backendFetch<Goal[]>("/api/goals"),
     fetchCurrentBook(userId),
   ]);
 

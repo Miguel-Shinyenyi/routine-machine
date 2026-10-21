@@ -78,7 +78,7 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
 
   const [hillside, myGoals, ledger] = await Promise.all([
     backendFetch<HillsideV2>(`/api/hillside/v2?${buildQuery(scope, goalId, seasonStart, asUserId)}`),
-    me ? backendFetch<Goal[]>(`/api/goals?userId=${me.id}`).catch(() => []) : Promise.resolve([]),
+    me ? backendFetch<Goal[]>("/api/goals").catch(() => []) : Promise.resolve([]),
     me
       ? backendFetch<EvidenceEvent[]>(
           `/api/evidence-events?userId=${me.id}&seasonStart=${seasonStart}&seasonEnd=${seasonEnd}`,

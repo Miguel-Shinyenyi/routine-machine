@@ -50,7 +50,9 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain jwtProtectedChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/api/users/**", "/api/granary/**")
+                .securityMatcher(
+                        "/api/users/**", "/api/granary/**", "/api/goals/**", "/api/routine-items/**",
+                        "/api/learning-topics/**", "/api/daily-logs/**", "/api/tasks/**", "/api/schedule-templates/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())

@@ -13,6 +13,5 @@ public record ScheduleTemplateRequest(
         Long routineItemId,
         @Min(1) int targetDurationMinutes,
         int sortOrder,
-        @NotBlank String label,
-        Long userId) {
+        @NotBlank String label) {
 }

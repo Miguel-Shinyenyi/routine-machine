@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.Goal;
 import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.GoalRepository;
@@ -33,18 +36,17 @@ public class GoalController {
     // this returns every goal exactly as before this phase. Passed, it scopes to that one
     // user's own goals, matching RoutineItemController/DailyLogController's pattern.
     @GetMapping
-    public List<GoalResponse> list(@RequestParam Optional<Long> userId) {
-        // Per-user scoping (docs/backend.md): userId omitted = only unowned goals, not every account's.
-        List<Goal> goals = userId.map(goalRepository::findByUserId).orElseGet(goalRepository::findByUserIsNull);
-        return goals.stream().map(GoalResponse::from).toList();
+    public List<GoalResponse> list(@AuthenticationPrincipal Jwt jwt) {
+        return goalRepository.findByUserId(TokenUser.idOf(jwt)).stream().map(GoalResponse::from).toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public GoalResponse create(@Valid @RequestBody GoalRequest request) {
-        User user = request.userId() == null ? null : userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
-        if (goalRepository.existsByUserIdAndName(request.userId(), request.name())) {
+    public GoalResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody GoalRequest request) {
+        Long userId = TokenUser.idOf(jwt);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
+        if (goalRepository.existsByUserIdAndName(userId, request.name())) {
             throw new IllegalArgumentException(
                     "A goal named '" + request.name() + "' already exists for this user");
         }

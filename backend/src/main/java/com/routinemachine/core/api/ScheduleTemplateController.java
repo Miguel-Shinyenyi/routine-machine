@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.RoutineItem;
 import com.routinemachine.core.domain.ScheduleTemplate;
 import com.routinemachine.core.domain.User;
@@ -39,25 +42,21 @@ public class ScheduleTemplateController {
 
     @GetMapping
     public List<ScheduleTemplateResponse> list(
-            @RequestParam Optional<DayOfWeek> dayOfWeek, @RequestParam Optional<Long> userId) {
-        // Per-user scoping (docs/backend.md): userId given = that user's templates; omitted =
-        // only the unowned (pre-account) ones, never another user's.
-        List<ScheduleTemplate> templates;
-        if (userId.isPresent()) {
-            templates = dayOfWeek.map(day -> scheduleTemplateRepository.findByDayOfWeekAndUserId(day, userId.get()))
-                    .orElseGet(() -> scheduleTemplateRepository.findByUserId(userId.get()));
-        } else {
-            templates = dayOfWeek.map(scheduleTemplateRepository::findByDayOfWeekAndUserIsNull)
-                    .orElseGet(scheduleTemplateRepository::findByUserIsNull);
-        }
+            @AuthenticationPrincipal Jwt jwt, @RequestParam Optional<DayOfWeek> dayOfWeek) {
+        Long userId = TokenUser.idOf(jwt);
+        List<ScheduleTemplate> templates = dayOfWeek
+                .map(day -> scheduleTemplateRepository.findByDayOfWeekAndUserId(day, userId))
+                .orElseGet(() -> scheduleTemplateRepository.findByUserId(userId));
         return templates.stream().map(ScheduleTemplateResponse::from).toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ScheduleTemplateResponse create(@Valid @RequestBody ScheduleTemplateRequest request) {
-        User owner = request.userId() == null ? null : userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
+    public ScheduleTemplateResponse create(
+            @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ScheduleTemplateRequest request) {
+        Long userId = TokenUser.idOf(jwt);
+        User owner = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
         ScheduleTemplate template = switch (request.targetType()) {
             case ROUTINE_ITEM -> {
                 if (request.routineItemId() == null) {

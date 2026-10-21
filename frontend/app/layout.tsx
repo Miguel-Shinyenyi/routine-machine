@@ -44,13 +44,13 @@ async function fetchShellContext(): Promise<{
   // signed-out visitor used to see the founder's own counts in this sidebar.
   const [tasks, tally, routineItems, wateringHoles, me] = await Promise.all([
     userId !== null
-      ? backendFetch<Task[]>(withUserId(`/api/tasks?date=${todayIsoDate()}`, userId)).catch(() => null)
+      ? backendFetch<Task[]>(`/api/tasks?date=${todayIsoDate()}`).catch(() => null)
       : Promise.resolve(null),
     userId !== null
       ? intelligenceFetch<Tally>(withUserId("/tally", userId)).catch(() => null)
       : Promise.resolve(null),
     userId !== null
-      ? backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)).catch(() => null)
+      ? backendFetch<RoutineItem[]>("/api/routine-items").catch(() => null)
       : Promise.resolve(null),
     // Owner-only integrations (docs/backend.md): anyone else gets every source "not connected".
     userId !== null

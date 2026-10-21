@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.DailyLog;
 import com.routinemachine.core.domain.DailyLogSource;
 import com.routinemachine.core.domain.LearningTopic;
@@ -47,29 +50,24 @@ public class DailyLogController {
     // userId is optional and additive, same as RoutineItemController's (Phase 8 groundwork,
     // see docs/backend.md): combines with date when both are given.
     @GetMapping
-    public List<DailyLogResponse> list(@RequestParam Optional<LocalDate> date, @RequestParam Optional<Long> userId) {
-        List<DailyLog> logs;
-        if (userId.isPresent() && date.isPresent()) {
-            logs = dailyLogRepository.findByUserIdAndLogDate(userId.get(), date.get());
-        } else if (userId.isPresent()) {
-            logs = dailyLogRepository.findByUserId(userId.get());
-        } else {
-            // Per-user scoping (docs/backend.md): userId omitted = only unowned logs.
-            logs = date.map(dailyLogRepository::findByUserIsNullAndLogDate).orElseGet(dailyLogRepository::findByUserIsNull);
-        }
+    public List<DailyLogResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<LocalDate> date) {
+        Long userId = TokenUser.idOf(jwt);
+        List<DailyLog> logs = date.map(d -> dailyLogRepository.findByUserIdAndLogDate(userId, d))
+                .orElseGet(() -> dailyLogRepository.findByUserId(userId));
         return logs.stream().map(DailyLogResponse::from).toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public DailyLogResponse create(@Valid @RequestBody DailyLogRequest request) {
+    public DailyLogResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody DailyLogRequest request) {
         if ((request.routineItemId() == null) == (request.learningTopicId() == null)) {
             throw new IllegalArgumentException(
                     "Exactly one of routineItemId or learningTopicId must be set");
         }
 
-        User owner = request.userId() == null ? null : userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
+        Long userId = TokenUser.idOf(jwt);
+        User owner = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
         DailyLogSource source = request.source() == null
                 ? DailyLogSource.MANUAL
                 : DailyLogSource.fromValue(request.source());
@@ -82,10 +80,7 @@ public class DailyLogController {
                         request.logDate(), findLearningTopic(request.learningTopicId(), owner), source,
                         request.measuredMinutes());
 
-        if (request.userId() != null) {
-            log.assignUser(userRepository.findById(request.userId())
-                    .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId())));
-        }
+        log.assignUser(owner);
 
         return DailyLogResponse.from(dailyLogRepository.save(log));
     }

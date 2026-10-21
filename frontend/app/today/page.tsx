@@ -44,8 +44,8 @@ export default async function TodayPage(props: PageProps<"/today">) {
 
   const [tasks, routineItems, goals, suggestion, tally, patterns, duePauses] = await Promise.all([
     materializeDay(date, userId),
-    backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)),
-    backendFetch<Goal[]>(withUserId("/api/goals", userId)),
+    backendFetch<RoutineItem[]>("/api/routine-items"),
+    backendFetch<Goal[]>("/api/goals"),
     intelligenceFetch<Suggestion>(withUserId("/suggestion", userId)).catch(() => null),
     intelligenceFetch<Tally>(withUserId("/tally", userId)).catch(() => null),
     intelligenceFetch<Patterns>(withUserId("/patterns", userId)).catch(() => null),

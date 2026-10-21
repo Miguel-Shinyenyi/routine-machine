@@ -12,7 +12,7 @@ function optionalNumber(value: FormDataEntryValue | null): number | null {
 }
 
 export async function createScheduleTemplate(formData: FormData): Promise<void> {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   await backendFetch("/api/schedule-templates", {
     method: "POST",
     body: JSON.stringify({
@@ -22,7 +22,6 @@ export async function createScheduleTemplate(formData: FormData): Promise<void> 
       targetDurationMinutes: Number(formData.get("targetDurationMinutes")),
       sortOrder: Number(formData.get("sortOrder")),
       label: formData.get("label"),
-      userId,
     }),
   });
 
@@ -31,7 +30,7 @@ export async function createScheduleTemplate(formData: FormData): Promise<void> 
 }
 
 export async function createRoutineItem(formData: FormData): Promise<void> {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   await backendFetch("/api/routine-items", {
     method: "POST",
     body: JSON.stringify({
@@ -39,7 +38,6 @@ export async function createRoutineItem(formData: FormData): Promise<void> {
       description: formData.get("description") || null,
       category: formData.get("category") || null,
       goalId: optionalNumber(formData.get("goalId")),
-      userId,
     }),
   });
 
@@ -47,14 +45,13 @@ export async function createRoutineItem(formData: FormData): Promise<void> {
 }
 
 export async function createAdHocTask(formData: FormData): Promise<void> {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   await backendFetch("/api/tasks", {
     method: "POST",
     body: JSON.stringify({
       taskDate: formData.get("taskDate"),
       label: formData.get("label"),
       routineItemId: optionalNumber(formData.get("routineItemId")),
-      userId,
     }),
   });
 
@@ -63,13 +60,12 @@ export async function createAdHocTask(formData: FormData): Promise<void> {
 }
 
 export async function createLearningTopic(formData: FormData): Promise<void> {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   await backendFetch("/api/learning-topics", {
     method: "POST",
     body: JSON.stringify({
       name: formData.get("name"),
       goalId: Number(formData.get("goalId")),
-      userId,
     }),
   });
 
@@ -77,8 +73,8 @@ export async function createLearningTopic(formData: FormData): Promise<void> {
 }
 
 export async function updateTaskStatus(taskId: number, status: string): Promise<void> {
-  const userId = await requireSessionUserId();
-  await backendFetch(withUserId(`/api/tasks/${taskId}`, userId), {
+  await requireSessionUserId();
+  await backendFetch(`/api/tasks/${taskId}`, {
     method: "PATCH",
     body: JSON.stringify({ status }),
   });

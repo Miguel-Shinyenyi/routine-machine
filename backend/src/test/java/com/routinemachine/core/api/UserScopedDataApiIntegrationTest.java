@@ -9,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -41,32 +42,32 @@ class UserScopedDataApiIntegrationTest extends AbstractIntegrationTest {
         long userA = registerUser("scoped-a@example.com");
         long userB = registerUser("scoped-b@example.com");
 
-        mockMvc.perform(post("/api/routine-items")
+        mockMvc.perform(post("/api/routine-items").with(asUser(userA))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"User A's routine\", \"userId\": " + userA + "}"))
+                        .content("{\"name\": \"User A's routine\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.userId", is((int) userA)));
 
-        mockMvc.perform(post("/api/routine-items")
+        mockMvc.perform(post("/api/routine-items").with(asUser(userB))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"User B's routine\", \"userId\": " + userB + "}"))
+                        .content("{\"name\": \"User B's routine\"}"))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/routine-items").param("userId", String.valueOf(userA)))
+        mockMvc.perform(get("/api/routine-items").with(asUser(userA)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()", is(1)))
                 .andExpect(jsonPath("$[0].name", is("User A's routine")));
 
-        mockMvc.perform(get("/api/routine-items").param("userId", String.valueOf(userB)))
+        mockMvc.perform(get("/api/routine-items").with(asUser(userB)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()", is(1)))
                 .andExpect(jsonPath("$[0].name", is("User B's routine")));
     }
 
     private long createRoutineItemFor(String name, long userId) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/routine-items")
+        MvcResult result = mockMvc.perform(post("/api/routine-items").with(asUser(userId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"" + name + "\", \"userId\": " + userId + "}"))
+                        .content("{\"name\": \"" + name + "\"}"))
                 .andExpect(status().isCreated())
                 .andReturn();
         return Long.parseLong(result.getResponse().getContentAsString().replaceAll(".*\"id\":(\\d+).*", "$1"));
@@ -82,34 +83,34 @@ class UserScopedDataApiIntegrationTest extends AbstractIntegrationTest {
         long itemA = createRoutineItemFor("Log scoping item A", userA);
         long itemB = createRoutineItemFor("Log scoping item B", userB);
 
-        mockMvc.perform(post("/api/daily-logs")
+        mockMvc.perform(post("/api/daily-logs").with(asUser(userA))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"logDate\": \"2026-10-17\", \"routineItemId\": " + itemA
-                                + ", \"userId\": " + userA + "}"))
+                                + "}"))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(post("/api/daily-logs")
+        mockMvc.perform(post("/api/daily-logs").with(asUser(userB))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"logDate\": \"2026-10-17\", \"routineItemId\": " + itemB
-                                + ", \"userId\": " + userB + "}"))
+                                + "}"))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/daily-logs").param("userId", String.valueOf(userA)))
+        mockMvc.perform(get("/api/daily-logs").with(asUser(userA)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()", is(1)))
                 .andExpect(jsonPath("$[0].userId", is((int) userA)));
 
-        mockMvc.perform(get("/api/daily-logs").param("userId", String.valueOf(userB)))
+        mockMvc.perform(get("/api/daily-logs").with(asUser(userB)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()", is(1)))
                 .andExpect(jsonPath("$[0].userId", is((int) userB)));
     }
 
     @Test
-    void creatingARoutineItemWithAnUnknownUserIdFails() throws Exception {
-        mockMvc.perform(post("/api/routine-items")
+    void creatingARoutineItemForATokenWhoseUserDoesNotExistFails() throws Exception {
+        mockMvc.perform(post("/api/routine-items").with(asUser(999999))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"orphan\", \"userId\": 999999}"))
+                        .content("{\"name\": \"orphan\"}"))
                 .andExpect(status().isBadRequest());
     }
 }

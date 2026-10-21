@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.LocalDate;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -52,8 +53,8 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     private long createGoal(String name, Long userId) throws Exception {
-        return idOf(mockMvc.perform(post("/api/goals").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"" + name + "\"" + userField(userId) + "}"))
+        return idOf(mockMvc.perform(post("/api/goals").with(asUser(userId)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"" + name + "\"}"))
                 .andExpect(status().isCreated()).andReturn());
     }
 
@@ -149,8 +150,8 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         long a = saveUser("note-e@example.com");
         long b = saveUser("note-f@example.com");
         for (long user : new long[] {a, b}) {
-            mockMvc.perform(post("/api/routine-items").contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"name\": \"reading-" + user + "\", \"source\": \"READER_NOTES\", \"userId\": " + user + "}"))
+            mockMvc.perform(post("/api/routine-items").with(asUser(user)).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"name\": \"reading-" + user + "\", \"source\": \"READER_NOTES\"}"))
                     .andExpect(status().isCreated());
         }
         long asBook = createBook("note-Es-book", a);
@@ -161,10 +162,10 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isCreated());
 
         String today = LocalDate.now().toString();
-        mockMvc.perform(get("/api/daily-logs").param("userId", String.valueOf(a)).param("date", today))
+        mockMvc.perform(get("/api/daily-logs").with(asUser(a)).param("date", today))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].userId", is((int) a)));
-        mockMvc.perform(get("/api/daily-logs").param("userId", String.valueOf(b)).param("date", today))
+        mockMvc.perform(get("/api/daily-logs").with(asUser(b)).param("date", today))
                 .andExpect(jsonPath("$", hasSize(0)));
     }
 
@@ -190,14 +191,14 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         long b = saveUser("topic-b@example.com");
         long asGoal = createGoal("topic-A-goal", a);
         long bsGoal = createGoal("topic-B-goal", b);
-        mockMvc.perform(post("/api/learning-topics").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"topic-A-topic\", \"goalId\": " + asGoal + ", \"userId\": " + a + "}"))
+        mockMvc.perform(post("/api/learning-topics").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"topic-A-topic\", \"goalId\": " + asGoal + "}"))
                 .andExpect(status().isCreated());
-        mockMvc.perform(post("/api/learning-topics").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"topic-B-topic\", \"goalId\": " + bsGoal + ", \"userId\": " + b + "}"))
+        mockMvc.perform(post("/api/learning-topics").with(asUser(b)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"topic-B-topic\", \"goalId\": " + bsGoal + "}"))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/learning-topics").param("userId", String.valueOf(a)))
+        mockMvc.perform(get("/api/learning-topics").with(asUser(a)))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].name", is("topic-A-topic")));
     }
@@ -208,23 +209,8 @@ class ScopedReadingAndTopicsApiIntegrationTest extends AbstractIntegrationTest {
         long b = saveUser("topic-d@example.com");
         long bsGoal = createGoal("topic-D-goal", b);
 
-        mockMvc.perform(post("/api/learning-topics").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"topic-intruder\", \"goalId\": " + bsGoal + ", \"userId\": " + a + "}"))
+        mockMvc.perform(post("/api/learning-topics").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"topic-intruder\", \"goalId\": " + bsGoal + "}"))
                 .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void omittingUserIdShowsOnlyTopicsOfUnownedGoals() throws Exception {
-        long a = saveUser("topic-e@example.com");
-        long asGoal = createGoal("topic-E-goal", a);
-        long unownedGoal = createGoal("topic-unowned-goal", null);
-        mockMvc.perform(post("/api/learning-topics").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"topic-owned-by-E\", \"goalId\": " + asGoal + ", \"userId\": " + a + "}"));
-        mockMvc.perform(post("/api/learning-topics").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"topic-unowned\", \"goalId\": " + unownedGoal + "}"));
-
-        String body = mockMvc.perform(get("/api/learning-topics")).andReturn().getResponse().getContentAsString();
-
-        assertThat(body).contains("topic-unowned").doesNotContain("topic-owned-by-E");
     }
 }

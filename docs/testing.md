@@ -350,3 +350,7 @@ the same request succeeding throughout.
   got in an earlier Phase 6 slice.
 - `RescueTimeClientImpl` has the same gap and, like `WakaTimeClientImpl`, has not been checked
   manually against the real API — no `RESCUETIME_API_KEY` available in this session.
+
+## Signing in inside tests
+
+Routes that take their user from the token (see `docs/backend.md`, access control) are called with `.with(TestTokens.asUser(userId))` (`backend/src/test/java/com/routinemachine/core/TestTokens.java`). It sets the token a signed-in request would carry, without a real signature. A request with no `.with(...)` is a signed-out request and gets 401 on those routes.

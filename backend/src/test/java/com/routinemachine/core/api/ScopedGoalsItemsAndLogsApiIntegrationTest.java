@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -41,14 +42,14 @@ class ScopedGoalsItemsAndLogsApiIntegrationTest extends AbstractIntegrationTest 
     }
 
     private long createGoal(String name, Long userId) throws Exception {
-        return idOf(mockMvc.perform(post("/api/goals").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"" + name + "\"" + userField(userId) + "}"))
+        return idOf(mockMvc.perform(post("/api/goals").with(asUser(userId))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"" + name + "\"}"))
                 .andExpect(status().isCreated()).andReturn());
     }
 
     private long createRoutineItem(String name, Long userId) throws Exception {
-        return idOf(mockMvc.perform(post("/api/routine-items").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"" + name + "\"" + userField(userId) + "}"))
+        return idOf(mockMvc.perform(post("/api/routine-items").with(asUser(userId))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"" + name + "\"}"))
                 .andExpect(status().isCreated()).andReturn());
     }
 
@@ -56,33 +57,15 @@ class ScopedGoalsItemsAndLogsApiIntegrationTest extends AbstractIntegrationTest 
         return mockMvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
     }
 
-    @Test
-    void omittingUserIdListsOnlyUnownedGoals() throws Exception {
-        long a = saveUser("goal-a@example.com");
-        createGoal("goal-owned-by-A", a);
-        createGoal("goal-unowned", null);
-
-        assertThat(body(get("/api/goals"))).contains("goal-unowned").doesNotContain("goal-owned-by-A");
-        assertThat(body(get("/api/goals").param("userId", String.valueOf(a)))).contains("goal-owned-by-A")
-                .doesNotContain("goal-unowned");
-    }
 
     @Test
     void aNewUserHasNoGoals() throws Exception {
         long newcomer = saveUser("goal-new@example.com");
         createGoal("goal-someone-elses", saveUser("goal-other@example.com"));
 
-        assertThat(body(get("/api/goals").param("userId", String.valueOf(newcomer)))).isEqualTo("[]");
+        assertThat(body(get("/api/goals").with(asUser(newcomer)))).isEqualTo("[]");
     }
 
-    @Test
-    void omittingUserIdListsOnlyUnownedRoutineItems() throws Exception {
-        long a = saveUser("item-a@example.com");
-        createRoutineItem("item-owned-by-A", a);
-        createRoutineItem("item-unowned", null);
-
-        assertThat(body(get("/api/routine-items"))).contains("item-unowned").doesNotContain("item-owned-by-A");
-    }
 
     @Test
     void aRoutineItemCannotBeCreatedUnderSomeoneElsesGoal() throws Exception {
@@ -90,28 +73,11 @@ class ScopedGoalsItemsAndLogsApiIntegrationTest extends AbstractIntegrationTest 
         long b = saveUser("item-c@example.com");
         long bsGoal = createGoal("item-Bs-goal", b);
 
-        mockMvc.perform(post("/api/routine-items").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"item-intruder\", \"goalId\": " + bsGoal + ", \"userId\": " + a + "}"))
+        mockMvc.perform(post("/api/routine-items").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"item-intruder\", \"goalId\": " + bsGoal + "}"))
                 .andExpect(status().isBadRequest());
     }
 
-    @Test
-    void omittingUserIdListsOnlyUnownedDailyLogs() throws Exception {
-        long a = saveUser("log-a@example.com");
-        long aItem = createRoutineItem("log-A-routine", a);
-        long unownedItem = createRoutineItem("log-unowned-routine", null);
-        mockMvc.perform(post("/api/daily-logs").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"logDate\": \"2032-01-01\", \"routineItemId\": " + aItem + ", \"userId\": " + a + "}"))
-                .andExpect(status().isCreated());
-        mockMvc.perform(post("/api/daily-logs").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"logDate\": \"2032-01-01\", \"routineItemId\": " + unownedItem + "}"))
-                .andExpect(status().isCreated());
-
-        String forTheDay = body(get("/api/daily-logs").param("date", "2032-01-01"));
-        assertThat(forTheDay).contains("\"routineItemId\":" + unownedItem).doesNotContain("\"routineItemId\":" + aItem);
-        String everything = body(get("/api/daily-logs"));
-        assertThat(everything).doesNotContain("\"routineItemId\":" + aItem);
-    }
 
     @Test
     void aDayCannotBeLoggedForSomeoneElsesRoutineItem() throws Exception {
@@ -119,8 +85,8 @@ class ScopedGoalsItemsAndLogsApiIntegrationTest extends AbstractIntegrationTest 
         long b = saveUser("log-c@example.com");
         long bsItem = createRoutineItem("log-Bs-routine", b);
 
-        mockMvc.perform(post("/api/daily-logs").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"logDate\": \"2032-02-02\", \"routineItemId\": " + bsItem + ", \"userId\": " + a + "}"))
+        mockMvc.perform(post("/api/daily-logs").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"logDate\": \"2032-02-02\", \"routineItemId\": " + bsItem + "}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -129,12 +95,12 @@ class ScopedGoalsItemsAndLogsApiIntegrationTest extends AbstractIntegrationTest 
         long a = saveUser("log-d@example.com");
         long b = saveUser("log-e@example.com");
         long bsGoal = createGoal("log-Bs-goal", b);
-        long bsTopic = idOf(mockMvc.perform(post("/api/learning-topics").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"log-Bs-topic\", \"goalId\": " + bsGoal + ", \"userId\": " + b + "}"))
+        long bsTopic = idOf(mockMvc.perform(post("/api/learning-topics").with(asUser(b)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"log-Bs-topic\", \"goalId\": " + bsGoal + "}"))
                 .andExpect(status().isCreated()).andReturn());
 
-        mockMvc.perform(post("/api/daily-logs").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"logDate\": \"2032-03-03\", \"learningTopicId\": " + bsTopic + ", \"userId\": " + a + "}"))
+        mockMvc.perform(post("/api/daily-logs").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"logDate\": \"2032-03-03\", \"learningTopicId\": " + bsTopic + "}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -143,11 +109,11 @@ class ScopedGoalsItemsAndLogsApiIntegrationTest extends AbstractIntegrationTest 
         long a = saveUser("log-f@example.com");
         long aItem = createRoutineItem("log-F-routine", a);
 
-        mockMvc.perform(post("/api/daily-logs").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"logDate\": \"2032-04-04\", \"routineItemId\": " + aItem + ", \"userId\": " + a + "}"))
+        mockMvc.perform(post("/api/daily-logs").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"logDate\": \"2032-04-04\", \"routineItemId\": " + aItem + "}"))
                 .andExpect(status().isCreated());
 
-        assertThat(body(get("/api/daily-logs").param("userId", String.valueOf(a)).param("date", "2032-04-04")))
+        assertThat(body(get("/api/daily-logs").with(asUser(a)).param("date", "2032-04-04")))
                 .contains("\"routineItemId\":" + aItem);
     }
 }

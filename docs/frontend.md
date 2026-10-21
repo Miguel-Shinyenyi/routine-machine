@@ -420,3 +420,12 @@ on every call to the backend, including multipart. With no session it sends noth
 The Granary page, the Today page's due-pause call and the Granary Server Actions no longer send
 a user id: the backend learns who is asking from the token. Other routes still carry `userId` until
 their part of the stage is done (see `docs/backend.md`).
+
+## Access control, part 2
+
+The session token now also goes to the intelligence service (`lib/api.ts` sends it on both
+backends). Calls for goals, routine items, learning topics, daily logs, tasks and schedule
+templates no longer carry `userId` (pages, `lib/materialize.ts` and the create and status
+Server Actions). Books, notes, Watering holes and credits still do, and so do the intelligence
+calls (`/suggestion`, `/tally`, `/patterns`).
+

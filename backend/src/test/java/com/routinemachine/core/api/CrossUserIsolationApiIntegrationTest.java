@@ -61,9 +61,13 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
         return result;
     }
 
-    private long create(String path, String json) throws Exception {
-        return idOf(send(post(path).contentType(H).content(json), 201));
+    private long create(String path, long user, String json) throws Exception {
+        return idOf(send(post(path).with(asUser(user)).contentType(H).content(json), 201));
     }
+
+    private static final java.util.Set<String> TOKEN_ROUTES = java.util.Set.of(
+            "/api/goals", "/api/routine-items", "/api/learning-topics", "/api/schedule-templates",
+            "/api/tasks", "/api/daily-logs");
 
     private String json(String path, String... params) throws Exception {
         var request = get(path);
@@ -91,22 +95,22 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
         for (int i = 0; i < 2; i++) {
             String s = seed(i) + "-" + System.nanoTime();
             long u = users[i];
-            goal[i] = create("/api/goals", "{\"name\":\"" + s + "-goal\",\"userId\":" + u + "}");
-            routine[i] = create("/api/routine-items", "{\"name\":\"" + s + "-routine\",\"userId\":" + u + "}");
-            create("/api/learning-topics", "{\"name\":\"" + s + "-topic\",\"goalId\":" + goal[i] + ",\"userId\":" + u + "}");
-            template[i] = create("/api/schedule-templates", "{\"dayOfWeek\":\"MONDAY\",\"targetType\":\"LEARNING_SLOT\","
-                    + "\"targetDurationMinutes\":30,\"sortOrder\":1,\"label\":\"" + s + "-template\",\"userId\":" + u + "}");
-            task[i] = create("/api/tasks", "{\"taskDate\":\"2033-03-0" + (i + 1) + "\",\"label\":\"" + s + "-task\",\"userId\":" + u + "}");
-            create("/api/daily-logs", "{\"logDate\":\"2033-03-0" + (i + 1) + "\",\"routineItemId\":" + routine[i] + ",\"userId\":" + u + "}");
-            book[i] = create("/api/books", "{\"title\":\"" + s + "-book\",\"userId\":" + u + "}");
-            create("/api/reading-notes", "{\"bookId\":" + book[i] + ",\"noteText\":\"" + s + "-note\",\"userId\":" + u + "}");
-            create("/api/current-reading", "{\"title\":\"" + s + "-reading\",\"userId\":" + u + "}");
+            goal[i] = create("/api/goals", u, "{\"name\":\"" + s + "-goal\"}");
+            routine[i] = create("/api/routine-items", u, "{\"name\":\"" + s + "-routine\"}");
+            create("/api/learning-topics", u, "{\"name\":\"" + s + "-topic\",\"goalId\":" + goal[i] + "}");
+            template[i] = create("/api/schedule-templates", u, "{\"dayOfWeek\":\"MONDAY\",\"targetType\":\"LEARNING_SLOT\","
+                    + "\"targetDurationMinutes\":30,\"sortOrder\":1,\"label\":\"" + s + "-template\"}");
+            task[i] = create("/api/tasks", u, "{\"taskDate\":\"2033-03-0" + (i + 1) + "\",\"label\":\"" + s + "-task\"}");
+            create("/api/daily-logs", u, "{\"logDate\":\"2033-03-0" + (i + 1) + "\",\"routineItemId\":" + routine[i] + "}");
+            book[i] = create("/api/books", u, "{\"title\":\"" + s + "-book\",\"userId\":" + u + "}");
+            create("/api/reading-notes", u, "{\"bookId\":" + book[i] + ",\"noteText\":\"" + s + "-note\",\"userId\":" + u + "}");
+            create("/api/current-reading", u, "{\"title\":\"" + s + "-reading\",\"userId\":" + u + "}");
             send(put("/api/granary/saving-target-amount").with(asUser(u)).contentType(H)
                     .content("{\"amount\":" + (i == 0 ? 111 : 222) + "}"), 200);
             send(post("/api/granary/savings").with(asUser(u)), 200);
             pause[i] = idOf(send(post("/api/granary/pauses").with(asUser(u)).contentType(H)
                     .content("{\"what\":\"" + s + "-pause\"}"), 200));
-            evidence[i] = create("/api/evidence-events", "{\"userId\":" + u + ",\"goalId\":" + goal[i] + ",\"source\":\"MANUAL\","
+            evidence[i] = create("/api/evidence-events", u, "{\"userId\":" + u + ",\"goalId\":" + goal[i] + ",\"source\":\"MANUAL\","
                     + "\"sourceEventId\":\"" + s + "-evt\",\"occurredAt\":\"2033-03-02T12:00:00Z\"}");
             long org = idOf(send(post("/api/organisations").contentType(H)
                     .content("{\"name\":\"" + s + "-org\",\"foundingAdminUserId\":" + u + "}"), 200));
@@ -118,15 +122,20 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
     // ---- every list route, read as A, as B and as nobody ------------------------------------
 
     private void assertEachSeesOnlyTheirOwn(String path, String marker, String... extraParams) throws Exception {
+        boolean tokenRoute = TOKEN_ROUTES.contains(path);
         String[] withUser = new String[extraParams.length + 2];
         System.arraycopy(extraParams, 0, withUser, 0, extraParams.length);
         withUser[extraParams.length] = "userId";
         for (int i = 0; i < 2; i++) {
             withUser[extraParams.length + 1] = String.valueOf(i == 0 ? a : b);
-            String body = json(path, withUser);
+            String body = tokenRoute ? asToken(path, i == 0 ? a : b) : json(path, withUser);
             String mine = seed(i), theirs = seed(1 - i);
             assertThat(body).as("%s as %s should show its own", path, mine).contains(mine).contains(marker);
             assertThat(body).as("%s as %s must not show %s's", path, mine, theirs).doesNotContain(theirs + "-");
+        }
+        if (tokenRoute) {
+            send(get(path), 401);
+            return;
         }
         String asNobody = json(path, extraParams);
         assertThat(asNobody).as("%s with no userId must show neither account", path)
@@ -172,11 +181,10 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
     void dailyLogsAreIsolated() throws Exception {
         for (int i = 0; i < 2; i++) {
             long me = i == 0 ? a : b;
-            String body = json("/api/daily-logs", "userId", String.valueOf(me));
+            String body = asToken("/api/daily-logs", me);
             assertThat(body).contains("\"routineItemId\":" + routine[i]).doesNotContain("\"routineItemId\":" + routine[1 - i]);
         }
-        String asNobody = json("/api/daily-logs");
-        assertThat(asNobody).doesNotContain("\"routineItemId\":" + routine[0]).doesNotContain("\"routineItemId\":" + routine[1]);
+        send(get("/api/daily-logs"), 401);
     }
 
     @Test
@@ -212,8 +220,8 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void anAccountCannotChangeAnotherAccountsTask() throws Exception {
-        send(patch("/api/tasks/" + task[0]).param("userId", String.valueOf(b)).contentType(H).content("{\"status\":\"DONE\"}"), 404);
-        send(patch("/api/tasks/" + task[0]).param("userId", String.valueOf(a)).contentType(H).content("{\"status\":\"DONE\"}"), 200);
+        send(patch("/api/tasks/" + task[0]).with(asUser(b)).contentType(H).content("{\"status\":\"DONE\"}"), 404);
+        send(patch("/api/tasks/" + task[0]).with(asUser(a)).contentType(H).content("{\"status\":\"DONE\"}"), 200);
     }
 
     @Test
@@ -235,11 +243,11 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     void anAccountCannotLinkItsRowsToAnotherAccountsRows() throws Exception {
         // B tries to build on A's goal, routine item, template, book.
-        send(post("/api/learning-topics").contentType(H).content("{\"name\":\"x\",\"goalId\":" + goal[0] + ",\"userId\":" + b + "}"), 400);
-        send(post("/api/routine-items").contentType(H).content("{\"name\":\"x\",\"goalId\":" + goal[0] + ",\"userId\":" + b + "}"), 400);
-        send(post("/api/daily-logs").contentType(H).content("{\"logDate\":\"2033-04-04\",\"routineItemId\":" + routine[0] + ",\"userId\":" + b + "}"), 400);
-        send(post("/api/tasks").contentType(H).content("{\"taskDate\":\"2033-04-04\",\"scheduleTemplateId\":" + template[0] + ",\"userId\":" + b + "}"), 400);
-        send(post("/api/tasks").contentType(H).content("{\"taskDate\":\"2033-04-04\",\"label\":\"x\",\"routineItemId\":" + routine[0] + ",\"userId\":" + b + "}"), 400);
+        send(post("/api/learning-topics").with(asUser(b)).contentType(H).content("{\"name\":\"x\",\"goalId\":" + goal[0] + "}"), 400);
+        send(post("/api/routine-items").with(asUser(b)).contentType(H).content("{\"name\":\"x\",\"goalId\":" + goal[0] + "}"), 400);
+        send(post("/api/daily-logs").with(asUser(b)).contentType(H).content("{\"logDate\":\"2033-04-04\",\"routineItemId\":" + routine[0] + "}"), 400);
+        send(post("/api/tasks").with(asUser(b)).contentType(H).content("{\"taskDate\":\"2033-04-04\",\"scheduleTemplateId\":" + template[0] + "}"), 400);
+        send(post("/api/tasks").with(asUser(b)).contentType(H).content("{\"taskDate\":\"2033-04-04\",\"label\":\"x\",\"routineItemId\":" + routine[0] + "}"), 400);
         send(post("/api/reading-notes").contentType(H).content("{\"bookId\":" + book[0] + ",\"noteText\":\"x\",\"userId\":" + b + "}"), 400);
         send(post("/api/evidence-events").contentType(H).content("{\"userId\":" + b + ",\"goalId\":" + goal[0] + ",\"source\":\"MANUAL\","
                 + "\"sourceEventId\":\"intruder\",\"occurredAt\":\"2033-03-02T12:00:00Z\"}"), 400);

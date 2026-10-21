@@ -422,3 +422,41 @@ def test_analogy_returns_502_when_claude_responds_with_unparseable_content(monke
     response = client.post("/analogy", json={"topic": "an unparseable topic", "interest": "cooking"})
 
     assert response.status_code == 502
+
+
+@respx.mock
+def test_the_callers_token_is_forwarded_to_every_backend_read():
+    # Access control, part 2: the backend takes the user from the token, so this service has to
+    # pass on the one it was given for /suggestion, /patterns and /tally.
+    routes = {
+        path: respx.get(f"{BACKEND_BASE_URL}{path}").mock(return_value=httpx.Response(200, json=[]))
+        for path in ("/api/goals", "/api/learning-topics", "/api/routine-items", "/api/daily-logs")
+    }
+    headers = {"Authorization": "Bearer the-callers-token"}
+
+    client.get("/suggestion?userId=5", headers=headers)
+    client.get("/patterns?userId=5", headers=headers)
+    client.get("/tally?userId=5", headers=headers)
+
+    for path, route in routes.items():
+        assert route.called, path
+        for call in route.calls:
+            assert call.request.headers.get("authorization") == "Bearer the-callers-token", path
+
+
+@respx.mock
+def test_no_token_means_none_is_sent_to_the_backend():
+    route = respx.get(f"{BACKEND_BASE_URL}/api/routine-items").mock(return_value=httpx.Response(200, json=[]))
+    respx.get(f"{BACKEND_BASE_URL}/api/daily-logs").mock(return_value=httpx.Response(200, json=[]))
+
+    client.get("/patterns")
+
+    assert "authorization" not in route.calls[0].request.headers
+
+
+@respx.mock
+def test_a_backend_refusal_for_a_missing_token_is_a_401_not_a_server_error():
+    respx.get(f"{BACKEND_BASE_URL}/api/routine-items").mock(return_value=httpx.Response(401))
+    respx.get(f"{BACKEND_BASE_URL}/api/daily-logs").mock(return_value=httpx.Response(401))
+
+    assert client.get("/patterns").status_code == 401

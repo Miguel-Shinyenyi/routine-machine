@@ -33,7 +33,7 @@ async function request<T>(baseUrl: string, path: string, init: RequestInit = {})
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(baseUrl === BACKEND_URL ? await sessionAuthorization() : {}),
+      ...(await sessionAuthorization()),
       ...(init.headers ?? {}),
     },
     // Always fetch fresh: task/log state changes on nearly every request, and this is a

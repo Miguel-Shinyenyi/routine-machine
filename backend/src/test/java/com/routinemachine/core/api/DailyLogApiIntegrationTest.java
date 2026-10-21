@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -21,6 +22,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
+
+    @Autowired
+    private com.routinemachine.core.repository.UserRepository userRepository;
+
+    private com.routinemachine.core.domain.User me;
+
+    @org.junit.jupiter.api.BeforeEach
+    void signInAsANewUser() {
+        me = userRepository.save(new com.routinemachine.core.domain.User(
+                "DailyLogApiIntegrationTest-" + System.nanoTime() + "@example.com", "irrelevant-hash", null, null));
+    }
+
+    // A goal this test's user owns. The seeded goals belong to nobody and the API never shows those.
+    private com.routinemachine.core.domain.Goal myGoal(String name) {
+        return goalRepository.save(new com.routinemachine.core.domain.Goal(name, null, me));
+    }
+
+    private com.routinemachine.core.domain.RoutineItem myItem(String name) {
+        com.routinemachine.core.domain.RoutineItem item = new com.routinemachine.core.domain.RoutineItem(name, null);
+        item.assignUser(me);
+        return routineItemRepository.save(item);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -36,9 +59,9 @@ class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void logsARoutineItemCompletionAsManualByDefault() throws Exception {
-        RoutineItem item = routineItemRepository.save(new RoutineItem("journaling", null));
+        RoutineItem item = myItem("journaling");
 
-        mockMvc.perform(post("/api/daily-logs")
+        mockMvc.perform(post("/api/daily-logs").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"logDate": "2026-09-18", "routineItemId": %d}
@@ -51,11 +74,11 @@ class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void logsALearningTopicCompletionWithAnExplicitHubSyncSource() throws Exception {
-        var goal = goalRepository.findFirstByName("ai-engineer-evidence").orElseThrow();
+        var goal = myGoal("ai-engineer-evidence");
         var topic = learningTopicRepository.save(
                 new com.routinemachine.core.domain.LearningTopic("write article on evals", goal));
 
-        mockMvc.perform(post("/api/daily-logs")
+        mockMvc.perform(post("/api/daily-logs").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"logDate": "2026-09-18", "learningTopicId": %d, "source": "hub-sync"}
@@ -67,9 +90,9 @@ class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void logsARoutineItemCompletionWithMeasuredMinutes() throws Exception {
-        RoutineItem item = routineItemRepository.save(new RoutineItem("deep work", null));
+        RoutineItem item = myItem("deep work");
 
-        mockMvc.perform(post("/api/daily-logs")
+        mockMvc.perform(post("/api/daily-logs").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"logDate": "2026-09-18", "routineItemId": %d, "measuredMinutes": 45}
@@ -80,12 +103,12 @@ class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void rejectsALogWithBothTargetsSet() throws Exception {
-        RoutineItem item = routineItemRepository.save(new RoutineItem("exercise", null));
-        var goal = goalRepository.findFirstByName("target-roles").orElseThrow();
+        RoutineItem item = myItem("exercise");
+        var goal = myGoal("target-roles");
         var topic = learningTopicRepository.save(
                 new com.routinemachine.core.domain.LearningTopic("PostHog analytics", goal));
 
-        mockMvc.perform(post("/api/daily-logs")
+        mockMvc.perform(post("/api/daily-logs").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"logDate": "2026-09-18", "routineItemId": %d, "learningTopicId": %d}
@@ -95,7 +118,7 @@ class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void rejectsALogWithNeitherTargetSet() throws Exception {
-        mockMvc.perform(post("/api/daily-logs")
+        mockMvc.perform(post("/api/daily-logs").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"logDate": "2026-09-18"}
@@ -105,9 +128,9 @@ class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void rejectsAnUnknownSource() throws Exception {
-        RoutineItem item = routineItemRepository.save(new RoutineItem("reading", null));
+        RoutineItem item = myItem("reading");
 
-        mockMvc.perform(post("/api/daily-logs")
+        mockMvc.perform(post("/api/daily-logs").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"logDate": "2026-09-18", "routineItemId": %d, "source": "automatic"}
@@ -117,15 +140,15 @@ class DailyLogApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void listsLogsFilteredByDate() throws Exception {
-        RoutineItem item = routineItemRepository.save(new RoutineItem("stretching", null));
-        mockMvc.perform(post("/api/daily-logs")
+        RoutineItem item = myItem("stretching");
+        mockMvc.perform(post("/api/daily-logs").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"logDate": "2026-09-17", "routineItemId": %d}
                                 """.formatted(item.getId())))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/daily-logs").param("date", "2026-09-17"))
+        mockMvc.perform(get("/api/daily-logs").with(asUser(me.getId())).param("date", "2026-09-17"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].routineItemId", org.hamcrest.Matchers.hasItem(item.getId().intValue())));
     }

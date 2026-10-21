@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -40,24 +41,24 @@ class ScopedTasksAndTemplatesApiIntegrationTest extends AbstractIntegrationTest 
     }
 
     private long createRoutineItem(String name, Long userId) throws Exception {
-        String user = userId == null ? "" : ", \"userId\": " + userId;
-        return idOf(mockMvc.perform(post("/api/routine-items").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"" + name + "\"" + user + "}")).andExpect(status().isCreated()).andReturn());
+        return idOf(mockMvc.perform(post("/api/routine-items").with(asUser(userId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"" + name + "\"}")).andExpect(status().isCreated()).andReturn());
     }
 
     private long createTemplate(String label, Long userId) throws Exception {
-        String user = userId == null ? "" : ", \"userId\": " + userId;
-        return idOf(mockMvc.perform(post("/api/schedule-templates").contentType(MediaType.APPLICATION_JSON)
+        return idOf(mockMvc.perform(post("/api/schedule-templates").with(asUser(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"dayOfWeek\": \"MONDAY\", \"targetType\": \"LEARNING_SLOT\", "
-                                + "\"targetDurationMinutes\": 30, \"sortOrder\": 1, \"label\": \"" + label + "\"" + user + "}"))
+                                + "\"targetDurationMinutes\": 30, \"sortOrder\": 1, \"label\": \"" + label + "\"}"))
                 .andExpect(status().isCreated()).andReturn());
     }
 
     private long createAdHocTask(String label, String date, Long userId, Long routineItemId) throws Exception {
-        String user = userId == null ? "" : ", \"userId\": " + userId;
         String item = routineItemId == null ? "" : ", \"routineItemId\": " + routineItemId;
-        return idOf(mockMvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"taskDate\": \"" + date + "\", \"label\": \"" + label + "\"" + item + user + "}"))
+        return idOf(mockMvc.perform(post("/api/tasks").with(asUser(userId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"taskDate\": \"" + date + "\", \"label\": \"" + label + "\"" + item + "}"))
                 .andExpect(status().isCreated()).andReturn());
     }
 
@@ -68,12 +69,12 @@ class ScopedTasksAndTemplatesApiIntegrationTest extends AbstractIntegrationTest 
         createTemplate("tmpl-A-only", a);
         createTemplate("tmpl-B-only", b);
 
-        mockMvc.perform(get("/api/schedule-templates").param("userId", String.valueOf(a)))
+        mockMvc.perform(get("/api/schedule-templates").with(asUser(a)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].label", is("tmpl-A-only")))
                 .andExpect(jsonPath("$[0].userId", is((int) a)));
-        mockMvc.perform(get("/api/schedule-templates").param("userId", String.valueOf(b)))
+        mockMvc.perform(get("/api/schedule-templates").with(asUser(b)))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].label", is("tmpl-B-only")));
     }
@@ -83,22 +84,11 @@ class ScopedTasksAndTemplatesApiIntegrationTest extends AbstractIntegrationTest 
         long newcomer = saveUser("tmpl-new@example.com");
         createTemplate("tmpl-someone-elses", saveUser("tmpl-other@example.com"));
 
-        mockMvc.perform(get("/api/schedule-templates").param("userId", String.valueOf(newcomer)))
+        mockMvc.perform(get("/api/schedule-templates").with(asUser(newcomer)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
     }
 
-    @Test
-    void omittingUserIdShowsOnlyUnownedTemplatesNeverAUsersOwn() throws Exception {
-        long a = saveUser("tmpl-c@example.com");
-        createTemplate("tmpl-owned-by-C", a);
-        createTemplate("tmpl-unowned", null);
-
-        String body = mockMvc.perform(get("/api/schedule-templates")).andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-
-        org.assertj.core.api.Assertions.assertThat(body).contains("tmpl-unowned").doesNotContain("tmpl-owned-by-C");
-    }
 
     @Test
     void aTemplateCannotPointAtSomeoneElsesRoutineItem() throws Exception {
@@ -106,9 +96,9 @@ class ScopedTasksAndTemplatesApiIntegrationTest extends AbstractIntegrationTest 
         long b = saveUser("tmpl-e@example.com");
         long bsItem = createRoutineItem("tmpl-Bs-routine", b);
 
-        mockMvc.perform(post("/api/schedule-templates").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/api/schedule-templates").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"dayOfWeek\": \"MONDAY\", \"targetType\": \"ROUTINE_ITEM\", \"routineItemId\": " + bsItem
-                                + ", \"targetDurationMinutes\": 10, \"sortOrder\": 1, \"label\": \"steal\", \"userId\": " + a + "}"))
+                                + ", \"targetDurationMinutes\": 10, \"sortOrder\": 1, \"label\": \"steal\"}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -119,27 +109,16 @@ class ScopedTasksAndTemplatesApiIntegrationTest extends AbstractIntegrationTest 
         createAdHocTask("task-A-only", "2031-05-05", a, null);
         createAdHocTask("task-B-only", "2031-05-05", b, null);
 
-        mockMvc.perform(get("/api/tasks").param("userId", String.valueOf(a)).param("date", "2031-05-05"))
+        mockMvc.perform(get("/api/tasks").with(asUser(a)).param("date", "2031-05-05"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].label", is("task-A-only")))
                 .andExpect(jsonPath("$[0].userId", is((int) a)));
-        mockMvc.perform(get("/api/tasks").param("userId", String.valueOf(b)))
+        mockMvc.perform(get("/api/tasks").with(asUser(b)))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].label", is("task-B-only")));
     }
 
-    @Test
-    void omittingUserIdShowsOnlyUnownedTasks() throws Exception {
-        long a = saveUser("task-c@example.com");
-        createAdHocTask("task-owned-by-C", "2031-06-06", a, null);
-        createAdHocTask("task-unowned", "2031-06-06", null, null);
-
-        String body = mockMvc.perform(get("/api/tasks").param("date", "2031-06-06")).andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-
-        org.assertj.core.api.Assertions.assertThat(body).contains("task-unowned").doesNotContain("task-owned-by-C");
-    }
 
     @Test
     void anAdHocTaskCannotLinkSomeoneElsesRoutineItem() throws Exception {
@@ -147,9 +126,9 @@ class ScopedTasksAndTemplatesApiIntegrationTest extends AbstractIntegrationTest 
         long b = saveUser("task-e@example.com");
         long bsItem = createRoutineItem("task-Bs-routine", b);
 
-        mockMvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/api/tasks").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"taskDate\": \"2031-07-07\", \"label\": \"x\", \"routineItemId\": " + bsItem
-                                + ", \"userId\": " + a + "}"))
+                                + "}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -159,9 +138,9 @@ class ScopedTasksAndTemplatesApiIntegrationTest extends AbstractIntegrationTest 
         long b = saveUser("task-g@example.com");
         long bsTemplate = createTemplate("task-Bs-template", b);
 
-        mockMvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/api/tasks").with(asUser(a)).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"taskDate\": \"2031-08-08\", \"scheduleTemplateId\": " + bsTemplate
-                                + ", \"userId\": " + a + "}"))
+                                + "}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -171,12 +150,10 @@ class ScopedTasksAndTemplatesApiIntegrationTest extends AbstractIntegrationTest 
         long b = saveUser("task-i@example.com");
         long asTask = createAdHocTask("task-As-own", "2031-09-09", a, null);
 
-        mockMvc.perform(patch("/api/tasks/" + asTask).param("userId", String.valueOf(b))
+        mockMvc.perform(patch("/api/tasks/" + asTask).with(asUser(b))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"DONE\"}"))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(patch("/api/tasks/" + asTask).contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"DONE\"}"))
-                .andExpect(status().isNotFound());
-        mockMvc.perform(patch("/api/tasks/" + asTask).param("userId", String.valueOf(a))
+        mockMvc.perform(patch("/api/tasks/" + asTask).with(asUser(a))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"IN_PROGRESS\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("IN_PROGRESS")));
@@ -189,14 +166,14 @@ class ScopedTasksAndTemplatesApiIntegrationTest extends AbstractIntegrationTest 
         long item = createRoutineItem("task-J-routine", a);
         long task = createAdHocTask("task-J-done", "2031-10-10", a, item);
 
-        mockMvc.perform(patch("/api/tasks/" + task).param("userId", String.valueOf(a))
+        mockMvc.perform(patch("/api/tasks/" + task).with(asUser(a))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"DONE\"}"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/daily-logs").param("userId", String.valueOf(a)).param("date", "2031-10-10"))
+        mockMvc.perform(get("/api/daily-logs").with(asUser(a)).param("date", "2031-10-10"))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].userId", is((int) a)));
-        mockMvc.perform(get("/api/daily-logs").param("userId", String.valueOf(b)).param("date", "2031-10-10"))
+        mockMvc.perform(get("/api/daily-logs").with(asUser(b)).param("date", "2031-10-10"))
                 .andExpect(jsonPath("$", hasSize(0)));
     }
 }

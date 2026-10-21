@@ -1,6 +1,5 @@
 import { backendFetch } from "@/lib/api";
 import { requireSessionUserId } from "@/lib/auth/session";
-import { withUserId } from "@/lib/scope";
 import { sourceLabel } from "@/lib/sourceLabels";
 import { routineIcon } from "@/lib/routineIcons";
 import type { Goal, LearningTopic, RoutineItem, ScheduleTemplate, Task } from "@/lib/types";
@@ -31,13 +30,13 @@ const HILLSIDE_FIELD_LABELS: Record<string, string> = {
 const ROW_GRID = "minmax(150px,1.2fr) minmax(180px,1.6fr) minmax(120px,1fr) minmax(110px,.9fr) 16px";
 
 export default async function FlockPage() {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   const [templates, allRoutineItems, learningTopics, goals, allTasks] = await Promise.all([
-    backendFetch<ScheduleTemplate[]>(withUserId("/api/schedule-templates", userId)),
-    backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)),
-    backendFetch<LearningTopic[]>(withUserId("/api/learning-topics", userId)),
-    backendFetch<Goal[]>(withUserId("/api/goals", userId)),
-    backendFetch<Task[]>(withUserId("/api/tasks", userId)),
+    backendFetch<ScheduleTemplate[]>("/api/schedule-templates"),
+    backendFetch<RoutineItem[]>("/api/routine-items"),
+    backendFetch<LearningTopic[]>("/api/learning-topics"),
+    backendFetch<Goal[]>("/api/goals"),
+    backendFetch<Task[]>("/api/tasks"),
   ]);
 
   // Every list above is already this signed-in user's own (per-user scoping, docs/backend.md),

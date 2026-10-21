@@ -84,7 +84,7 @@ export default async function WateringHolesPage() {
   const userId = await requireSessionUserId();
   const [statuses, routineItems] = await Promise.all([
     backendFetch<WateringHoleStatus[]>(withUserId("/api/watering-holes", userId)),
-    backendFetch<RoutineItem[]>(withUserId("/api/routine-items", userId)),
+    backendFetch<RoutineItem[]>("/api/routine-items"),
   ]);
 
   const connected = statuses.filter((s) => s.enabled);

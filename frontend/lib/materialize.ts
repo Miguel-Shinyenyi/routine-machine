@@ -13,8 +13,8 @@ import type { ScheduleTemplate, Suggestion, Task } from "./types";
 export async function materializeDay(date: string, userId: number): Promise<Task[]> {
   const day = dayOfWeekName(date);
   const [templates, existingTasks] = await Promise.all([
-    backendFetch<ScheduleTemplate[]>(withUserId(`/api/schedule-templates?dayOfWeek=${day}`, userId)),
-    backendFetch<Task[]>(withUserId(`/api/tasks?date=${date}`, userId)),
+    backendFetch<ScheduleTemplate[]>(`/api/schedule-templates?dayOfWeek=${day}`),
+    backendFetch<Task[]>(`/api/tasks?date=${date}`),
   ]);
 
   const toMaterialize = templatesNeedingMaterialization(templates, existingTasks);
@@ -24,7 +24,7 @@ export async function materializeDay(date: string, userId: number): Promise<Task
 
   const created: Task[] = [];
   for (const template of toMaterialize) {
-    const body: Record<string, unknown> = { taskDate: date, scheduleTemplateId: template.id, userId };
+    const body: Record<string, unknown> = { taskDate: date, scheduleTemplateId: template.id };
 
     if (template.targetType === "LEARNING_SLOT") {
       const suggestion = await intelligenceFetch<Suggestion>(withUserId("/suggestion", userId)).catch(() => null);

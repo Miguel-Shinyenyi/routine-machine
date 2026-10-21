@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.Goal;
 import com.routinemachine.core.domain.LearningTopic;
 import com.routinemachine.core.repository.GoalRepository;
@@ -31,26 +34,20 @@ public class LearningTopicController {
     }
 
     @GetMapping
-    public List<LearningTopicResponse> list(@RequestParam Optional<Long> goalId, @RequestParam Optional<Long> userId) {
-        // Per-user scoping (docs/backend.md): a topic belongs to whoever owns its goal. userId
-        // given = that user's topics; omitted = only topics of unowned goals.
-        List<LearningTopic> topics;
-        if (userId.isPresent()) {
-            topics = goalId.map(id -> learningTopicRepository.findByGoalIdAndOwnerWithGoal(id, userId.get()))
-                    .orElseGet(() -> learningTopicRepository.findByOwnerWithGoal(userId.get()));
-        } else {
-            topics = goalId.map(learningTopicRepository::findByGoalIdAndNoOwnerWithGoal)
-                    .orElseGet(learningTopicRepository::findByNoOwnerWithGoal);
-        }
+    public List<LearningTopicResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<Long> goalId) {
+        // A topic belongs to whoever owns its goal.
+        Long userId = TokenUser.idOf(jwt);
+        List<LearningTopic> topics = goalId.map(id -> learningTopicRepository.findByGoalIdAndOwnerWithGoal(id, userId))
+                .orElseGet(() -> learningTopicRepository.findByOwnerWithGoal(userId));
         return topics.stream().map(LearningTopicResponse::from).toList();
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public LearningTopicResponse create(@Valid @RequestBody LearningTopicRequest request) {
+    public LearningTopicResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody LearningTopicRequest request) {
         // Someone else's goal answers exactly like one that does not exist.
         Goal goal = goalRepository.findById(request.goalId())
-                .filter(found -> Ownership.ownedBy(found.getUser(), request.userId()))
+                .filter(found -> Ownership.ownedBy(found.getUser(), TokenUser.idOf(jwt)))
                 .orElseThrow(() -> new IllegalArgumentException("No goal with id " + request.goalId()));
         LearningTopic saved = learningTopicRepository.save(new LearningTopic(request.name(), goal));
         return LearningTopicResponse.from(saved);

@@ -848,9 +848,11 @@ Who sees what, by route group (all rules also hold for creates: the new row belo
 
 | Routes | `userId` given | `userId` omitted | Someone else's row |
 |---|---|---|---|
-| `/api/goals`, `/routine-items`, `/learning-topics`, `/schedule-templates`, `/tasks`, `/daily-logs`, `/books`, `/reading-notes`, `/current-reading`, `/books/current` | That user's rows only | Unowned (pre-account) rows only | Linking to it is 400; changing a task is 404 |
-| `/api/granary/summary`, `/pauses`, `/pauses/due`, `/savings`, `/saving-target-amount` | That user's | 400 (required) | Not reachable |
-| `/api/granary/pauses/{id}/decide`, `/reflect`; `/api/evidence-events/{id}/question` | Must own the row | 400 (required) | 404 |
+| `/api/goals`, `/routine-items`, `/learning-topics`, `/schedule-templates`, `/tasks`, `/daily-logs` (**token**, access control part 2) | The token's user only; a `userId` in the request is not read | 401 | Linking to it is 400; changing a task is 404 |
+| `/api/books`, `/reading-notes`, `/current-reading`, `/books/current` | That user's rows only | Unowned (pre-account) rows only | Linking to it is 400 |
+| `/api/granary/summary`, `/pauses`, `/pauses/due`, `/savings`, `/saving-target-amount` (**token**, access control part 1) | The token's user only | 401 | Not reachable |
+| `/api/granary/pauses/{id}/decide`, `/reflect` (**token**) | Must own the row | 401 | 404 |
+| `/api/evidence-events/{id}/question` | Must own the row | 400 (required) | 404 |
 | `GET /api/evidence-events` (ledger) | That user's | 400 (required) | Not reachable |
 | `/api/watering-holes` | Real status for the owner, all sources off for anyone else | Real status (legacy view) | Not applicable |
 | `/api/organisations/cohorts/{id}/...` | `requestingUserId` must belong to the cohort's organisation as the route requires | 400 (required) | An outsider gets 403 |
@@ -877,7 +879,21 @@ and finally the intelligence and sync services plus a 401 sweep).
   `/api/granary/**` from the protected chain makes the new test fail.
 - **Rollback**: revert the commit. No migration, no data change.
 
-The table above still describes every other route group: they have not moved to the token yet.
+**Access control, part 2: personal data takes its user from the token.** Goals, routine items,
+learning topics, daily logs, tasks and schedule templates join the JWT filter chain. No token is 401.
+Their `userId` query parameter and request-body field are gone, and one sent anyway is ignored.
+- The "no `userId` shows only unowned rows" rule is gone for these routes: nobody can list unowned
+  rows through the API any more. They still exist (the seeded goals, and anything the owner claim
+  has not moved), and the sync services still reach them directly, not over HTTP.
+- `POST /api/goals` and the others require a user that exists: a token whose user is gone is 400.
+- The intelligence service reads these routes, so it now forwards the caller's `Authorization`
+  header (see `docs/intelligence-service.md`). The frontend sends the session token to it.
+- Tests: `PersonalDataTokenApiIntegrationTest` (4). Eight tests for the removed "unowned view"
+  rule were deleted; the rest of the older tests now sign in with `TestTokens.asUser`. Removing
+  `/api/tasks/**` and `/api/goals/**` from the protected chain made the new test error out.
+- **Rollback**: revert the commit. No migration, no data change.
+
+Rows in the table marked **token** are done. The others still take a claimed `userId`.
 
 **Still open**: outside the Granary, the user id is claimed by the caller, not proven by a token. Anyone who can reach
 the backend can send any `userId`. That is the access-control stage.
