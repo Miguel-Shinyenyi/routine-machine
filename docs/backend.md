@@ -835,6 +835,34 @@ daily logs). The rule on every personal endpoint:
   and the failure only appeared at runtime. Use `./mvnw clean test` (or `clean test-compile`)
   when sources changed while the IDE is open.
 
+**Per-user scoping, part 6: id-only routes closed, and the route map.** Writing the
+end-to-end test found four holes the per-route tests had missed:
+- `PATCH /api/granary/pauses/{id}/decide` and `/reflect` and `PATCH /api/evidence-events/{id}/question`
+  took only a row id, so any caller could change any account's pause or question its credit.
+  They now require `userId`. Someone else's row answers 404, like one that does not exist, and a
+  missing `userId` answers 400.
+- `POST /api/evidence-events` accepted another account's goal. A goal must now have the same
+  owner as the user (400 otherwise), so an unowned founder goal cannot receive a new user's evidence.
+
+Who sees what, by route group (all rules also hold for creates: the new row belongs to `userId`):
+
+| Routes | `userId` given | `userId` omitted | Someone else's row |
+|---|---|---|---|
+| `/api/goals`, `/routine-items`, `/learning-topics`, `/schedule-templates`, `/tasks`, `/daily-logs`, `/books`, `/reading-notes`, `/current-reading`, `/books/current` | That user's rows only | Unowned (pre-account) rows only | Linking to it is 400; changing a task is 404 |
+| `/api/granary/summary`, `/pauses`, `/pauses/due`, `/savings`, `/saving-target-amount` | That user's | 400 (required) | Not reachable |
+| `/api/granary/pauses/{id}/decide`, `/reflect`; `/api/evidence-events/{id}/question` | Must own the row | 400 (required) | 404 |
+| `GET /api/evidence-events` (ledger) | That user's | 400 (required) | Not reachable |
+| `/api/watering-holes` | Real status for the owner, all sources off for anyone else | Real status (legacy view) | Not applicable |
+| `/api/organisations/cohorts/{id}/...` | `requestingUserId` must belong to the cohort's organisation as the route requires | 400 (required) | An outsider gets 403 |
+
+`CrossUserIsolationApiIntegrationTest` (17 tests) creates data for two accounts on every personal
+route, reads each list as A, as B and as nobody, and tries each cross-account write. It fails if a
+route is added or changed without following the rules above. A deliberate break (the pause
+ownership filter removed) made it fail.
+
+**Still open**: the user id is claimed by the caller, not proven by a token. Anyone who can reach
+the backend can send any `userId`. That is the access-control stage.
+
 ## Decisions log
 
 | Date | Decision | Reason |

@@ -5,6 +5,7 @@ import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.PauseDecisionRepository;
 import com.routinemachine.core.repository.UserRepository;
 import com.routinemachine.core.service.GranaryService;
+import com.routinemachine.core.service.Ownership;
 import com.routinemachine.core.service.MpesaCategory;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -105,16 +106,16 @@ public class GranaryController {
     }
 
     @PatchMapping("/pauses/{id}/decide")
-    public PauseDecisionResponse decide(@PathVariable Long id, @Valid @RequestBody DecidePauseRequest request) {
-        PauseDecision pause = findPause(id);
+    public PauseDecisionResponse decide(@PathVariable Long id, @RequestParam Long userId, @Valid @RequestBody DecidePauseRequest request) {
+        PauseDecision pause = findPause(id, userId);
         Instant now = Instant.now();
         granaryService.decidePause(pause, request.outcome(), now);
         return PauseDecisionResponse.from(pause, now);
     }
 
     @PatchMapping("/pauses/{id}/reflect")
-    public PauseDecisionResponse reflect(@PathVariable Long id, @Valid @RequestBody ReflectPauseRequest request) {
-        PauseDecision pause = findPause(id);
+    public PauseDecisionResponse reflect(@PathVariable Long id, @RequestParam Long userId, @Valid @RequestBody ReflectPauseRequest request) {
+        PauseDecision pause = findPause(id, userId);
         granaryService.reflectPause(pause, request.reflection());
         return PauseDecisionResponse.from(pause, Instant.now());
     }
@@ -148,8 +149,10 @@ public class GranaryController {
                 .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
     }
 
-    private PauseDecision findPause(Long id) {
+    // Someone else's pause answers exactly like one that does not exist.
+    private PauseDecision findPause(Long id, Long userId) {
         return pauseDecisionRepository.findById(id)
+                .filter(pause -> Ownership.ownedBy(pause.getUser(), userId))
                 .orElseThrow(() -> new NoSuchElementException("No pause decision with id " + id));
     }
 }

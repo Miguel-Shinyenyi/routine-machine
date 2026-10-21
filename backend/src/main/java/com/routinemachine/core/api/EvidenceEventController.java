@@ -7,6 +7,7 @@ import com.routinemachine.core.repository.EvidenceEventRepository;
 import com.routinemachine.core.repository.GoalRepository;
 import com.routinemachine.core.repository.UserRepository;
 import com.routinemachine.core.service.EvidenceCreditService;
+import com.routinemachine.core.service.Ownership;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,6 +51,7 @@ public class EvidenceEventController {
         User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
         Goal goal = goalRepository.findById(request.goalId())
+                .filter(found -> Ownership.sameOwner(found.getUser(), user))
                 .orElseThrow(() -> new IllegalArgumentException("No goal with id " + request.goalId()));
 
         EvidenceEvent event = evidenceCreditService.ingest(
@@ -72,8 +74,9 @@ public class EvidenceEventController {
     // "Question a credit": records the request, nothing more — see
     // docs/product-direction.md's Hillside v2 transparency bullet.
     @PatchMapping("/{id}/question")
-    public EvidenceEventResponse question(@PathVariable Long id) {
+    public EvidenceEventResponse question(@PathVariable Long id, @RequestParam Long userId) {
         EvidenceEvent event = evidenceEventRepository.findWithGoalById(id)
+                .filter(found -> Ownership.ownedBy(found.getUser(), userId))
                 .orElseThrow(() -> new NoSuchElementException("No evidence event with id " + id));
         Goal goal = event.getGoal();
         event.question(Instant.now());

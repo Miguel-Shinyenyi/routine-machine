@@ -88,13 +88,13 @@ class GranaryApiIntegrationTest extends AbstractIntegrationTest {
         String body = created.getResponse().getContentAsString();
         long id = Long.parseLong(body.replaceAll(".*\"id\":(\\d+).*", "$1"));
 
-        mockMvc.perform(patch("/api/granary/pauses/" + id + "/decide")
+        mockMvc.perform(patch("/api/granary/pauses/" + id + "/decide").param("userId", user.getId().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"outcome\": \"DECLINED\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.outcome", is("DECLINED")));
 
-        mockMvc.perform(patch("/api/granary/pauses/" + id + "/reflect")
+        mockMvc.perform(patch("/api/granary/pauses/" + id + "/reflect").param("userId", user.getId().toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reflection\": \"Glad I waited.\"}"))
                 .andExpect(status().isOk())
@@ -107,7 +107,7 @@ class GranaryApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void decidingAnUnknownPauseReturns404() throws Exception {
-        mockMvc.perform(patch("/api/granary/pauses/999999/decide")
+        mockMvc.perform(patch("/api/granary/pauses/999999/decide").param("userId", "1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"outcome\": \"DECLINED\"}"))
                 .andExpect(status().isNotFound());

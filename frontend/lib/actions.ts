@@ -173,8 +173,9 @@ export async function setHillsideOptIn(formData: FormData): Promise<void> {
 // "Question a credit" — records the request, nothing more (see
 // docs/product-direction.md's Hillside v2 transparency bullet).
 export async function questionCredit(formData: FormData): Promise<void> {
+  const userId = await requireSessionUserId();
   const eventId = formData.get("eventId");
-  await backendFetch(`/api/evidence-events/${eventId}/question`, { method: "PATCH" });
+  await backendFetch(withUserId(`/api/evidence-events/${eventId}/question`, userId), { method: "PATCH" });
   revalidatePath("/hillside");
 }
 
@@ -255,9 +256,10 @@ export async function createPause(formData: FormData): Promise<void> {
 }
 
 export async function decidePause(formData: FormData): Promise<void> {
+  const userId = await requireSessionUserId();
   const pauseId = formData.get("pauseId");
   const outcome = formData.get("outcome");
-  await backendFetch(`/api/granary/pauses/${pauseId}/decide`, {
+  await backendFetch(withUserId(`/api/granary/pauses/${pauseId}/decide`, userId), {
     method: "PATCH",
     body: JSON.stringify({ outcome }),
   });
@@ -266,9 +268,10 @@ export async function decidePause(formData: FormData): Promise<void> {
 }
 
 export async function reflectPause(formData: FormData): Promise<void> {
+  const userId = await requireSessionUserId();
   const pauseId = formData.get("pauseId");
   const reflection = formData.get("reflection");
-  await backendFetch(`/api/granary/pauses/${pauseId}/reflect`, {
+  await backendFetch(withUserId(`/api/granary/pauses/${pauseId}/reflect`, userId), {
     method: "PATCH",
     body: JSON.stringify({ reflection }),
   });

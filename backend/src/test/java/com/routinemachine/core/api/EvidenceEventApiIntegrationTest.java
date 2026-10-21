@@ -34,7 +34,7 @@ class EvidenceEventApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     void ingestingEvidenceCreatesAnAcceptedEventWhenNoRuleExists() throws Exception {
         User user = userRepository.save(new User("api-evidence@example.com", "irrelevant-hash", null, null));
-        Goal goal = goalRepository.save(new Goal("api-evidence-goal", null));
+        Goal goal = goalRepository.save(new Goal("api-evidence-goal", null, user));
 
         mockMvc.perform(post("/api/evidence-events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -62,7 +62,7 @@ class EvidenceEventApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     void theLedgerListsEveryEventInTheWindowWhateverItsStatus() throws Exception {
         User user = userRepository.save(new User("api-ledger@example.com", "irrelevant-hash", null, null));
-        Goal goal = goalRepository.save(new Goal("api-ledger-goal", null));
+        Goal goal = goalRepository.save(new Goal("api-ledger-goal", null, user));
 
         mockMvc.perform(post("/api/evidence-events")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -81,7 +81,7 @@ class EvidenceEventApiIntegrationTest extends AbstractIntegrationTest {
     @Test
     void questioningACreditRecordsTheRequest() throws Exception {
         User user = userRepository.save(new User("api-question@example.com", "irrelevant-hash", null, null));
-        Goal goal = goalRepository.save(new Goal("api-question-goal", null));
+        Goal goal = goalRepository.save(new Goal("api-question-goal", null, user));
 
         MvcResult created = mockMvc.perform(post("/api/evidence-events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -92,7 +92,7 @@ class EvidenceEventApiIntegrationTest extends AbstractIntegrationTest {
         String body = created.getResponse().getContentAsString();
         long id = Long.parseLong(body.replaceAll(".*\"id\":(\\d+).*", "$1"));
 
-        mockMvc.perform(patch("/api/evidence-events/" + id + "/question"))
+        mockMvc.perform(patch("/api/evidence-events/" + id + "/question").param("userId", user.getId().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.questioned", is(true)));
     }
