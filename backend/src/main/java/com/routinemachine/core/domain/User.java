@@ -1,6 +1,8 @@
 package com.routinemachine.core.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -37,6 +39,12 @@ public class User {
 
     @Column(name = "display_name")
     private String displayName;
+
+    // Read-only here: the database default gives every new account USER, and only OwnerRoleService
+    // (a direct update at startup, from OWNER_EMAIL) ever changes it. Saving a User never writes it.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, insertable = false, updatable = false)
+    private UserRole role = UserRole.USER;
 
     // Defaults false: the hillside should never enroll a user who hasn't explicitly agreed to
     // be compared against others, even if they already have non-private routine items.
@@ -112,6 +120,10 @@ public class User {
 
     public void optOutOfHillside() {
         this.hillsideOptIn = false;
+    }
+
+    public UserRole getRole() {
+        return role;
     }
 
     public boolean isHillsideOptIn() {

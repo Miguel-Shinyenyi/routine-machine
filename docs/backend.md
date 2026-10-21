@@ -854,7 +854,7 @@ Who sees what, by route group (all rules also hold for creates: the new row belo
 | `/api/granary/pauses/{id}/decide`, `/reflect` (**token**) | Must own the row | 401 | 404 |
 | `/api/evidence-events` (ingest, ledger) and `/{id}/question` (**token**) | The token's user; a goal must be the user's own | 401 | Question: 404; goal: 400 |
 | `/api/watering-holes` (**token**) | Real status for the owner, all sources off for anyone else (and for everyone when no owner is configured) | 401 | Not applicable |
-| `/api/organisations/cohorts/{id}/...` | `requestingUserId` must belong to the cohort's organisation as the route requires | 400 (required) | An outsider gets 403 |
+| `/api/organisations/**` (**token**, access control part 4) | The token's user must hold the right the route needs (founding admin, or cohort member for the dashboard and survey) | 401 | 403 |
 
 `CrossUserIsolationApiIntegrationTest` (17 tests) creates data for two accounts on every personal
 route, reads each list as A, as B and as nobody, and tries each cross-account write. It fails if a
@@ -905,8 +905,26 @@ the field).
   chain made the new test error out.
 - **Rollback**: revert the commit. No migration, no data change.
 
-Rows in the table marked **token** are done. The cohort and organisation routes still take a claimed
-`requestingUserId` (part 4).
+**Access control, part 4: cohort routes and the owner role.**
+- `/api/organisations/**` joins the JWT filter chain. No token is 401. The founding admin of a new
+  organisation is the token's user; `requestingUserId` and `foundingAdminUserId` are gone from every
+  request, and one sent anyway is ignored. Phase 12's rights are unchanged (admins read aggregates and
+  manage the cohort, members read the dashboard and answer the survey, outsiders get 403), now judged
+  against the token. Anyone signed in can still create an organisation, as before.
+- **Owner role** (migration `V29__user_role.sql`, `User.role`, `UserRole`, `OwnerRoleService`).
+  Every account is `USER`. At startup `OwnerClaimRunner` calls `OwnerRoleService`, which gives
+  `OWNER` to the account whose email is in `OWNER_EMAIL` and takes it from any other account, so there
+  is exactly one owner. It runs separately from the data claim, so a failed claim cannot leave the
+  owner without the role. The role column is read-only for the application (`updatable = false`); only
+  that startup update changes it. No address is in code, SQL or logs. Nothing reads the role yet:
+  the operations page and API docs (staged Prompts 3 and 4) will check it on the server.
+- Tests: `OrganisationTokenApiIntegrationTest` (4), `OwnerRoleServiceTest` (5), two new
+  `OwnerClaimRunnerTest` cases. Unprotecting the organisation routes and removing the demotion step each
+  made a test fail.
+- **Rollback**: revert the commit. `V29` only adds a column with a default; it can stay.
+
+Every route group in the table above is now on the token except the intelligence service's `userId`
+parameter (part 5).
 
 **Still open**: outside the Granary, the user id is claimed by the caller, not proven by a token. Anyone who can reach
 the backend can send any `userId`. That is the access-control stage.

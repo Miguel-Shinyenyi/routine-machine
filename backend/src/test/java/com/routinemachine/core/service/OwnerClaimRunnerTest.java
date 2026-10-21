@@ -18,8 +18,8 @@ class OwnerClaimRunnerTest {
     void doesNothingWhenNoOwnerEmailIsConfigured() throws Exception {
         OwnerClaimService service = mock(OwnerClaimService.class);
 
-        new OwnerClaimRunner(service, "").run(null);
-        new OwnerClaimRunner(service, "   ").run(null);
+        new OwnerClaimRunner(service, mock(OwnerRoleService.class), "").run(null);
+        new OwnerClaimRunner(service, mock(OwnerRoleService.class), "   ").run(null);
 
         verify(service, never()).claimUnownedDataFor(anyString());
     }
@@ -29,7 +29,7 @@ class OwnerClaimRunnerTest {
         OwnerClaimService service = mock(OwnerClaimService.class);
         when(service.claimUnownedDataFor("owner@example.com")).thenReturn(Map.of("goals", 3));
 
-        new OwnerClaimRunner(service, " owner@example.com ").run(null);
+        new OwnerClaimRunner(service, mock(OwnerRoleService.class), " owner@example.com ").run(null);
 
         verify(service).claimUnownedDataFor("owner@example.com");
     }
@@ -39,6 +39,26 @@ class OwnerClaimRunnerTest {
         OwnerClaimService service = mock(OwnerClaimService.class);
         when(service.claimUnownedDataFor("typo@example.com")).thenThrow(new NoSuchElementException("no such user"));
 
-        assertThatCode(() -> new OwnerClaimRunner(service, "typo@example.com").run(null)).doesNotThrowAnyException();
+        assertThatCode(() -> new OwnerClaimRunner(service, mock(OwnerRoleService.class), "typo@example.com").run(null)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void grantsTheOwnerRoleEvenWhenTheClaimFails() {
+        OwnerClaimService claim = mock(OwnerClaimService.class);
+        OwnerRoleService role = mock(OwnerRoleService.class);
+        when(claim.claimUnownedDataFor("owner@example.com")).thenThrow(new IllegalStateException("duplicate goal"));
+
+        new OwnerClaimRunner(claim, role, "owner@example.com").run(null);
+
+        verify(role).grantOwnerRoleTo("owner@example.com");
+    }
+
+    @Test
+    void doesNotGrantTheRoleWhenNoOwnerEmailIsConfigured() {
+        OwnerRoleService role = mock(OwnerRoleService.class);
+
+        new OwnerClaimRunner(mock(OwnerClaimService.class), role, "").run(null);
+
+        verify(role, never()).grantOwnerRoleTo(anyString());
     }
 }

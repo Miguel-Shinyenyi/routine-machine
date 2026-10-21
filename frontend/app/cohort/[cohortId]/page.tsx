@@ -36,13 +36,13 @@ export default async function CohortDashboardPage({
   try {
     [summary, groups, weeklyChart] = await Promise.all([
       backendFetch<CohortDashboardSummary>(
-        `/api/organisations/cohorts/${cohortId}/dashboard?requestingUserId=${userId}`,
+        `/api/organisations/cohorts/${cohortId}/dashboard`,
       ),
       backendFetch<CohortGroupMeasure[]>(
-        `/api/organisations/cohorts/${cohortId}/dashboard/by-group?requestingUserId=${userId}`,
+        `/api/organisations/cohorts/${cohortId}/dashboard/by-group`,
       ),
       backendFetch<CohortWeeklyCheckInChart>(
-        `/api/organisations/cohorts/${cohortId}/dashboard/weekly-check-ins?requestingUserId=${userId}`,
+        `/api/organisations/cohorts/${cohortId}/dashboard/weekly-check-ins`,
       ),
     ]);
   } catch (error) {

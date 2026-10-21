@@ -7,5 +7,5 @@ import jakarta.validation.constraints.Positive;
 import java.time.LocalDate;
 
 public record CreateCohortRequest(
-        @NotNull Long requestingUserId, @NotBlank String name, @NotNull LocalDate startsOn, @Positive int weeks) {
+        @NotBlank String name, @NotNull LocalDate startsOn, @Positive int weeks) {
 }

@@ -17,10 +17,14 @@ public class OwnerClaimRunner implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(OwnerClaimRunner.class);
 
     private final OwnerClaimService ownerClaimService;
+    private final OwnerRoleService ownerRoleService;
     private final String ownerEmail;
 
-    public OwnerClaimRunner(OwnerClaimService ownerClaimService, @Value("${owner.email:}") String ownerEmail) {
+    public OwnerClaimRunner(
+            OwnerClaimService ownerClaimService, OwnerRoleService ownerRoleService,
+            @Value("${owner.email:}") String ownerEmail) {
         this.ownerClaimService = ownerClaimService;
+        this.ownerRoleService = ownerRoleService;
         this.ownerEmail = ownerEmail;
     }
 
@@ -34,6 +38,14 @@ public class OwnerClaimRunner implements ApplicationRunner {
             log.info("Owner claim: unowned rows given to the owner account, per table: {}", claimed);
         } catch (RuntimeException e) {
             log.error("Owner claim skipped, nothing was changed: {}", e.getMessage());
+        }
+        // Separate from the claim: a claim that fails on a data conflict must not leave the owner
+        // without the role.
+        try {
+            ownerRoleService.grantOwnerRoleTo(ownerEmail.trim());
+            log.info("Owner role granted to the configured owner account");
+        } catch (RuntimeException e) {
+            log.error("Owner role not granted, nothing was changed: {}", e.getMessage());
         }
     }
 }

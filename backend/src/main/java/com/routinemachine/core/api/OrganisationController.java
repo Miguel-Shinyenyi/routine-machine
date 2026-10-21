@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.Cohort;
 import com.routinemachine.core.domain.CohortMembership;
 import com.routinemachine.core.domain.Organisation;
@@ -50,62 +53,68 @@ public class OrganisationController {
     }
 
     @PostMapping
-    public OrganisationResponse createOrganisation(@Valid @RequestBody CreateOrganisationRequest request) {
-        Organisation organisation = organisationService.createOrganisation(request.name(), request.foundingAdminUserId());
+    public OrganisationResponse createOrganisation(
+            @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CreateOrganisationRequest request) {
+        Organisation organisation = organisationService.createOrganisation(request.name(), TokenUser.idOf(jwt));
         return OrganisationResponse.from(organisation);
     }
 
     @PostMapping("/{organisationId}/cohorts")
-    public CohortResponse createCohort(@PathVariable Long organisationId, @Valid @RequestBody CreateCohortRequest request) {
+    public CohortResponse createCohort(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable Long organisationId, @Valid @RequestBody CreateCohortRequest request) {
         Cohort cohort = organisationService.createCohort(
-                organisationId, request.requestingUserId(), request.name(), request.startsOn(), request.weeks());
+                organisationId, TokenUser.idOf(jwt), request.name(), request.startsOn(), request.weeks());
         return CohortResponse.from(cohort);
     }
 
     @PostMapping("/cohorts/{cohortId}/members")
-    public CohortMemberResponse addCohortMember(@PathVariable Long cohortId, @Valid @RequestBody AddCohortMemberRequest request) {
+    public CohortMemberResponse addCohortMember(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId, @Valid @RequestBody AddCohortMemberRequest request) {
         CohortMembership membership =
-                organisationService.addCohortMember(cohortId, request.requestingUserId(), request.newMemberUserId());
+                organisationService.addCohortMember(cohortId, TokenUser.idOf(jwt), request.newMemberUserId());
         return toMemberResponse(membership);
     }
 
     @GetMapping("/cohorts/{cohortId}/members")
-    public List<CohortMemberResponse> listCohortMembers(@PathVariable Long cohortId, @RequestParam Long requestingUserId) {
-        return organisationService.listCohortMembers(cohortId, requestingUserId).stream()
+    public List<CohortMemberResponse> listCohortMembers(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
+        return organisationService.listCohortMembers(cohortId, TokenUser.idOf(jwt)).stream()
                 .map(this::toMemberResponse)
                 .toList();
     }
 
     @PutMapping("/{organisationId}/seat-limit")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void setSeatLimit(@PathVariable Long organisationId, @Valid @RequestBody SetSeatLimitRequest request) {
-        organisationService.setSeatLimit(organisationId, request.requestingUserId(), request.seatLimit());
+    public void setSeatLimit(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable Long organisationId, @Valid @RequestBody SetSeatLimitRequest request) {
+        organisationService.setSeatLimit(organisationId, TokenUser.idOf(jwt), request.seatLimit());
     }
 
     @PostMapping("/cohorts/{cohortId}/bulk-invite")
-    public List<CsvInviteRowResult> bulkInvite(@PathVariable Long cohortId, @Valid @RequestBody BulkInviteRequest request) {
-        return organisationService.bulkInviteByCsv(cohortId, request.requestingUserId(), request.csv());
+    public List<CsvInviteRowResult> bulkInvite(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId, @Valid @RequestBody BulkInviteRequest request) {
+        return organisationService.bulkInviteByCsv(cohortId, TokenUser.idOf(jwt), request.csv());
     }
 
     @GetMapping("/cohorts/{cohortId}/dashboard")
-    public CohortDashboardSummary dashboard(@PathVariable Long cohortId, @RequestParam Long requestingUserId) {
-        return cohortDashboardService.summarize(cohortId, requestingUserId, LocalDate.now());
+    public CohortDashboardSummary dashboard(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
+        return cohortDashboardService.summarize(cohortId, TokenUser.idOf(jwt), LocalDate.now());
     }
 
     @GetMapping("/cohorts/{cohortId}/dashboard/by-group")
-    public List<CohortGroupMeasure> dashboardByGroup(@PathVariable Long cohortId, @RequestParam Long requestingUserId) {
-        return cohortDashboardService.summarizeByGroup(cohortId, requestingUserId, LocalDate.now());
+    public List<CohortGroupMeasure> dashboardByGroup(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
+        return cohortDashboardService.summarizeByGroup(cohortId, TokenUser.idOf(jwt), LocalDate.now());
     }
 
     @GetMapping("/cohorts/{cohortId}/dashboard/weekly-check-ins")
-    public CohortWeeklyCheckInChart weeklyCheckIns(@PathVariable Long cohortId, @RequestParam Long requestingUserId) {
-        return cohortDashboardService.weeklyCheckIns(cohortId, requestingUserId, LocalDate.now());
+    public CohortWeeklyCheckInChart weeklyCheckIns(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
+        return cohortDashboardService.weeklyCheckIns(cohortId, TokenUser.idOf(jwt), LocalDate.now());
     }
 
     @PostMapping("/cohorts/{cohortId}/survey-response")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void submitSurveyResponse(@PathVariable Long cohortId, @Valid @RequestBody SubmitSurveyResponseRequest request) {
-        cohortDashboardService.submitSurveyResponse(cohortId, request.requestingUserId(), request.answer());
+    public void submitSurveyResponse(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId, @Valid @RequestBody SubmitSurveyResponseRequest request) {
+        cohortDashboardService.submitSurveyResponse(cohortId, TokenUser.idOf(jwt), request.answer());
     }
 
     private CohortMemberResponse toMemberResponse(CohortMembership membership) {

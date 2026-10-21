@@ -333,7 +333,7 @@ export async function submitCohortSurveyResponse(formData: FormData): Promise<vo
   try {
     await backendFetch(`/api/organisations/cohorts/${cohortId}/survey-response`, {
       method: "POST",
-      body: JSON.stringify({ requestingUserId: userId, answer: formData.get("answer") }),
+      body: JSON.stringify({ answer: formData.get("answer") }),
     });
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 403)) {

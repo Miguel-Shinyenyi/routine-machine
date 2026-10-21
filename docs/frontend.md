@@ -436,3 +436,8 @@ Reading (books, notes, current book), Watering holes and credits calls (the Hill
 only `userId` left is on the intelligence calls (`/suggestion`, `/tally`, `/patterns`) and the
 cohort pages' `requestingUserId` (part 4).
 
+## Access control, part 4
+
+The cohort page and the pilot survey action no longer send `requestingUserId`: the backend reads the
+user from the session token and applies the same admin and member rights as before.
+

@@ -287,3 +287,10 @@ accounts has `user_id IS NULL` until `OwnerClaimService` gives it to the owner (
 - Phase 8: `routine_items`, `daily_logs`, and now `goals` have an optional `user_id`; how
   existing dev data backfills to a seed user is still undecided — see `backend.md`'s open
   questions for the full list.
+
+## V29: user role
+
+`users.role` (`VARCHAR(20) NOT NULL DEFAULT 'USER'`). Values `USER` and `OWNER`. Forward-only; existing
+accounts become `USER`. The owner is set at startup from `OWNER_EMAIL` (see `docs/backend.md`), never in
+SQL.
+

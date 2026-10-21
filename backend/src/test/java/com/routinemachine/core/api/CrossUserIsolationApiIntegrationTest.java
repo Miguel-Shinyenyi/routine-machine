@@ -112,10 +112,10 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
                     .content("{\"what\":\"" + s + "-pause\"}"), 200));
             evidence[i] = create("/api/evidence-events", u, "{\"goalId\":" + goal[i] + ",\"source\":\"MANUAL\","
                     + "\"sourceEventId\":\"" + s + "-evt\",\"occurredAt\":\"2033-03-02T12:00:00Z\"}");
-            long org = idOf(send(post("/api/organisations").contentType(H)
-                    .content("{\"name\":\"" + s + "-org\",\"foundingAdminUserId\":" + u + "}"), 200));
-            cohort[i] = idOf(send(post("/api/organisations/" + org + "/cohorts").contentType(H)
-                    .content("{\"requestingUserId\":" + u + ",\"name\":\"" + s + "-cohort\",\"startsOn\":\"2033-03-01\",\"weeks\":4}"), 200));
+            long org = idOf(send(post("/api/organisations").with(asUser(u)).contentType(H)
+                    .content("{\"name\":\"" + s + "-org\"}"), 200));
+            cohort[i] = idOf(send(post("/api/organisations/" + org + "/cohorts").with(asUser(u)).contentType(H)
+                    .content("{\"name\":\"" + s + "-cohort\",\"startsOn\":\"2033-03-01\",\"weeks\":4}"), 200));
         }
     }
 
@@ -255,16 +255,15 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void anAccountCannotReadOrRunAnotherAccountsCohort() throws Exception {
-        String other = String.valueOf(b);
-        send(get("/api/organisations/cohorts/" + cohort[0] + "/dashboard").param("requestingUserId", other), 403);
-        send(get("/api/organisations/cohorts/" + cohort[0] + "/dashboard/by-group").param("requestingUserId", other), 403);
-        send(get("/api/organisations/cohorts/" + cohort[0] + "/dashboard/weekly-check-ins").param("requestingUserId", other), 403);
-        send(get("/api/organisations/cohorts/" + cohort[0] + "/members").param("requestingUserId", other), 403);
-        send(post("/api/organisations/cohorts/" + cohort[0] + "/bulk-invite").contentType(H)
-                .content("{\"requestingUserId\":" + b + ",\"csv\":\"x@example.com\"}"), 403);
-        send(post("/api/organisations/cohorts/" + cohort[0] + "/survey-response").contentType(H)
-                .content("{\"requestingUserId\":" + b + ",\"answer\":\"SUPPORTIVE\"}"), 403);
-        send(get("/api/organisations/cohorts/" + cohort[0] + "/dashboard").param("requestingUserId", String.valueOf(a)), 200);
+        String base = "/api/organisations/cohorts/" + cohort[0];
+        send(get(base + "/dashboard").with(asUser(b)), 403);
+        send(get(base + "/dashboard/by-group").with(asUser(b)), 403);
+        send(get(base + "/dashboard/weekly-check-ins").with(asUser(b)), 403);
+        send(get(base + "/members").with(asUser(b)), 403);
+        send(post(base + "/bulk-invite").with(asUser(b)).contentType(H).content("{\"csv\":\"x@example.com\"}"), 403);
+        send(post(base + "/survey-response").with(asUser(b)).contentType(H).content("{\"answer\":\"SUPPORTIVE\"}"), 403);
+        send(get(base + "/dashboard").with(asUser(a)), 200);
+        send(get(base + "/dashboard"), 401);
     }
 
     @Test
