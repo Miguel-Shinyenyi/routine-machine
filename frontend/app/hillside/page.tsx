@@ -6,17 +6,16 @@ import { mondayOf, addDays } from "@/lib/weekDates";
 import { todayIsoDate } from "@/lib/schedule";
 import type { CurrentUser, EvidenceEvent, Goal, HillsideV2 } from "@/lib/types";
 
-function buildQuery(scope: string, goalId: string | null, seasonStart: string, asUserId: string | undefined): string {
+function buildQuery(scope: string, goalId: string | null, seasonStart: string): string {
   const params = new URLSearchParams();
   params.set("scope", scope);
   if (goalId !== null) params.set("goalId", goalId);
   params.set("seasonStart", seasonStart);
-  if (asUserId) params.set("asUserId", asUserId);
   return params.toString();
 }
 
-function buildHref(scope: string, goalId: string | null, seasonStart: string, asUserId: string | undefined): string {
-  return `/hillside?${buildQuery(scope, goalId, seasonStart, asUserId)}`;
+function buildHref(scope: string, goalId: string | null, seasonStart: string): string {
+  return `/hillside?${buildQuery(scope, goalId, seasonStart)}`;
 }
 
 function formatDay(iso: string): string {
@@ -72,12 +71,8 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
     ? await authenticatedBackendFetch<CurrentUser>("/api/users/me", sessionToken).catch(() => null)
     : null;
 
-  const rawAsUserId = searchParams.asUserId;
-  const demoAsUserId = typeof rawAsUserId === "string" ? rawAsUserId : undefined;
-  const asUserId = me ? String(me.id) : demoAsUserId;
-
   const [hillside, myGoals, ledger] = await Promise.all([
-    backendFetch<HillsideV2>(`/api/hillside/v2?${buildQuery(scope, goalId, seasonStart, asUserId)}`),
+    backendFetch<HillsideV2>(`/api/hillside/v2?${buildQuery(scope, goalId, seasonStart)}`),
     me ? backendFetch<Goal[]>("/api/goals").catch(() => []) : Promise.resolve([]),
     me
       ? backendFetch<EvidenceEvent[]>(
@@ -134,7 +129,7 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
               {(["cohort", "open"] as const).map((s) => (
                 <Link
                   key={s}
-                  href={buildHref(s, goalId, seasonStart, demoAsUserId)}
+                  href={buildHref(s, goalId, seasonStart)}
                   aria-pressed={scope === s}
                   className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink"
                   style={
@@ -149,7 +144,7 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
             </div>
             <div className="inline-flex max-w-full flex-wrap gap-0.5 rounded-[9px] p-0.5" style={{ background: "var(--fill)" }}>
               <Link
-                href={buildHref(scope, null, seasonStart, demoAsUserId)}
+                href={buildHref(scope, null, seasonStart)}
                 aria-pressed={goalId === null}
                 className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink"
                 style={goalId === null ? { background: "var(--surface)", fontWeight: 600, boxShadow: "0 3px 8px rgba(0,0,0,.12), 0 3px 1px rgba(0,0,0,.04)" } : undefined}
@@ -159,7 +154,7 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
               {myGoals.map((goal) => (
                 <Link
                   key={goal.id}
-                  href={buildHref(scope, String(goal.id), seasonStart, demoAsUserId)}
+                  href={buildHref(scope, String(goal.id), seasonStart)}
                   aria-pressed={goalId === String(goal.id)}
                   className="rounded-[7px] px-3.5 py-1.5 text-[13px] font-medium text-ink"
                   style={
@@ -203,8 +198,7 @@ export default async function HillsidePage(props: PageProps<"/hillside">) {
                       <Link href="/login" className="text-tint-text hover:underline">
                         Sign in
                       </Link>{" "}
-                      to see your own band, or pass <code>?asUserId=</code> in the URL to preview
-                      a specific person&rsquo;s.
+                      to see your own band.
                     </p>
                   )}
                 </>

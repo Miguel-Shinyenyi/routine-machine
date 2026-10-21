@@ -11,19 +11,12 @@ import java.util.List;
 
 public interface ScheduleTemplateRepository extends JpaRepository<ScheduleTemplate, Long> {
 
-    // Per-user scoping (docs/backend.md): a user's own templates, or — userId omitted — only
-    // the unowned ones.
+    // A user's own templates (the token's user).
     @EntityGraph(attributePaths = "routineItem")
     List<ScheduleTemplate> findByUserId(Long userId);
 
     @EntityGraph(attributePaths = "routineItem")
-    List<ScheduleTemplate> findByUserIsNull();
-
-    @EntityGraph(attributePaths = "routineItem")
     List<ScheduleTemplate> findByDayOfWeekAndUserId(DayOfWeek dayOfWeek, Long userId);
-
-    @EntityGraph(attributePaths = "routineItem")
-    List<ScheduleTemplate> findByDayOfWeekAndUserIsNull(DayOfWeek dayOfWeek);
 
     // Fetch-joins routineItem: see LearningTopicRepository for why (open-in-view is disabled,
     // and ScheduleTemplateResponse reads routineItem.getName() after the transaction closes).

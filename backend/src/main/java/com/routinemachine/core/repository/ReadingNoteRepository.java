@@ -18,14 +18,8 @@ public interface ReadingNoteRepository extends JpaRepository<ReadingNote, Long> 
     @Query("SELECT n FROM ReadingNote n JOIN FETCH n.book b WHERE b.user.id = :userId ORDER BY n.createdAt DESC")
     List<ReadingNote> findByOwnerWithBook(@Param("userId") Long userId);
 
-    @Query("SELECT n FROM ReadingNote n JOIN FETCH n.book b WHERE b.user IS NULL ORDER BY n.createdAt DESC")
-    List<ReadingNote> findByNoOwnerWithBook();
-
     @Query("SELECT n FROM ReadingNote n JOIN FETCH n.book b WHERE b.id = :bookId AND b.user.id = :userId ORDER BY n.createdAt DESC")
     List<ReadingNote> findByBookIdAndOwnerWithBook(@Param("bookId") Long bookId, @Param("userId") Long userId);
-
-    @Query("SELECT n FROM ReadingNote n JOIN FETCH n.book b WHERE b.id = :bookId AND b.user IS NULL ORDER BY n.createdAt DESC")
-    List<ReadingNote> findByBookIdAndNoOwnerWithBook(@Param("bookId") Long bookId);
 
     @Query("SELECT n FROM ReadingNote n JOIN FETCH n.book WHERE n.book.id = :bookId ORDER BY n.createdAt DESC")
     List<ReadingNote> findByBookIdWithBookOrderByCreatedAtDesc(Long bookId);

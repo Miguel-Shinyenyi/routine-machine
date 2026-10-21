@@ -62,8 +62,23 @@ public class SecurityConfig {
         return http.build();
     }
 
+    // The hillside is a public ranking anyone may read. A valid token only adds "you" to it, and a
+    // bad one is refused (401) rather than quietly treated as a visitor. Nothing here is user-scoped
+    // without that token.
     @Bean
     @Order(2)
+    public SecurityFilterChain optionalTokenChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/api/hillside/**")
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}));
+        return http.build();
+    }
+
+    @Bean
+    @Order(3)
     public SecurityFilterChain defaultChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())

@@ -923,8 +923,26 @@ the field).
   made a test fail.
 - **Rollback**: revert the commit. `V29` only adds a column with a default; it can stay.
 
-Every route group in the table above is now on the token except the intelligence service's `userId`
-parameter (part 5).
+**Access control, part 5: the last claimed ids, and a sweep.**
+- **Hillside** (`/api/hillside`, `/api/hillside/v2`): still a public ranking, but "you" comes only from
+  a valid token (a new filter chain: no token is a visitor, a bad token is 401). The `asUserId`
+  parameter is gone and ignored. It was a real leak: naming any opted-in person returned their rank,
+  score and neighbours.
+- **Intelligence service**: `/suggestion`, `/patterns` and `/tally` have no `userId` parameter and
+  no row filter; the backend returns only the token's rows (see `docs/intelligence-service.md`).
+- **The sweep**: `EveryRouteNeedsATokenTest` walks every `/api/**` route the application serves and
+  requires 401 without a token, except three open on purpose (sign-in, health push with its own token,
+  the hillside). A new route left unprotected fails it, and so does a stale entry in its list.
+- **Dead code removed**: the repository methods that listed unowned rows (nothing calls them now).
+  The unowned rows themselves, and the sync services' use of them, stay.
+- Tests: `EveryRouteNeedsATokenTest` (2), `HillsideTokenApiIntegrationTest` (3). Unprotecting a route
+  made the sweep fail; the hillside test was red before the change.
+- **Rollback**: revert the commit. No migration, no data change.
+
+**The stage is finished**: every route that acts for a person takes that person from the signed
+token. **Known remaining risk**: the compose file's default `AUTH_JWT_SECRET` is committed, and tokens
+are signed with it unless a real one is set. Anyone who knows it can sign a token for any user. Set a
+real value (and the same one for the frontend) before any deployment beyond this machine.
 
 **Still open**: outside the Granary, the user id is claimed by the caller, not proven by a token. Anyone who can reach
 the backend can send any `userId`. That is the access-control stage.

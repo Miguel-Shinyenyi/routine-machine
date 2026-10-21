@@ -18,10 +18,6 @@ public interface RoutineItemRepository extends JpaRepository<RoutineItem, Long> 
     @Query("SELECT r FROM RoutineItem r LEFT JOIN FETCH r.goal WHERE r.id = :id")
     Optional<RoutineItem> findWithGoalById(Long id);
 
-    // userId omitted: only the unowned (pre-account) items, never another user's.
-    @Query("SELECT r FROM RoutineItem r LEFT JOIN FETCH r.goal WHERE r.user IS NULL")
-    List<RoutineItem> findAllWithGoalUnowned();
-
     @Query("SELECT r FROM RoutineItem r LEFT JOIN FETCH r.goal WHERE r.user.id = :userId")
     List<RoutineItem> findAllWithGoalByUserId(Long userId);
 

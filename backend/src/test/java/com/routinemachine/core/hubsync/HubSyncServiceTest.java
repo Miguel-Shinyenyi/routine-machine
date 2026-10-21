@@ -265,7 +265,8 @@ class HubSyncServiceTest extends AbstractIntegrationTest {
         var books = bookRepository.findByUserIdOrderByCreatedAtDesc(owner.getId());
         assertThat(books).hasSize(1);
         assertThat(books.get(0).getTitle()).isEqualTo("Sapiens");
-        assertThat(bookRepository.findByUserIsNullOrderByCreatedAtDesc()).extracting("title").doesNotContain("Sapiens");
+        assertThat(bookRepository.findAll().stream().filter(b -> b.getUser() == null).map(b -> b.getTitle()).toList())
+                .doesNotContain("Sapiens");
     }
 
     @Test

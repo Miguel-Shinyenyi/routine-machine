@@ -441,3 +441,9 @@ cohort pages' `requestingUserId` (part 4).
 The cohort page and the pilot survey action no longer send `requestingUserId`: the backend reads the
 user from the session token and applies the same admin and member rights as before.
 
+## Access control, part 5
+
+No call carries a user id any more. `lib/scope.ts` (`withUserId`) is deleted; `materializeDay(date)` and the
+intelligence calls take none. Hillside no longer reads `?asUserId=`; "you" appears when you are signed in.
+`lib/api.ts` sends the session token on every call to either backend.
+

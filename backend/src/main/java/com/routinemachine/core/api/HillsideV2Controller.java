@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.service.HillsideV2Service;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,9 +33,11 @@ public class HillsideV2Controller {
     @GetMapping
     public HillsideV2Response get(
             @RequestParam Optional<Long> goalId, @RequestParam Optional<LocalDate> seasonStart,
-            @RequestParam Optional<Long> asUserId) {
+            @AuthenticationPrincipal Jwt jwt) {
+        // "You" comes only from a valid token; a visitor with none sees the ranking without a band.
+        Long you = jwt == null ? null : TokenUser.idOf(jwt);
         LocalDate start = seasonStart.orElseGet(() -> LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)));
         LocalDate end = start.plusDays(6);
-        return HillsideV2Response.from(hillsideV2Service.compute(goalId.orElse(null), start, end, asUserId.orElse(null)));
+        return HillsideV2Response.from(hillsideV2Service.compute(goalId.orElse(null), start, end, you));
     }
 }

@@ -16,11 +16,6 @@ public interface DailyLogRepository extends JpaRepository<DailyLog, Long> {
 
     List<DailyLog> findByUserIdAndLogDate(Long userId, LocalDate logDate);
 
-    // userId omitted: only the unowned (pre-account) logs, never another user's.
-    List<DailyLog> findByUserIsNull();
-
-    List<DailyLog> findByUserIsNullAndLogDate(LocalDate logDate);
-
     // Hillside groundwork (Phase 8): every non-private, user-owned log in a window from a user
     // who has opted into the hillside, with its routine item fetched eagerly since
     // HillsideService needs each log's hillsideField. Learning-topic logs are excluded (no

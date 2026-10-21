@@ -1,5 +1,4 @@
 import { ApiError, backendFetch, intelligenceFetch } from "./api";
-import { withUserId } from "./scope";
 import { dayOfWeekName, templatesNeedingMaterialization } from "./schedule";
 import type { ScheduleTemplate, Suggestion, Task } from "./types";
 
@@ -10,7 +9,7 @@ import type { ScheduleTemplate, Suggestion, Task } from "./types";
 // means asking the intelligence service, and the backend stays unaware that service exists.
 // Per-user scoping (docs/backend.md): reads the user's own templates and tasks, and creates the
 // day's tasks as theirs.
-export async function materializeDay(date: string, userId: number): Promise<Task[]> {
+export async function materializeDay(date: string): Promise<Task[]> {
   const day = dayOfWeekName(date);
   const [templates, existingTasks] = await Promise.all([
     backendFetch<ScheduleTemplate[]>(`/api/schedule-templates?dayOfWeek=${day}`),
@@ -27,7 +26,7 @@ export async function materializeDay(date: string, userId: number): Promise<Task
     const body: Record<string, unknown> = { taskDate: date, scheduleTemplateId: template.id };
 
     if (template.targetType === "LEARNING_SLOT") {
-      const suggestion = await intelligenceFetch<Suggestion>(withUserId("/suggestion", userId)).catch(() => null);
+      const suggestion = await intelligenceFetch<Suggestion>("/suggestion").catch(() => null);
       if (suggestion === null) {
         // No learning topics configured yet, or the intelligence service is unreachable: skip
         // this slot for today rather than failing the whole board. It'll be retried on the next

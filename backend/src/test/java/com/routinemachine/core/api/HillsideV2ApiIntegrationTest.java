@@ -56,7 +56,7 @@ class HillsideV2ApiIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/hillside/v2")
                         .param("seasonStart", "2026-10-12")
-                        .param("asUserId", you.getId().toString()))
+                        .with(asUser(you.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalParticipants", is(1)))
                 .andExpect(jsonPath("$.yourScore", is(1)))
@@ -71,7 +71,7 @@ class HillsideV2ApiIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(get("/api/hillside/v2")
                         .param("seasonStart", "2026-10-12")
-                        .param("asUserId", user.getId().toString()))
+                        .with(asUser(user.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.yourScore").doesNotExist());
     }
@@ -101,7 +101,7 @@ class HillsideV2ApiIntegrationTest extends AbstractIntegrationTest {
 
         String body = mockMvc.perform(get("/api/hillside/v2")
                         .param("seasonStart", "2026-09-07")
-                        .param("asUserId", user.getId().toString()))
+                        .with(asUser(user.getId())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
@@ -147,7 +147,7 @@ class HillsideV2ApiIntegrationTest extends AbstractIntegrationTest {
 
         String body = mockMvc.perform(get("/api/hillside/v2")
                         .param("seasonStart", "2026-08-03")
-                        .param("asUserId", user.getId().toString()))
+                        .with(asUser(user.getId())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 

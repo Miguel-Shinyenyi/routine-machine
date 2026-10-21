@@ -1,5 +1,8 @@
 package com.routinemachine.core.api;
 
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.HillsideField;
 import com.routinemachine.core.service.HillsideService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,8 +31,9 @@ public class HillsideController {
     public HillsideResponse get(
             @RequestParam Optional<HillsideField> field,
             @RequestParam(defaultValue = "7") int windowDays,
-            @RequestParam Optional<Long> asUserId) {
-        return HillsideResponse.from(hillsideService.compute(
-                field.orElse(null), windowDays, asUserId.orElse(null), LocalDate.now()));
+            @AuthenticationPrincipal Jwt jwt) {
+        // "You" comes only from a valid token; a visitor with none sees the ranking without a band.
+        Long you = jwt == null ? null : TokenUser.idOf(jwt);
+        return HillsideResponse.from(hillsideService.compute(field.orElse(null), windowDays, you, LocalDate.now()));
     }
 }

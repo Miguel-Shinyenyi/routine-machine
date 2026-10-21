@@ -4,7 +4,6 @@ import { todayIsoDate } from "@/lib/schedule";
 import { formatEyebrowDate } from "@/lib/formatDate";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
 import { getSessionToken, requireSessionUserId } from "@/lib/auth/session";
-import { withUserId } from "@/lib/scope";
 import { decidePause, reflectPause } from "@/lib/actions";
 import type { AnalogyResponse, Goal, Patterns, PauseDecision, Profile, RoutineItem, Suggestion, Tally } from "@/lib/types";
 import { TaskCard } from "@/components/TaskCard";
@@ -33,7 +32,7 @@ function adjacentDate(isoDate: string, deltaDays: number): string {
 
 export default async function TodayPage(props: PageProps<"/today">) {
   const searchParams = await props.searchParams;
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   const rawDate = searchParams.date;
   const date = typeof rawDate === "string" ? rawDate : todayIsoDate();
 
@@ -43,12 +42,12 @@ export default async function TodayPage(props: PageProps<"/today">) {
     : null;
 
   const [tasks, routineItems, goals, suggestion, tally, patterns, duePauses] = await Promise.all([
-    materializeDay(date, userId),
+    materializeDay(date),
     backendFetch<RoutineItem[]>("/api/routine-items"),
     backendFetch<Goal[]>("/api/goals"),
-    intelligenceFetch<Suggestion>(withUserId("/suggestion", userId)).catch(() => null),
-    intelligenceFetch<Tally>(withUserId("/tally", userId)).catch(() => null),
-    intelligenceFetch<Patterns>(withUserId("/patterns", userId)).catch(() => null),
+    intelligenceFetch<Suggestion>("/suggestion").catch(() => null),
+    intelligenceFetch<Tally>("/tally").catch(() => null),
+    intelligenceFetch<Patterns>("/patterns").catch(() => null),
     backendFetch<PauseDecision[]>("/api/granary/pauses/due").catch(() => []),
   ]);
 

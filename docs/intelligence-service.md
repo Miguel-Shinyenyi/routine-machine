@@ -156,6 +156,6 @@ backend, which now requires a signed token on those routes. Each endpoint accept
 `Authorization` header and sends it unchanged on its backend calls (`_backend_headers`). The service
 never makes or checks a token itself. With no header it sends none, and when the backend answers
 401 or 403 the service answers the same (it used to return 500); any other backend error is now 502.
-The optional `userId` parameter stays for now: `_scoped` still filters on it, and a later part of
-the access-control stage takes it from the token instead.
+There is no `userId` parameter (removed in part 5) and no row filter: the backend returns only the
+rows of the person in the forwarded token. A `userId` in the request is not read and never sent on.
 

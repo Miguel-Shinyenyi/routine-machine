@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -54,7 +55,7 @@ class HillsideApiIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/hillside")
                         .param("field", "READING")
                         .param("windowDays", "7")
-                        .param("asUserId", user.getId().toString()))
+                        .with(asUser(user.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.yourDaysShownUp", is(1)))
                 .andExpect(jsonPath("$.yourRank", is(1)))

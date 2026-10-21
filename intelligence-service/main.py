@@ -140,26 +140,12 @@ def health():
     return {"status": "ok"}
 
 
-def _scoped(records: list[dict], user_id: int | None) -> list[dict]:
-    # Per-user scoping, part 4 (docs/intelligence-service.md). With a userId the backend already
-    # returns only that user's rows; this keeps only rows owned by them anyway, so a backend
-    # that ever returned someone else's row could not leak it into a computation. Without a
-    # userId (None) it keeps only the unowned, pre-account rows — which is what this service
-    # computed for everyone before accounts existed, and still keeps Phase 8's hillside demo
-    # users' rows out of that view.
-    return [r for r in records if r.get("userId") == user_id]
-
-
 @app.exception_handler(httpx.HTTPStatusError)
 def _backend_refused(request, exc: httpx.HTTPStatusError):
     # The backend said no to the token (or to its absence). Say the same, not "server error".
     if exc.response.status_code in (401, 403):
         return JSONResponse(status_code=exc.response.status_code, content={"detail": "Not signed in"})
     return JSONResponse(status_code=502, content={"detail": "The backend answered with an error"})
-
-
-def _user_params(user_id: int | None) -> dict:
-    return {} if user_id is None else {"userId": user_id}
 
 
 def _backend_headers(authorization: str | None) -> dict:
@@ -169,13 +155,12 @@ def _backend_headers(authorization: str | None) -> dict:
 
 
 @app.get("/suggestion", response_model=SuggestionResponse)
-def suggestion(userId: int | None = None, authorization: str | None = Header(default=None)):
-    params = _user_params(userId)
+def suggestion(authorization: str | None = Header(default=None)):
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
-        goals = _scoped(client.get("/api/goals", params=params).raise_for_status().json(), userId)
+        goals = client.get("/api/goals").raise_for_status().json()
         # A topic belongs to whoever owns its goal; the backend scopes it, the rows carry no userId.
-        topics = client.get("/api/learning-topics", params=params).raise_for_status().json()
-        logs = _scoped(client.get("/api/daily-logs", params=params).raise_for_status().json(), userId)
+        topics = client.get("/api/learning-topics").raise_for_status().json()
+        logs = client.get("/api/daily-logs").raise_for_status().json()
 
     try:
         result = choose_suggestion(goals, topics, logs)
@@ -191,11 +176,10 @@ def suggestion(userId: int | None = None, authorization: str | None = Header(def
 
 
 @app.get("/patterns", response_model=PatternsResponse)
-def patterns(userId: int | None = None, authorization: str | None = Header(default=None)):
-    params = _user_params(userId)
+def patterns(authorization: str | None = Header(default=None)):
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
-        routine_items = _scoped(client.get("/api/routine-items", params=params).raise_for_status().json(), userId)
-        logs = _scoped(client.get("/api/daily-logs", params=params).raise_for_status().json(), userId)
+        routine_items = client.get("/api/routine-items").raise_for_status().json()
+        logs = client.get("/api/daily-logs").raise_for_status().json()
 
     result = compute_patterns(routine_items, logs, today=date.today())
 
@@ -232,14 +216,13 @@ def patterns(userId: int | None = None, authorization: str | None = Header(defau
 
 @app.get("/tally", response_model=TallyResponse)
 def tally(
-    windowDays: int = 28, sinceStart: bool = False, userId: int | None = None,
+    windowDays: int = 28, sinceStart: bool = False,
     authorization: str | None = Header(default=None),
 ):
-    params = _user_params(userId)
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
-        routine_items = _scoped(client.get("/api/routine-items", params=params).raise_for_status().json(), userId)
-        learning_topics = client.get("/api/learning-topics", params=params).raise_for_status().json()
-        logs = _scoped(client.get("/api/daily-logs", params=params).raise_for_status().json(), userId)
+        routine_items = client.get("/api/routine-items").raise_for_status().json()
+        learning_topics = client.get("/api/learning-topics").raise_for_status().json()
+        logs = client.get("/api/daily-logs").raise_for_status().json()
 
     result = compute_tally(
         routine_items, learning_topics, logs, today=date.today(), window_days=windowDays,

@@ -17,6 +17,4 @@ public interface GoalRepository extends JpaRepository<Goal, Long> {
 
     List<Goal> findByUserId(Long userId);
 
-    // userId omitted: only the unowned (pre-account) goals, never another user's.
-    List<Goal> findByUserIsNull();
 }

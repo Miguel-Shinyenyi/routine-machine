@@ -11,19 +11,12 @@ import java.util.List;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
 
-    // Per-user scoping (docs/backend.md): a user's own tasks, or — userId omitted — only the
-    // unowned ones. EntityGraph for the same open-in-view reason as the queries below.
+    // Per-user scoping (docs/backend.md): a user's own tasks (the token's user). EntityGraph for the same open-in-view reason as the queries below.
     @EntityGraph(attributePaths = {"routineItem", "learningTopic"})
     List<Task> findByUserId(Long userId);
 
     @EntityGraph(attributePaths = {"routineItem", "learningTopic"})
-    List<Task> findByUserIsNull();
-
-    @EntityGraph(attributePaths = {"routineItem", "learningTopic"})
     List<Task> findByTaskDateAndUserId(LocalDate taskDate, Long userId);
-
-    @EntityGraph(attributePaths = {"routineItem", "learningTopic"})
-    List<Task> findByTaskDateAndUserIsNull(LocalDate taskDate);
 
     // Fetch-joins routineItem/learningTopic: same open-in-view reasoning as
     // ScheduleTemplateRepository and LearningTopicRepository.

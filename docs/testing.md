@@ -354,3 +354,10 @@ the same request succeeding throughout.
 ## Signing in inside tests
 
 Routes that take their user from the token (see `docs/backend.md`, access control) are called with `.with(TestTokens.asUser(userId))` (`backend/src/test/java/com/routinemachine/core/TestTokens.java`). It sets the token a signed-in request would carry, without a real signature. A request with no `.with(...)` is a signed-out request and gets 401 on those routes.
+
+## The route sweep
+
+`EveryRouteNeedsATokenTest` fails when any `/api/**` route answers without a token, except those listed in
+the test with a reason. Adding a route means either protecting it (add its path to the protected chain in
+`SecurityConfig`) or adding it to that list with a reason and a test of its own.
+

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ApiError, backendFetch, intelligenceFetch } from "@/lib/api";
 import { requireSessionUserId } from "@/lib/auth/session";
-import { withUserId } from "@/lib/scope";
 import { todayIsoDate } from "@/lib/schedule";
 import { steepDayInsight, learningInsight } from "@/lib/tallyInsights";
 import type { Book, Goal, Patterns, Tally } from "@/lib/types";
@@ -27,7 +26,7 @@ async function fetchCurrentBook(): Promise<Book | null> {
 }
 
 export default async function TallyPage(props: PageProps<"/tally">) {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   const searchParams = await props.searchParams;
   // "4 weeks" is the default (matches /tally's own default windowDays=28); "Since the start"
   // asks for a window wide enough to include every day ever logged, same trick Path's own
@@ -36,8 +35,8 @@ export default async function TallyPage(props: PageProps<"/tally">) {
   const windowDays = sinceStart ? 3650 : 28;
 
   const [tally, patterns, goals, book] = await Promise.all([
-    intelligenceFetch<Tally>(withUserId(`/tally?windowDays=${windowDays}&sinceStart=${sinceStart}`, userId)),
-    intelligenceFetch<Patterns>(withUserId("/patterns", userId)),
+    intelligenceFetch<Tally>(`/tally?windowDays=${windowDays}&sinceStart=${sinceStart}`),
+    intelligenceFetch<Patterns>("/patterns"),
     backendFetch<Goal[]>("/api/goals"),
     fetchCurrentBook(),
   ]);

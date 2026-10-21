@@ -3,7 +3,6 @@ import { Shell } from "@/components/Shell";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
 import { todayIsoDate } from "@/lib/schedule";
 import { getSessionToken, getSessionUserId } from "@/lib/auth/session";
-import { withUserId } from "@/lib/scope";
 import type { RoutineItem, Tally, Task, WateringHoleStatus } from "@/lib/types";
 import "./globals.css";
 
@@ -47,7 +46,7 @@ async function fetchShellContext(): Promise<{
       ? backendFetch<Task[]>(`/api/tasks?date=${todayIsoDate()}`).catch(() => null)
       : Promise.resolve(null),
     userId !== null
-      ? intelligenceFetch<Tally>(withUserId("/tally", userId)).catch(() => null)
+      ? intelligenceFetch<Tally>("/tally").catch(() => null)
       : Promise.resolve(null),
     userId !== null
       ? backendFetch<RoutineItem[]>("/api/routine-items").catch(() => null)

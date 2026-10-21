@@ -24,14 +24,8 @@ public interface LearningTopicRepository extends JpaRepository<LearningTopic, Lo
     @Query("SELECT t FROM LearningTopic t JOIN FETCH t.goal g WHERE g.user.id = :userId")
     List<LearningTopic> findByOwnerWithGoal(@Param("userId") Long userId);
 
-    @Query("SELECT t FROM LearningTopic t JOIN FETCH t.goal g WHERE g.user IS NULL")
-    List<LearningTopic> findByNoOwnerWithGoal();
-
     @Query("SELECT t FROM LearningTopic t JOIN FETCH t.goal g WHERE g.id = :goalId AND g.user.id = :userId")
     List<LearningTopic> findByGoalIdAndOwnerWithGoal(@Param("goalId") Long goalId, @Param("userId") Long userId);
-
-    @Query("SELECT t FROM LearningTopic t JOIN FETCH t.goal g WHERE g.id = :goalId AND g.user IS NULL")
-    List<LearningTopic> findByGoalIdAndNoOwnerWithGoal(@Param("goalId") Long goalId);
 
     @Query("SELECT t FROM LearningTopic t JOIN FETCH t.goal WHERE t.goal.id = :goalId")
     List<LearningTopic> findByGoalIdWithGoal(@Param("goalId") Long goalId);
