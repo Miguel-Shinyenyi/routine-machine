@@ -38,9 +38,9 @@ export default async function GranaryPage() {
   }
 
   const [summary, pauses, mpesaCategories] = await Promise.all([
-    backendFetch<GranaryMonthSummary>(`/api/granary/summary?userId=${userId}`),
-    backendFetch<PauseDecision[]>(`/api/granary/pauses?userId=${userId}`),
-    backendFetch<Partial<Record<MpesaCategory, number>>>(`/api/granary/mpesa-categories?userId=${userId}`).catch(
+    backendFetch<GranaryMonthSummary>("/api/granary/summary"),
+    backendFetch<PauseDecision[]>("/api/granary/pauses"),
+    backendFetch<Partial<Record<MpesaCategory, number>>>("/api/granary/mpesa-categories").catch(
       () => ({}),
     ),
   ]);

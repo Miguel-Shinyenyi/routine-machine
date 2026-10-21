@@ -14,11 +14,26 @@ export class ApiError extends Error {
   }
 }
 
+// The signed-in person's session token as a bearer header, or nothing when there is no session
+// (the login and register calls, or code running outside a request). Routes that act for a user
+// read who it is from this token, never from the request. Passed first, so a caller's own
+// Authorization header still wins.
+async function sessionAuthorization(): Promise<Record<string, string>> {
+  try {
+    const { getSessionToken } = await import("./auth/session");
+    const token = await getSessionToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function request<T>(baseUrl: string, path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(baseUrl === BACKEND_URL ? await sessionAuthorization() : {}),
       ...(init.headers ?? {}),
     },
     // Always fetch fresh: task/log state changes on nearly every request, and this is a
@@ -62,6 +77,7 @@ export async function backendFetchMultipart<T>(path: string, formData: FormData)
   const response = await fetch(`${BACKEND_URL}${path}`, {
     method: "POST",
     body: formData,
+    headers: await sessionAuthorization(),
     cache: "no-store",
   });
   if (!response.ok) {

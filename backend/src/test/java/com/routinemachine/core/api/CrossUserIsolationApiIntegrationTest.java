@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.RequestBuilder;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -72,6 +73,11 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
         return send(request, 200).getResponse().getContentAsString();
     }
 
+    // A signed-in read: the token says who is asking.
+    private String asToken(String path, long userId) throws Exception {
+        return send(get(path).with(asUser(userId)), 200).getResponse().getContentAsString();
+    }
+
     private String seed(int who) {
         return who == 0 ? "iso-A" : "iso-B";
     }
@@ -95,11 +101,11 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
             book[i] = create("/api/books", "{\"title\":\"" + s + "-book\",\"userId\":" + u + "}");
             create("/api/reading-notes", "{\"bookId\":" + book[i] + ",\"noteText\":\"" + s + "-note\",\"userId\":" + u + "}");
             create("/api/current-reading", "{\"title\":\"" + s + "-reading\",\"userId\":" + u + "}");
-            send(put("/api/granary/saving-target-amount").contentType(H)
-                    .content("{\"userId\":" + u + ",\"amount\":" + (i == 0 ? 111 : 222) + "}"), 200);
-            send(post("/api/granary/savings").contentType(H).content("{\"userId\":" + u + "}"), 200);
-            pause[i] = idOf(send(post("/api/granary/pauses").contentType(H)
-                    .content("{\"userId\":" + u + ",\"what\":\"" + s + "-pause\"}"), 200));
+            send(put("/api/granary/saving-target-amount").with(asUser(u)).contentType(H)
+                    .content("{\"amount\":" + (i == 0 ? 111 : 222) + "}"), 200);
+            send(post("/api/granary/savings").with(asUser(u)), 200);
+            pause[i] = idOf(send(post("/api/granary/pauses").with(asUser(u)).contentType(H)
+                    .content("{\"what\":\"" + s + "-pause\"}"), 200));
             evidence[i] = create("/api/evidence-events", "{\"userId\":" + u + ",\"goalId\":" + goal[i] + ",\"source\":\"MANUAL\","
                     + "\"sourceEventId\":\"" + s + "-evt\",\"occurredAt\":\"2033-03-02T12:00:00Z\"}");
             long org = idOf(send(post("/api/organisations").contentType(H)
@@ -184,12 +190,12 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void theGranaryIsIsolated() throws Exception {
-        String summaryA = json("/api/granary/summary", "userId", String.valueOf(a));
-        String summaryB = json("/api/granary/summary", "userId", String.valueOf(b));
+        String summaryA = asToken("/api/granary/summary", a);
+        String summaryB = asToken("/api/granary/summary", b);
         assertThat(summaryA).contains("\"savingTargetAmount\":111").doesNotContain("222");
         assertThat(summaryB).contains("\"savingTargetAmount\":222").doesNotContain("111");
-        assertThat(json("/api/granary/pauses", "userId", String.valueOf(a))).contains("iso-A-").doesNotContain("iso-B-");
-        assertThat(json("/api/granary/pauses", "userId", String.valueOf(b))).contains("iso-B-").doesNotContain("iso-A-");
+        assertThat(asToken("/api/granary/pauses", a)).contains("iso-A-").doesNotContain("iso-B-");
+        assertThat(asToken("/api/granary/pauses", b)).contains("iso-B-").doesNotContain("iso-A-");
     }
 
     @Test
@@ -212,11 +218,11 @@ class CrossUserIsolationApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void anAccountCannotDecideOrReflectOnAnotherAccountsPause() throws Exception {
-        send(patch("/api/granary/pauses/" + pause[0] + "/decide").param("userId", String.valueOf(b))
+        send(patch("/api/granary/pauses/" + pause[0] + "/decide").with(asUser(b))
                 .contentType(H).content("{\"outcome\":\"DECLINED\"}"), 404);
-        send(patch("/api/granary/pauses/" + pause[0] + "/reflect").param("userId", String.valueOf(b))
+        send(patch("/api/granary/pauses/" + pause[0] + "/reflect").with(asUser(b))
                 .contentType(H).content("{\"reflection\":\"not yours\"}"), 404);
-        send(patch("/api/granary/pauses/" + pause[0] + "/decide").param("userId", String.valueOf(a))
+        send(patch("/api/granary/pauses/" + pause[0] + "/decide").with(asUser(a))
                 .contentType(H).content("{\"outcome\":\"DECLINED\"}"), 200);
     }
 

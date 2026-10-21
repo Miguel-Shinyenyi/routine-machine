@@ -5,9 +5,12 @@ import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.PauseDecisionRepository;
 import com.routinemachine.core.repository.UserRepository;
 import com.routinemachine.core.service.GranaryService;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.service.Ownership;
 import com.routinemachine.core.service.MpesaCategory;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,16 +52,17 @@ public class GranaryController {
     }
 
     @PostMapping("/savings")
-    public GranaryMonthSummaryResponse storeSaving(@Valid @RequestBody StoreSavingRequest request) {
-        User user = findUser(request.userId());
+    public GranaryMonthSummaryResponse storeSaving(@AuthenticationPrincipal Jwt jwt) {
+        User user = findUser(TokenUser.idOf(jwt));
         LocalDate today = LocalDate.now(ZoneId.of(user.getTimeZone()));
         granaryService.storeSaving(user, today);
         return summaryResponse(user, YearMonth.from(today), today);
     }
 
     @PutMapping("/saving-target-amount")
-    public GranaryMonthSummaryResponse setSavingTargetAmount(@Valid @RequestBody SetSavingTargetAmountRequest request) {
-        User user = findUser(request.userId());
+    public GranaryMonthSummaryResponse setSavingTargetAmount(
+            @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SetSavingTargetAmountRequest request) {
+        User user = findUser(TokenUser.idOf(jwt));
         user.changeSavingTargetAmount(request.amount());
         userRepository.save(user);
         LocalDate today = LocalDate.now(ZoneId.of(user.getTimeZone()));
@@ -66,8 +70,8 @@ public class GranaryController {
     }
 
     @GetMapping("/summary")
-    public GranaryMonthSummaryResponse summary(@RequestParam Long userId, @RequestParam Optional<YearMonth> month) {
-        User user = findUser(userId);
+    public GranaryMonthSummaryResponse summary(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<YearMonth> month) {
+        User user = findUser(TokenUser.idOf(jwt));
         LocalDate today = LocalDate.now(ZoneId.of(user.getTimeZone()));
         return summaryResponse(user, month.orElse(YearMonth.from(today)), today);
     }
@@ -78,8 +82,8 @@ public class GranaryController {
     }
 
     @PostMapping("/pauses")
-    public PauseDecisionResponse createPause(@Valid @RequestBody CreatePauseRequest request) {
-        User user = findUser(request.userId());
+    public PauseDecisionResponse createPause(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CreatePauseRequest request) {
+        User user = findUser(TokenUser.idOf(jwt));
         Instant now = Instant.now();
         PauseDecision pause = granaryService.createPause(
                 user, request.what(), request.amount(), request.why(), request.heardFrom(), now);
@@ -89,16 +93,16 @@ public class GranaryController {
     // Every pause decision this user has ever logged, newest first — the granary page's own
     // "the pause" table. GET .../pauses/due below is the narrower list Today prompts about.
     @GetMapping("/pauses")
-    public List<PauseDecisionResponse> pauses(@RequestParam Long userId) {
+    public List<PauseDecisionResponse> pauses(@AuthenticationPrincipal Jwt jwt) {
         Instant now = Instant.now();
-        return pauseDecisionRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+        return pauseDecisionRepository.findByUserIdOrderByCreatedAtDesc(TokenUser.idOf(jwt)).stream()
                 .map(p -> PauseDecisionResponse.from(p, now))
                 .toList();
     }
 
     @GetMapping("/pauses/due")
-    public List<PauseDecisionResponse> duePauses(@RequestParam Long userId) {
-        User user = findUser(userId);
+    public List<PauseDecisionResponse> duePauses(@AuthenticationPrincipal Jwt jwt) {
+        User user = findUser(TokenUser.idOf(jwt));
         Instant now = Instant.now();
         return granaryService.pausesDueForFollowUp(user, now).stream()
                 .map(p -> PauseDecisionResponse.from(p, now))
@@ -106,16 +110,18 @@ public class GranaryController {
     }
 
     @PatchMapping("/pauses/{id}/decide")
-    public PauseDecisionResponse decide(@PathVariable Long id, @RequestParam Long userId, @Valid @RequestBody DecidePauseRequest request) {
-        PauseDecision pause = findPause(id, userId);
+    public PauseDecisionResponse decide(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @Valid @RequestBody DecidePauseRequest request) {
+        PauseDecision pause = findPause(id, TokenUser.idOf(jwt));
         Instant now = Instant.now();
         granaryService.decidePause(pause, request.outcome(), now);
         return PauseDecisionResponse.from(pause, now);
     }
 
     @PatchMapping("/pauses/{id}/reflect")
-    public PauseDecisionResponse reflect(@PathVariable Long id, @RequestParam Long userId, @Valid @RequestBody ReflectPauseRequest request) {
-        PauseDecision pause = findPause(id, userId);
+    public PauseDecisionResponse reflect(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @Valid @RequestBody ReflectPauseRequest request) {
+        PauseDecision pause = findPause(id, TokenUser.idOf(jwt));
         granaryService.reflectPause(pause, request.reflection());
         return PauseDecisionResponse.from(pause, Instant.now());
     }
@@ -126,8 +132,8 @@ public class GranaryController {
     // stored (see docs/product-direction.md's M-Pesa section and MpesaPdfReader).
     @PostMapping("/mpesa-statement")
     public MpesaImportResponse importMpesaStatement(
-            @RequestParam Long userId, @RequestParam MultipartFile file, @RequestParam Optional<String> password) {
-        User user = findUser(userId);
+            @AuthenticationPrincipal Jwt jwt, @RequestParam MultipartFile file, @RequestParam Optional<String> password) {
+        User user = findUser(TokenUser.idOf(jwt));
         byte[] pdfBytes;
         try {
             pdfBytes = file.getBytes();
@@ -138,8 +144,8 @@ public class GranaryController {
     }
 
     @GetMapping("/mpesa-categories")
-    public Map<MpesaCategory, Integer> mpesaCategories(@RequestParam Long userId, @RequestParam Optional<YearMonth> month) {
-        User user = findUser(userId);
+    public Map<MpesaCategory, Integer> mpesaCategories(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<YearMonth> month) {
+        User user = findUser(TokenUser.idOf(jwt));
         YearMonth target = month.orElseGet(() -> YearMonth.now(ZoneId.of(user.getTimeZone())).minusMonths(1));
         return granaryService.mpesaCategoryTotals(user, target);
     }

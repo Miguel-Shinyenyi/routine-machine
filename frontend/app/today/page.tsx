@@ -49,7 +49,7 @@ export default async function TodayPage(props: PageProps<"/today">) {
     intelligenceFetch<Suggestion>(withUserId("/suggestion", userId)).catch(() => null),
     intelligenceFetch<Tally>(withUserId("/tally", userId)).catch(() => null),
     intelligenceFetch<Patterns>(withUserId("/patterns", userId)).catch(() => null),
-    backendFetch<PauseDecision[]>(`/api/granary/pauses/due?userId=${userId}`).catch(() => []),
+    backendFetch<PauseDecision[]>("/api/granary/pauses/due").catch(() => []),
   ]);
 
   // Phase 10: explained through the first interest the user picked on their Profile page,

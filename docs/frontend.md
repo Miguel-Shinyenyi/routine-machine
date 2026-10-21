@@ -411,3 +411,12 @@ departure from precedent.
   rendered check.
 - `docs/schedule.md`'s open question about real target durations is still open; Path shows a
   banner rather than inventing one.
+
+## Access control, part 1: the session token rides on every backend call
+
+`lib/api.ts` reads the session cookie (`getSessionToken`) and sends it as `Authorization: Bearer`
+on every call to the backend, including multipart. With no session it sends nothing, and an
+`Authorization` header a caller sets itself takes precedence (the login, GitHub and health calls).
+The Granary page, the Today page's due-pause call and the Granary Server Actions no longer send
+a user id: the backend learns who is asking from the token. Other routes still carry `userId` until
+their part of the stage is done (see `docs/backend.md`).

@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -128,20 +129,20 @@ class HillsideV2ApiIntegrationTest extends AbstractIntegrationTest {
         service.ingest(user, goal, DailyLogSource.MANUAL, "v2-granary-privacy-evt",
                 day.atStartOfDay(ZoneOffset.UTC).toInstant(), null);
 
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/granary/pauses")
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/granary/pauses").with(asUser(user.getId()))
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                        .content("{\"userId\": " + user.getId() + ", \"what\": \"a-granary-what-marker\", "
+                        .content("{\"what\": \"a-granary-what-marker\", "
                                 + "\"amount\": \"a-granary-amount-marker\", \"why\": \"a-granary-why-marker\", "
                                 + "\"heardFrom\": \"a-granary-heard-from-marker\"}"))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/granary/saving-target-amount")
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/granary/saving-target-amount").with(asUser(user.getId()))
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                        .content("{\"userId\": " + user.getId() + ", \"amount\": 193837}"))
+                        .content("{\"amount\": 193837}"))
                 .andExpect(status().isOk());
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/granary/savings")
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/granary/savings").with(asUser(user.getId()))
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                        .content("{\"userId\": " + user.getId() + "}"))
+                        .content("{}"))
                 .andExpect(status().isOk());
 
         String body = mockMvc.perform(get("/api/hillside/v2")

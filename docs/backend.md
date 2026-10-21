@@ -860,7 +860,26 @@ route, reads each list as A, as B and as nobody, and tries each cross-account wr
 route is added or changed without following the rules above. A deliberate break (the pause
 ownership filter removed) made it fail.
 
-**Still open**: the user id is claimed by the caller, not proven by a token. Anyone who can reach
+**Access control, part 1: the Granary takes its user from the token.** The stage is split into
+five parts (the Granary first, then personal data, books and credits, cohorts and the owner role,
+and finally the intelligence and sync services plus a 401 sweep).
+- `/api/granary/**` joins `/api/users/**` in the JWT filter chain (`SecurityConfig`). No token, or a
+  bad one, is 401.
+- The user is `TokenUser.idOf(jwt)`, the token's subject. Granary routes no longer have a `userId`
+  query parameter, body field or form field (`StoreSavingRequest` is gone; `CreatePauseRequest` and
+  `SetSavingTargetAmountRequest` lost the field). A `userId` sent anyway is not read.
+- Someone else's pause is 404, as before, now judged against the token's user.
+- The frontend's `backendFetch` and `backendFetchMultipart` send the session token as a bearer
+  header on every call when a session exists. A caller's own `Authorization` header wins, so the
+  login, GitHub and health calls are unchanged.
+- Tests: `GranaryTokenApiIntegrationTest` (5); the other Granary tests and
+  `CrossUserIsolationApiIntegrationTest` now sign in with `TestTokens.asUser(id)`. Removing
+  `/api/granary/**` from the protected chain makes the new test fail.
+- **Rollback**: revert the commit. No migration, no data change.
+
+The table above still describes every other route group: they have not moved to the token yet.
+
+**Still open**: outside the Granary, the user id is claimed by the caller, not proven by a token. Anyone who can reach
 the backend can send any `userId`. That is the access-control stage.
 
 ## Decisions log

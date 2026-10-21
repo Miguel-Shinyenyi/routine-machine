@@ -222,7 +222,7 @@ export async function updateProfile(formData: FormData): Promise<void> {
 export async function storeSaving(): Promise<void> {
   const userId = await getSessionUserId();
   if (userId === null) return;
-  await backendFetch("/api/granary/savings", { method: "POST", body: JSON.stringify({ userId }) });
+  await backendFetch("/api/granary/savings", { method: "POST" });
   revalidatePath("/granary");
   revalidatePath("/today");
 }
@@ -233,7 +233,7 @@ export async function setSavingTargetAmount(formData: FormData): Promise<void> {
   const amount = Number(formData.get("amount"));
   await backendFetch("/api/granary/saving-target-amount", {
     method: "PUT",
-    body: JSON.stringify({ userId, amount }),
+    body: JSON.stringify({ amount }),
   });
   revalidatePath("/granary");
 }
@@ -244,7 +244,6 @@ export async function createPause(formData: FormData): Promise<void> {
   await backendFetch("/api/granary/pauses", {
     method: "POST",
     body: JSON.stringify({
-      userId,
       what: formData.get("what"),
       amount: formData.get("amount") || null,
       why: formData.get("why") || null,
@@ -256,10 +255,10 @@ export async function createPause(formData: FormData): Promise<void> {
 }
 
 export async function decidePause(formData: FormData): Promise<void> {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   const pauseId = formData.get("pauseId");
   const outcome = formData.get("outcome");
-  await backendFetch(withUserId(`/api/granary/pauses/${pauseId}/decide`, userId), {
+  await backendFetch(`/api/granary/pauses/${pauseId}/decide`, {
     method: "PATCH",
     body: JSON.stringify({ outcome }),
   });
@@ -268,10 +267,10 @@ export async function decidePause(formData: FormData): Promise<void> {
 }
 
 export async function reflectPause(formData: FormData): Promise<void> {
-  const userId = await requireSessionUserId();
+  await requireSessionUserId();
   const pauseId = formData.get("pauseId");
   const reflection = formData.get("reflection");
-  await backendFetch(withUserId(`/api/granary/pauses/${pauseId}/reflect`, userId), {
+  await backendFetch(`/api/granary/pauses/${pauseId}/reflect`, {
     method: "PATCH",
     body: JSON.stringify({ reflection }),
   });
@@ -304,7 +303,6 @@ export async function importMpesaStatement(
   const password = formData.get("password");
 
   const body = new FormData();
-  body.set("userId", String(userId));
   body.set("file", file);
   if (typeof password === "string" && password.trim() !== "") {
     body.set("password", password.trim());

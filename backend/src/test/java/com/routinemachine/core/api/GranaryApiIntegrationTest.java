@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.io.ByteArrayOutputStream;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -41,23 +42,23 @@ class GranaryApiIntegrationTest extends AbstractIntegrationTest {
     void settingTheDailyAmountThenStoringASavingUpdatesTheSummary() throws Exception {
         User user = userRepository.save(new User("granary-store@example.com", "irrelevant-hash", null, null));
 
-        mockMvc.perform(put("/api/granary/saving-target-amount")
+        mockMvc.perform(put("/api/granary/saving-target-amount").with(asUser(user.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\": " + user.getId() + ", \"amount\": 50}"))
+                        .content("{\"amount\": 50}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.savingTargetAmount", is(50)));
 
-        mockMvc.perform(post("/api/granary/savings")
+        mockMvc.perform(post("/api/granary/savings").with(asUser(user.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\": " + user.getId() + "}"))
+                        .content("{}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.storedThisMonth", is(50)))
                 .andExpect(jsonPath("$.daysStored", is(1)));
 
         // Storing again the same day doesn't double it.
-        mockMvc.perform(post("/api/granary/savings")
+        mockMvc.perform(post("/api/granary/savings").with(asUser(user.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\": " + user.getId() + "}"))
+                        .content("{}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.storedThisMonth", is(50)))
                 .andExpect(jsonPath("$.daysStored", is(1)));
@@ -67,9 +68,9 @@ class GranaryApiIntegrationTest extends AbstractIntegrationTest {
     void storingWithNoTargetAmountSetFails() throws Exception {
         User user = userRepository.save(new User("granary-no-target@example.com", "irrelevant-hash", null, null));
 
-        mockMvc.perform(post("/api/granary/savings")
+        mockMvc.perform(post("/api/granary/savings").with(asUser(user.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\": " + user.getId() + "}"))
+                        .content("{}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -77,9 +78,9 @@ class GranaryApiIntegrationTest extends AbstractIntegrationTest {
     void creatingAPauseThenDecidingAndReflectingUpdatesItsState() throws Exception {
         User user = userRepository.save(new User("granary-pause@example.com", "irrelevant-hash", null, null));
 
-        MvcResult created = mockMvc.perform(post("/api/granary/pauses")
+        MvcResult created = mockMvc.perform(post("/api/granary/pauses").with(asUser(user.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"userId\": " + user.getId() + ", \"what\": \"A token presale\", "
+                        .content("{\"what\": \"A token presale\", "
                                 + "\"amount\": \"KSh 5,000\", \"why\": \"Everyone says it will 10x\", "
                                 + "\"heardFrom\": \"WhatsApp group\"}"))
                 .andExpect(status().isOk())
@@ -88,26 +89,27 @@ class GranaryApiIntegrationTest extends AbstractIntegrationTest {
         String body = created.getResponse().getContentAsString();
         long id = Long.parseLong(body.replaceAll(".*\"id\":(\\d+).*", "$1"));
 
-        mockMvc.perform(patch("/api/granary/pauses/" + id + "/decide").param("userId", user.getId().toString())
+        mockMvc.perform(patch("/api/granary/pauses/" + id + "/decide").with(asUser(user.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"outcome\": \"DECLINED\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.outcome", is("DECLINED")));
 
-        mockMvc.perform(patch("/api/granary/pauses/" + id + "/reflect").param("userId", user.getId().toString())
+        mockMvc.perform(patch("/api/granary/pauses/" + id + "/reflect").with(asUser(user.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reflection\": \"Glad I waited.\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reflectionThirtyDay", is("Glad I waited.")));
 
-        mockMvc.perform(get("/api/granary/pauses").param("userId", user.getId().toString()))
+        mockMvc.perform(get("/api/granary/pauses").with(asUser(user.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].what", is("A token presale")));
     }
 
     @Test
     void decidingAnUnknownPauseReturns404() throws Exception {
-        mockMvc.perform(patch("/api/granary/pauses/999999/decide").param("userId", "1")
+        User user = userRepository.save(new User("granary-unknown-pause@example.com", "irrelevant-hash", null, null));
+        mockMvc.perform(patch("/api/granary/pauses/999999/decide").with(asUser(user.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"outcome\": \"DECLINED\"}"))
                 .andExpect(status().isNotFound());
@@ -143,13 +145,13 @@ class GranaryApiIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(multipart("/api/granary/mpesa-statement")
                         .file(file)
-                        .param("userId", user.getId().toString()))
+                        .with(asUser(user.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.transactionsParsed", is(1)))
                 .andExpect(jsonPath("$.categoryTotals.FOOD", is(1200)));
 
-        mockMvc.perform(get("/api/granary/mpesa-categories")
-                        .param("userId", user.getId().toString())
+        mockMvc.perform(get("/api/granary/mpesa-categories").with(asUser(user.getId()))
+                        
                         .param("month", "2026-09"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.FOOD", is(1200)));
@@ -163,7 +165,7 @@ class GranaryApiIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(multipart("/api/granary/mpesa-statement")
                         .file(file)
-                        .param("userId", user.getId().toString()))
+                        .with(asUser(user.getId())))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.type", is("PARSE_ERROR")));
     }
