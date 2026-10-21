@@ -940,9 +940,10 @@ the field).
 - **Rollback**: revert the commit. No migration, no data change.
 
 **The stage is finished**: every route that acts for a person takes that person from the signed
-token. **Known remaining risk**: the compose file's default `AUTH_JWT_SECRET` is committed, and tokens
-are signed with it unless a real one is set. Anyone who knows it can sign a token for any user. Set a
-real value (and the same one for the frontend) before any deployment beyond this machine.
+token. **Secret handling**: compose has no default `AUTH_JWT_SECRET` any more and refuses to start without one.
+The development value is generated locally into the git-ignored `infra/.env` (with `OWNER_EMAIL`), and
+`infra/.env.example` names the variables only. Tokens are signed with it, so anyone holding it can sign
+a token for any user: production needs its own, generated there. The swap list is in `PROJECT.md`'s backlog.
 
 **Still open**: outside the Granary, the user id is claimed by the caller, not proven by a token. Anyone who can reach
 the backend can send any `userId`. That is the access-control stage.

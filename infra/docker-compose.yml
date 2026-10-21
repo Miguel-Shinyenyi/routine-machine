@@ -28,7 +28,7 @@ services:
       # Phase 8 groundwork only, nothing in the app requires login yet. A default here (not
       # in application.yml itself) keeps `docker compose up` working out of the box; this
       # placeholder is not safe for any real deployment with real accounts. See docs/backend.md.
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-only-insecure-default-change-before-real-use-0123456789}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env (see .env.example)}
       AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
       OWNER_EMAIL: ${OWNER_EMAIL:-}
     ports:
@@ -56,7 +56,7 @@ services:
       # Same shared secret the backend verifies GET /api/users/me's bearer token against (see
       # lib/auth/session.ts) — must stay identical to the backend service's own AUTH_JWT_SECRET
       # below, hence the same default rather than a second, independently-generated one.
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-only-insecure-default-change-before-real-use-0123456789}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env (see .env.example)}
     ports:
       - "3000:3000"
     depends_on:
