@@ -1,0 +1,54 @@
+# Alert rules (docs/observability.md). Unit-tested by alerts_test.yml; run infra/observability/check.sh.
+groups:
+  - name: routine-machine
+    rules:
+      - alert: BackendDown
+        expr: up{job="backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The backend is down"
+          description: "Prometheus has not been able to scrape {{ $labels.instance }} for over a minute."
+
+      - alert: IntelligenceServiceDown
+        expr: up{job="intelligence-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The intelligence service is down"
+          description: "Prometheus has not been able to scrape {{ $labels.instance }} for over a minute."
+
+      # A source failing three fetches in a row. Two exceptions, both deliberate:
+      #  - hub makes three directory listings per run, so one failed run is already 3; it alerts at 9
+      #    (three failed runs in a row);
+      #  - ActivityWatch is a local-only source with no server in the Docker stack, so it fails on every
+      #    poll by design and never alerts.
+      - alert: SyncSourceFailing
+        expr: |
+          (sync_consecutive_failures{source!~"activitywatch|hub"} >= 3)
+          or
+          (sync_consecutive_failures{source="hub"} >= 9)
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.source }} has failed {{ $value | printf \"%.0f\" }} fetches in a row"
+          description: "The {{ $labels.source }} integration has failed every fetch since its last success. Check its credentials and the source's availability."
+
+      # More than half of the reading-note assessments ending in an upstream error or an unparseable
+      # answer, for 15 minutes. A missing API key ("unavailable") is not counted as a failure, and no
+      # traffic at all is not an alert (the division is empty).
+      - alert: AssessmentFailureRateHigh
+        expr: |
+          sum(rate(assessment_requests_total{outcome=~"upstream_error|unparseable"}[15m]))
+          /
+          sum(rate(assessment_requests_total[15m]))
+          > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Over half of reading-note assessments are failing"
+          description: "More than 50% of assessments ended in an upstream error or an unparseable answer over the last 15 minutes."

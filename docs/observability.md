@@ -9,14 +9,14 @@ differs and why. Built in parts; this file describes only what exists.
 
 ## Current state
 
-Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done: the backend, the intelligence service and the custom metrics.** The rest is not built.
+Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is half done (4a: Prometheus, Alertmanager and the alert rules).** Loki, Promtail, Grafana, Jaeger and tracing, and the page, are not built.
 
 | Part | What | State |
 |---|---|---|
 | 1 | Backend: request id, JSON logs, metrics endpoint on its own port | Done |
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
-| 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | Not built |
+| 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done.** 4b Loki and Promtail: not built. 4c Grafana, Jaeger and OpenTelemetry tracing: not built |
 | 5 | Owner-only operations page in the frontend (working name `/watchtower`) | Not built |
 
 ### Part 1: the backend
@@ -81,6 +81,28 @@ client already logs the failure. Their HTTP calls have fixed URLs and no tests, 
 running the stack, not by unit tests. In Docker there is no local ActivityWatch server, so that source counts a
 failure on every poll; the alerts in part 4 must account for sources that are not expected to be up.
 
+### Part 4a: Prometheus, Alertmanager and the alerts
+
+Started only with the profile: `docker compose --profile observability up -d` (a plain `docker compose up`
+does not start them). Files are in `infra/observability/`.
+
+- **Prometheus** (`prom/prometheus:v3.13.1`, the reference's version; 3.13.4 exists as a newer patch) scrapes
+  three static targets every 15 seconds: the backend's management port (`backend:8081`), the intelligence
+  service's metrics port (`intelligence-service:9000`) and itself. UI at `http://localhost:9090`, bound to this
+  machine only (`127.0.0.1`). 7 days of data, memory capped at 512 MB.
+- **Alertmanager** (`prom/alertmanager:v0.33.1`) at `http://localhost:9093`, same binding, 128 MB cap. No
+  notification integration: a firing alert is visible in its own page and in Prometheus's Alerts page.
+- **The rules** (`alerts.yml`): `BackendDown` and `IntelligenceServiceDown` (target down for a minute),
+  `SyncSourceFailing` (`sync_consecutive_failures` of 3, with two deliberate exceptions: hub makes three
+  listing calls per run so it alerts at 9, and ActivityWatch, a local-only source with no server in Docker,
+  never alerts) and `AssessmentFailureRateHigh` (more than half of assessments ending in `upstream_error` or
+  `unparseable` for 15 minutes; a missing key and no traffic at all are not failures).
+- **Tests first**: `alerts_test.yml` is a `promtool` unit test of each rule (down, recovery, thresholds, the
+  exceptions, the no-traffic case). `infra/observability/check.sh` validates both configs and runs it.
+- Metrics and both UIs are not reachable from the browser-facing frontend: the backend's metrics port is
+  8081 and unpublished, the intelligence service's is 9000 and unpublished, and Prometheus and Alertmanager
+  bind to 127.0.0.1.
+
 ## What it records about people
 
 - Logs: method, path, status, duration, request id, and the application's own messages. No query
@@ -93,11 +115,14 @@ failure on every poll; the alerts in part 4 must account for sources that are no
 
 ## Turning it off
 
+- The observability containers: `docker compose --profile observability down` (add `-v` to delete their
+  stored data). Nothing in the application depends on them; the services keep serving their metrics ports.
+
 - Metrics port: set `MANAGEMENT_PORT` to a different port, or `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health`
   to drop the Prometheus endpoint.
 - JSON logs: set `LOGGING_STRUCTURED_FORMAT_CONSOLE=` (empty) to return to plain text lines.
 - The request id and the completion line have no switch; removing `RequestIdFilter` removes both.
-- The cost of the whole stack (memory and disk) is stated when part 4 is built.
+- The cost of the whole stack is stated when part 4 is finished. So far (4a, measured on this machine with the services idle): Prometheus about 97 MB of memory and Alertmanager about 38 MB, under 1% CPU each; images 335 MB and 114 MB on disk; Prometheus data about 0.1 MB after a few minutes, growing at roughly that rate for the 7 days it keeps.
 
 ## Decisions log
 
@@ -105,6 +130,9 @@ failure on every poll; the alerts in part 4 must account for sources that are no
 |------|----------|--------|
 | 2026-10-21 | Spring Boot's built-in structured logging (`logstash` format) instead of `logstash-logback-encoder` | The latest encoder (9.0) needs Jackson 3, and Spring Boot 3.5 uses Jackson 2; Boot 3.4 and later emit the same Logstash JSON with the MDC included and no extra dependency. Differs from the staged prompt, which named the library |
 | 2026-10-21 | Metrics on a separate management port (8081), not published to the host, instead of exposing `/actuator/**` on the API port and relying on routing | The staged prompt requires it never share the port the browser talks to. Following the reference's lesson: an endpoint that is never served on the public port cannot be reached through an auth mistake there |
+| 2026-10-21 | Alert rules are unit-tested with `promtool test rules` before they were written | An alert that has never been shown to fire (and to stay quiet when it should) is a guess. The tests cover firing, the `for` delay, recovery and the deliberate exceptions |
+| 2026-10-21 | `SyncSourceFailing` skips ActivityWatch and alerts hub at 9, not 3 | ActivityWatch has no server in the Docker stack and fails every poll by design; hub counts three listing calls per run, so 3 is one failed run, not three |
+| 2026-10-21 | Prometheus and Alertmanager UIs bound to 127.0.0.1, behind a compose profile | Operations data is for the owner on this machine; a plain `docker compose up` stays light |
 | 2026-10-21 | Only `health` and `prometheus` exposed | Everything else Actuator offers (env, beans, heap dump, loggers) can leak configuration or data |
 | 2026-10-21 | Incoming `X-Request-Id` accepted only if short and plain | An unchecked header written into logs can forge log lines |
 | 2026-10-21 | Intelligence service metrics with `prometheus_client` directly, not `prometheus-fastapi-instrumentator` | The instrumentator's support for Starlette 1.x (this service runs 1.6) is unverified; a counter and a histogram in a small ASGI middleware are about 30 lines, fully tested, and add no compatibility risk. Differs from the staged prompt's wording only in the library; the endpoint and port are as asked |

@@ -1,0 +1,12 @@
+# Alertmanager (docs/observability.md). No notification integration: a personal tool has no on-call, so a
+# firing alert is visible in Alertmanager's own page (http://localhost:9093) and in Prometheus's Alerts
+# page. Add a receiver here (email, Slack) if that ever changes.
+route:
+  receiver: default
+  group_by: ["alertname"]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 12h
+
+receivers:
+  - name: default

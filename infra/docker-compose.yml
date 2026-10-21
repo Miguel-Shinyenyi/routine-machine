@@ -56,9 +56,9 @@ services:
     environment:
       BACKEND_URL: http://backend:8080
       INTELLIGENCE_SERVICE_URL: http://intelligence-service:8000
-      # Same shared secret the backend verifies GET /api/users/me's bearer token against (see
-      # lib/auth/session.ts) — must stay identical to the backend service's own AUTH_JWT_SECRET
-      # below, hence the same default rather than a second, independently-generated one.
+      # Same shared secret the backend verifies its bearer tokens against (see lib/auth/session.ts)
+      # — must stay identical to the backend service's own AUTH_JWT_SECRET, so both read the one
+      # value from infra/.env.
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env (see .env.example)}
     ports:
       - "3000:3000"
@@ -66,5 +66,39 @@ services:
       - backend
       - intelligence-service
 
+  # --- Observability (docs/observability.md). Not started by a plain `docker compose up`; start with
+  # `docker compose --profile observability up -d`. Both UIs are bound to this machine only (127.0.0.1).
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.13.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - observability_prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    mem_limit: 512m
+    depends_on:
+      - alertmanager
+
+  alertmanager:
+    profiles: ["observability"]
+    image: prom/alertmanager:v0.33.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - observability_alertmanager_data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    mem_limit: 128m
+
 volumes:
   routine_machine_postgres_data:
+  observability_prometheus_data:
+  observability_alertmanager_data:
