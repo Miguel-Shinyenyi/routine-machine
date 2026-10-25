@@ -12,6 +12,7 @@ from observability import (
 )
 from pydantic import BaseModel
 
+from api_docs import start_docs_server_from_env
 from analogy import Analogy, AnalogyParseError, ANALOGY_SYSTEM_PROMPT
 from analogy import build_user_message as build_analogy_user_message
 from analogy import parse_analogy_response
@@ -32,10 +33,15 @@ configure_logging()
 @asynccontextmanager
 async def lifespan(_app):
     start_metrics_server()
+    start_docs_server_from_env(_app)
     yield
 
 
-app = FastAPI(title="Routine Machine Intelligence Service", lifespan=lifespan)
+# FastAPI's own documentation is off on this (published) port; api_docs.py serves the spec on an internal one.
+app = FastAPI(
+    title="Routine Machine Intelligence Service", lifespan=lifespan,
+    docs_url=None, redoc_url=None, openapi_url=None,
+)
 app.add_middleware(RequestObservabilityMiddleware)
 
 
@@ -151,7 +157,7 @@ class AnalogyResponse(BaseModel):
 _ANALOGY_CACHE: dict[tuple[str, str], Analogy] = {}
 
 
-@app.get("/health")
+@app.get("/health", summary="Check that the service is running")
 def health():
     return {"status": "ok"}
 
@@ -177,7 +183,7 @@ def _backend_headers(authorization: str | None) -> dict:
     return headers
 
 
-@app.get("/suggestion", response_model=SuggestionResponse)
+@app.get("/suggestion", response_model=SuggestionResponse, summary="Suggest the next learning topic and why")
 def suggestion(authorization: str | None = Header(default=None)):
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
         goals = client.get("/api/goals").raise_for_status().json()
@@ -198,7 +204,7 @@ def suggestion(authorization: str | None = Header(default=None)):
     )
 
 
-@app.get("/patterns", response_model=PatternsResponse)
+@app.get("/patterns", response_model=PatternsResponse, summary="Find completion rates, streaks and skip-heavy days")
 def patterns(authorization: str | None = Header(default=None)):
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
         routine_items = client.get("/api/routine-items").raise_for_status().json()
@@ -237,7 +243,7 @@ def patterns(authorization: str | None = Header(default=None)):
     )
 
 
-@app.get("/tally", response_model=TallyResponse)
+@app.get("/tally", response_model=TallyResponse, summary="Build the tally stick, hours per goal and routine meters")
 def tally(
     windowDays: int = 28, sinceStart: bool = False,
     authorization: str | None = Header(default=None),
@@ -268,7 +274,7 @@ def tally(
     )
 
 
-@app.post("/reading-notes/assess", response_model=ReadingNoteAssessmentResponse)
+@app.post("/reading-notes/assess", response_model=ReadingNoteAssessmentResponse, summary="Assess a reading note against the book with the model")
 def assess_reading_note(request: ReadingNoteAssessmentRequest):
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -325,7 +331,7 @@ def assess_reading_note(request: ReadingNoteAssessmentRequest):
     )
 
 
-@app.post("/analogy", response_model=AnalogyResponse)
+@app.post("/analogy", response_model=AnalogyResponse, summary="Explain a learning topic through one of the person's interests")
 def explain_with_analogy(request: AnalogyRequest):
     cache_key = (request.topic.strip().lower(), request.interest.strip().lower())
     cached = _ANALOGY_CACHE.get(cache_key)

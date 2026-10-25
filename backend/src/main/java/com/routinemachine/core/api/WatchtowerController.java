@@ -4,6 +4,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.service.OwnerAccount;
 import com.routinemachine.core.service.ServiceHealthService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.routinemachine.core.service.WatchtowerIntelligenceDocsService;
 import com.routinemachine.core.service.WatchtowerLogsService;
 import com.routinemachine.core.service.WatchtowerMetricsService;
 import com.routinemachine.core.service.WatchtowerSyncService;
@@ -31,15 +33,17 @@ public class WatchtowerController {
     private final WatchtowerMetricsService metricsService;
     private final WatchtowerLogsService logsService;
     private final WatchtowerSyncService syncService;
+    private final WatchtowerIntelligenceDocsService intelligenceDocsService;
 
     public WatchtowerController(OwnerAccount ownerAccount, ServiceHealthService serviceHealthService,
                                 WatchtowerMetricsService metricsService, WatchtowerLogsService logsService,
-                                WatchtowerSyncService syncService) {
+                                WatchtowerSyncService syncService, WatchtowerIntelligenceDocsService intelligenceDocsService) {
         this.ownerAccount = ownerAccount;
         this.serviceHealthService = serviceHealthService;
         this.metricsService = metricsService;
         this.logsService = logsService;
         this.syncService = syncService;
+        this.intelligenceDocsService = intelligenceDocsService;
     }
 
     @Operation(summary = "Owner only: the health of each service")
@@ -79,6 +83,17 @@ public class WatchtowerController {
     public WatchtowerSyncService.Sync sync(@AuthenticationPrincipal Jwt jwt) {
         requireOwner(jwt);
         return syncService.sync();
+    }
+
+    // The intelligence service's API document (staged Prompt 4). The service serves it only on an internal port; this hands
+    // it to the owner, so the documentation page can show both APIs. The address is configuration, nothing in the request.
+    @Operation(summary = "Owner only: the intelligence service's OpenAPI document")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "The intelligence service's documentation is not configured or does not answer.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "What the intelligence service sent is not an OpenAPI document.")
+    @GetMapping("/intelligence-api-docs")
+    public JsonNode intelligenceApiDocs(@AuthenticationPrincipal Jwt jwt) {
+        requireOwner(jwt);
+        return intelligenceDocsService.spec();
     }
 
     private void requireOwner(Jwt jwt) {

@@ -34,6 +34,9 @@ services:
       # Owner-only operations page (docs/observability.md): the addresses it probes for "is it up". A service that
       # is not running (the observability ones, without the profile) shows as DOWN.
       WATCHTOWER_INTELLIGENCE_URL: http://intelligence-service:8000/health
+      # The intelligence service's API document, on its internal docs port (never published to the host); the backend
+      # hands it to the owner (docs/intelligence-service.md).
+      WATCHTOWER_INTELLIGENCE_DOCS_URL: http://intelligence-service:9001/openapi.json
       WATCHTOWER_PROMETHEUS_URL: http://prometheus:9090/-/ready
       # Where the page reads its charts from (a fixed list of queries; see docs/observability.md).
       WATCHTOWER_PROMETHEUS_BASE_URL: http://prometheus:9090

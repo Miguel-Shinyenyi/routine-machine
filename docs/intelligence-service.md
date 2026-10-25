@@ -167,3 +167,25 @@ A request id (`X-Request-Id`, reused if plain, else generated) goes on every res
 
 `POST /reading-notes/assess` reports `assessment_requests_total{outcome}`, `assessment_duration_seconds`, `assessment_tokens_total{direction}` and `assessment_estimated_cost_usd_total` (prices from `ANTHROPIC_INPUT_USD_PER_MTOK` / `ANTHROPIC_OUTPUT_USD_PER_MTOK`, 0 if unset). Never the note or the book. See `docs/observability.md`.
 
+## API documentation (staged Prompt 4, part 3)
+
+**Where the docs live.** Not on this service's open port. FastAPI's own `/docs`, `/redoc` and `/openapi.json` are switched
+off (`docs_url`, `redoc_url` and `openapi_url` are `None` in `main.py`), so port 8000, which `docker-compose` publishes to
+the host, answers 404 on all three. The spec is served by `api_docs.py` on a **separate internal port**, `DOCS_PORT` (9001,
+set in the Dockerfile), at `/openapi.json` only. Compose never publishes it, so only other containers on the Compose
+network can reach it, the same arrangement as the metrics port (`METRICS_PORT`, 9000). Unset or 0 means no docs server.
+
+**How the owner sees it.** The backend reads that internal address (`WATCHTOWER_INTELLIGENCE_DOCS_URL`), checks that the caller
+is the owner, and returns the document at `GET /api/watchtower/intelligence-api-docs` (see `docs/backend.md`, "API
+documentation"). Anyone else gets a plain 404 and the service is never asked. If the address is missing or the service does
+not answer, the owner gets a 503; if what comes back is not an OpenAPI document, a 502.
+
+**Every route has a summary** (`summary=` on each of the six decorators), and `test_api_docs.py` fails if one is missing,
+the same rule as the backend's. Its other tests check that the open port serves no documentation, that the docs server
+serves only `/openapi.json`, and that a docs port of 0 starts nothing.
+
+**Not provided: ReDoc.** The spec is shown in the Swagger UI the backend already serves (part 4 puts both specs in it), so
+there is no second viewer to host. The `/redoc` address is simply off.
+
+**Known limit.** The document lists the routes and their shapes. It does not describe the errors each route can answer;
+those come from the backend this service forwards to (`httpx.HTTPStatusError` is passed through, `main.py`).

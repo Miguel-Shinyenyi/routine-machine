@@ -56,6 +56,8 @@ watchtower:
   # The address a BROWSER can open Jaeger at (not the one the backend probes inside Docker); empty means no trace links.
   jaeger-ui-url: ${WATCHTOWER_JAEGER_UI_URL:}
   intelligence-url: ${WATCHTOWER_INTELLIGENCE_URL:}
+  # The intelligence service's API document, on its internal docs port (never published to the host).
+  intelligence-docs-url: ${WATCHTOWER_INTELLIGENCE_DOCS_URL:}
   prometheus-url: ${WATCHTOWER_PROMETHEUS_URL:}
   alertmanager-url: ${WATCHTOWER_ALERTMANAGER_URL:}
   loki-url: ${WATCHTOWER_LOKI_URL:}
