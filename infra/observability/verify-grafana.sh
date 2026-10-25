@@ -51,3 +51,38 @@ for p in d["panels"]:
 print("ok: %d dashboard queries ran without error" % ok if not bad else "FAIL: %d queries errored" % bad)
 sys.exit(1 if bad else 0)
 PY
+
+# Exemplars (docs/observability.md): the Prometheus datasource links a trace_id to the Jaeger UI, both p95 panels
+# ask for exemplars, and the query a panel makes returns real trace ids. With no traced traffic yet there are no
+# exemplars: that is reported, not failed (verify-exemplars.sh is the check that needs traffic).
+python3 - "$GRAFANA" "$CRED" "$DASHBOARD" <<'PY'
+import sys, json, subprocess, time
+grafana, cred, path = sys.argv[1], sys.argv[2], sys.argv[3]
+def curl(*args):
+    return json.loads(subprocess.run(["curl", "-s", "-u", cred, *args], capture_output=True, text=True).stdout)
+def fail(message):
+    print("FAIL: " + message); sys.exit(1)
+destinations = curl(grafana + "/api/datasources/uid/prometheus").get("jsonData", {}).get("exemplarTraceIdDestinations") or []
+if not any(d.get("name") == "trace_id" and "/trace/" in d.get("url", "") for d in destinations):
+    fail("the Prometheus datasource does not link the exemplar trace_id to the Jaeger UI")
+print("ok: the Prometheus datasource links an exemplar's trace_id to the Jaeger UI")
+panels = {p["title"]: p for p in json.load(open(path))["dashboard"]["panels"]}
+found = 0
+for title in ("Backend p95 latency by route", "Intelligence service p95 latency by route"):
+    target = panels[title]["targets"][0]
+    if not target.get("exemplar"):
+        fail("panel %r does not ask for exemplars" % title)
+    now = int(time.time())
+    query = {**target, "exemplar": True, "range": True, "instant": False, "intervalMs": 15000, "maxDataPoints": 500}
+    body = json.dumps({"queries": [query], "from": str((now - 3600) * 1000), "to": str(now * 1000)})
+    result = curl("-H", "Content-Type: application/json", "-X", "POST", grafana + "/api/ds/query", "-d", body)["results"]["A"]
+    if "error" in result:
+        fail("panel %r exemplar query errored: %s" % (title, result["error"]))
+    for frame in result.get("frames", []):
+        if frame["schema"].get("meta", {}).get("custom", {}).get("resultType") == "exemplar":
+            names = [f["name"] for f in frame["schema"]["fields"]]
+            ids = [i for i in frame["data"]["values"][names.index("trace_id")] if len(i) == 32]
+            found += len(ids)
+print("ok: both p95 panels ask for exemplars; %d exemplar trace ids returned through Grafana" % found
+      + ("" if found else " (none yet: send traced traffic, see verify-exemplars.sh)"))
+PY

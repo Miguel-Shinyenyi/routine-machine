@@ -9,7 +9,7 @@ differs and why. Built in parts; this file describes only what exists.
 
 ## Current state
 
-Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is mostly done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard).** Metric exemplars and the page are not built.
+Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is mostly done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard; metric exemplars).** The page is not built.
 
 | Part | What | State |
 |---|---|---|
@@ -152,15 +152,15 @@ does not start them). Files are in `infra/observability/`.
   put a note or an amount in one would put it in the trace; keep such values in bodies.
 - Cost, measured idle with tracing on: the backend about 445 MB against 327 MB off (about 120 MB more), the
   intelligence service about 55 MB against 42 MB, Jaeger about 20 MB; Jaeger's image 164 MB.
-- **The trace id on a metric (exemplars), in progress, steps 1 to 3 of 4 done.** The staged prompt asks to show the
+- **The trace id on a metric (exemplars), done in four steps.** The staged prompt asks to show the
   trace id in the metric, the log line and the trace. A metric carries it as a Prometheus *exemplar*, a trace id
   attached to one observation of a histogram bucket. Steps: (1) the intelligence service attaches the id to
   `http_request_duration_seconds` observations made inside a trace (done); (2) the backend does the same for
   `http_server_requests` (done: `OtelSpanContext` is a `SpanContext` bean that reads the OpenTelemetry API, which the
   Java agent backs; Spring Boot's own version needs Micrometer Tracing, which this service does not use); (3) Prometheus
   stores them (done: `--enable-feature=exemplar-storage` on the Prometheus service; it negotiates OpenMetrics with
-  both services on its own, so `prometheus.yml` did not change); (4) Grafana shows them on the p95 panels and links
-  to Jaeger (not done). An exemplar appears only in the OpenMetrics text, which both services serve
+  both services on its own, so `prometheus.yml` did not change); (4) Grafana shows them on the two p95 panels
+  (`exemplar: true`) and links each to its trace in the Jaeger UI (done, see 4c-ii). An exemplar appears only in the OpenMetrics text, which both services serve
   when the scraper asks for it; the plain text is unchanged. With tracing off there is no span, so none is attached.
   Checked live (tracing on): a request's latency bucket carried `trace_id="c4989b2f…"` on the backend and
   `trace_id="92f77443…"` on the intelligence service, and the backend's id was a real trace in Jaeger and on the
@@ -186,6 +186,10 @@ does not start them). Files are in `infra/observability/`.
   per source; assessments, p95 latency, tokens and estimated cost; and the application logs, filtered by level and by
   request or trace id. The level filter lists `WARN` (backend) and `WARNING` (intelligence service) and `CRITICAL`,
   because the two services name levels differently.
+- **Metric to trace**: the two p95 panels show exemplars as dots; the Prometheus datasource's
+  `exemplarTraceIdDestinations` turns each one's `trace_id` into a link to `http://localhost:16686/trace/<id>`.
+  Needs tracing on; with it off the charts are as before. Shown through Grafana's own query API (the call a panel
+  makes), not yet seen as dots in a browser.
 - **Log to trace**: a log line that carries a trace id (`traceId` or `trace_id`) gets a link that opens that trace in
   Jaeger (`http://localhost:16686/trace/<id>`). Tracing must be on (`TRACING_ENABLED=true`) for lines to carry one.
 - **No Jaeger datasource in Grafana.** Jaeger 2.22 dropped the v1 listing and search endpoints (`/api/services`,
@@ -197,7 +201,9 @@ does not start them). Files are in `infra/observability/`.
   (`management.metrics.distribution.percentiles-histogram`), which Spring Boot does not do by default. The p95 panel
   needs it. A test covers it.
 - **Check**: `infra/observability/verify-grafana.sh` (stack running): no login is refused, the default login does not
-  work, the two datasources are healthy, the dashboard is loaded and every query on it runs without error. A chart
+  work, the two datasources are healthy, the dashboard is loaded, every query on it runs without error, the
+  Prometheus datasource links exemplars to Jaeger, and the p95 panels' exemplar queries return trace ids through
+  Grafana. A chart
   with no data is fine on a new stack; a query that errors is not. Run on 2026-10-25: all checks pass, 14 queries.
   The backend p95 panel shows no data until the backend image is rebuilt, because the running image predates the
   latency-bucket setting.
