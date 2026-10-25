@@ -184,7 +184,7 @@ not answer, the owner gets a 503; if what comes back is not an OpenAPI document,
 the same rule as the backend's. Its other tests check that the open port serves no documentation, that the docs server
 serves only `/openapi.json`, and that a docs port of 0 starts nothing.
 
-**Not provided: ReDoc.** The spec is shown in the Swagger UI the backend already serves (part 4 puts both specs in it), so
+**Not provided: ReDoc.** The spec is shown in the Swagger UI the backend already serves (both specs are in it, behind the frontend's `/watchtower/docs`), so
 there is no second viewer to host. The `/redoc` address is simply off.
 
 **Known limit.** The document lists the routes and their shapes. It does not describe the errors each route can answer;

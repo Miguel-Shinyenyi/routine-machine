@@ -120,7 +120,7 @@ deliberate deviation rather than an oversight.
   `null` (the page then calls `notFound()`) and rethrows every other failure, so an outage is never shown as a 404. The
   owner reaches it by typing the address. The charts (`components/charts/WatchtowerChart.tsx`, a client component for the hover) sit under a range row of three links
   (`?range=1h|6h|24h`). The logs section (`lib/logs.ts`) is a plain `GET` form (level, request id) over the newest 100 lines; the range
-  row sets the logs' range too, and a request id in a row filters to that request. The link to the API docs is not there yet: it waits for Prompt 4 (`docs/observability.md`, "Piece 6"). Details and checks:
+  row sets the logs' range too, and a request id in a row filters to that request. The page has an "API documentation" section with a link to `/watchtower/docs` (staged Prompt 4, part 4): both APIs in one read-only Swagger UI. `app/watchtower/docs/route.ts` is the way in and `app/watchtower/docs/[...path]/route.ts` is a narrow proxy: GET only, a fixed list of three backend specs and the Swagger UI's own files (`lib/docsProxy.ts`, `proxyTarget`), the owner's session added as a bearer token, the body's type checked (`safeContentType`) and the UI's configuration tidied (`sanitizeSwaggerConfig`). To anyone but the owner, signed in or not, every `/watchtower/docs` address is the plain 404, the same as the page. Details and checks:
   `docs/observability.md`, "Part 5".
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
@@ -280,6 +280,9 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-25 | The API documentation is served by a narrow route handler on the frontend that adds the owner's session, with an allow-list of backend addresses | A browser cannot send a bearer token when it loads a page, so the backend's Swagger UI could not be opened directly. The proxy reaches only the three specs and the UI's own files, GET only, so no address a visitor types can use the session on any other backend route. The backend still decides who the owner is; the frontend holds no owner logic |
+| 2026-10-25 | The API documentation is read-only: no "Try it out" | "Try it out" would send requests from the browser. Through this proxy that would mean forwarding arbitrary requests with the owner's token, which is more surface to protect than reading the documentation is worth. Turned off in the backend's Swagger UI settings and checked by a test |
+| 2026-10-25 | The documentation link is a plain `<a>`, not Next's `Link` | `Link` prefetches, and this address is a route handler, not a page |
 | 2026-10-25 | The logs filter is a plain `GET` form with the level and id in the address, and the page range scopes the logs as well as the charts | Same server-rendered, bookmarkable pattern as Tally's and Path's controls, with no client state. One range row above everything keeps the charts, the sync table and the logs on the same slice (the dataviz skill's filter rule) |
 | 2026-10-25 | `parseLogFilters` drops a bad level or id before the call, and the page says when an id was dropped | The backend refuses them with a 400, which would show as an error page for something the owner typed. Dropping it keeps the page up and the note says why the filter did not apply |
 | 2026-10-25 | Trace links render only for `http` and `https` addresses, open in a new tab with `noopener noreferrer` | The address comes from the backend's configuration, but a link built from data is checked before it is shown |

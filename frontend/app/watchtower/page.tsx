@@ -90,6 +90,19 @@ export default async function WatchtowerPage({
         </div>
       </section>
 
+      <section aria-labelledby="apidocs">
+        <h2 id="apidocs" className="mb-2.5 px-1 text-[17px] font-semibold">
+          API documentation
+        </h2>
+        <p className="px-1 text-[14px] text-muted">
+          Both APIs, the backend and the intelligence service, in one read-only viewer. Only you can open it.{" "}
+          {/* A plain link on purpose: Next's Link would prefetch it, and it is a route handler, not a page. */}
+          <a href="/watchtower/docs" target="_blank" rel="noopener noreferrer" className="text-tint-text">
+            Open the API documentation
+          </a>
+        </p>
+      </section>
+
       <section aria-labelledby="charts">
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 id="charts" className="text-[17px] font-semibold">

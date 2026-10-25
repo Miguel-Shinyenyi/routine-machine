@@ -63,3 +63,22 @@ watchtower:
   loki-url: ${WATCHTOWER_LOKI_URL:}
   jaeger-url: ${WATCHTOWER_JAEGER_URL:}
   grafana-url: ${WATCHTOWER_GRAFANA_URL:}
+
+# The API documentation page (staged Prompt 4, docs/backend.md). The owner opens it through the frontend's /watchtower/docs
+# route, which adds the owner's session; a browser cannot send a bearer token on a page load. So the UI is told to read both
+# specs from that route, not from the backend's own addresses. Read-only on purpose: no supported submit methods means no
+# "Try it out", so nothing opened here can send a request.
+springdoc:
+  swagger-ui:
+    urls:
+      - name: Backend
+        url: /watchtower/docs/spec/backend
+      - name: Intelligence service
+        url: /watchtower/docs/spec/intelligence
+    supported-submit-methods: []
+    # The UI reads its configuration from here and then reads this address again, so it must be the address the frontend
+    # serves it from; springdoc's own default is the backend's, which the browser cannot reach. (The frontend's docs route
+    # also drops oauth2RedirectUrl from the answer: springdoc builds it from the internal host name, and nothing uses it.)
+    config-url: /watchtower/docs/spec/config
+    # Off: the default asks an online validator about the spec's address.
+    validator-url: none

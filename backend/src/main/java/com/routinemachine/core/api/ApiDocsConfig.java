@@ -8,6 +8,7 @@ import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.servers.Server;
 import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +16,7 @@ import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.bind.annotation.RequestMapping;
 
+import java.util.List;
 import java.util.Map;
 
 // The error codes and the title of the API documentation (staged Prompt 4). The documentation is visible to the owner
@@ -36,7 +38,9 @@ public class ApiDocsConfig {
 
     @Bean
     public OpenAPI routineMachineApi() {
-        return new OpenAPI().info(new Info()
+        // One relative server, so springdoc does not fill "servers" from the address the request came in on: behind the
+        // frontend that is the internal host name, which the documentation page would then show.
+        return new OpenAPI().servers(List.of(new Server().url("/"))).info(new Info()
                 .title("Routine Machine API")
                 .version("1")
                 .description("The backend's HTTP API. Visible to the owner only. Routes under /api/users, /api/granary, "
