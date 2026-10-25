@@ -37,6 +37,8 @@ cp infra/.env.example infra/.env
 docker compose -f infra/docker-compose.yml up --build
 ```
 
+If port 5432 is already taken on your machine, set `POSTGRES_HOST_PORT=5433` (or any free port) in `infra/.env` before the last command. The services reach Postgres inside Docker and are not affected.
+
 Then open <http://localhost:3000>, choose "Create account", and follow the first-step card.
 
 | Service | Port | Folder |
@@ -46,7 +48,7 @@ Then open <http://localhost:3000>, choose "Create account", and follow the first
 | Intelligence service (FastAPI) | 8000 | `intelligence-service/` |
 | Postgres | 5432 | `infra/` |
 
-**Environment variables** (names only; the file `infra/.env.example` explains each one and `infra/.env` is git-ignored): `AUTH_JWT_SECRET` (required), `AUTH_INTERNAL_TOKEN`, `OWNER_EMAIL`, `HEALTH_INGEST_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_INPUT_USD_PER_MTOK`, `ANTHROPIC_OUTPUT_USD_PER_MTOK`, `WAKATIME_API_KEY`, `ACTIVITYWATCH_BASE_URL`, `RESCUETIME_API_KEY`, `RESCUETIME_SYNC_ENABLED`, `GITHUB_TOKEN`, `UMWAYI_JOURNAL_KEY_B64`, `GRAFANA_ADMIN_PASSWORD`, `POSTHOG_KEY`, `POSTHOG_HOST`, `PRIVACY_CONTACT`. The compose file insists on `AUTH_JWT_SECRET` only. Each integration is meant to stay off until its own variable is set.
+**Environment variables** (names only; the file `infra/.env.example` explains each one and `infra/.env` is git-ignored): `AUTH_JWT_SECRET` (required), `AUTH_INTERNAL_TOKEN`, `OWNER_EMAIL`, `HEALTH_INGEST_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_INPUT_USD_PER_MTOK`, `ANTHROPIC_OUTPUT_USD_PER_MTOK`, `WAKATIME_API_KEY`, `ACTIVITYWATCH_BASE_URL`, `RESCUETIME_API_KEY`, `RESCUETIME_SYNC_ENABLED`, `GITHUB_TOKEN`, `UMWAYI_JOURNAL_KEY_B64`, `GRAFANA_ADMIN_PASSWORD`, `POSTGRES_HOST_PORT`, `POSTHOG_KEY`, `POSTHOG_HOST`, `PRIVACY_CONTACT`. The compose file insists on `AUTH_JWT_SECRET` only. Each integration is meant to stay off until its own variable is set.
 
 **Migrations** run by themselves: the backend applies its Flyway migrations (`backend/src/main/resources/db/migration/`) when it starts.
 
