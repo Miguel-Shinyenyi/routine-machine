@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -34,12 +35,14 @@ public class BookController {
         this.userRepository = userRepository;
     }
 
+    @Operation(summary = "List the signed-in person's books")
     @GetMapping
     public List<BookResponse> list(@AuthenticationPrincipal Jwt jwt) {
         List<Book> books = bookRepository.findByUserIdOrderByCreatedAtDesc(TokenUser.idOf(jwt));
         return books.stream().map(BookResponse::from).toList();
     }
 
+    @Operation(summary = "Get the book being read now")
     @GetMapping("/current")
     public BookResponse current(@AuthenticationPrincipal Jwt jwt) {
         return bookRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(TokenUser.idOf(jwt))
@@ -47,6 +50,7 @@ public class BookController {
                 .orElseThrow(() -> new NoSuchElementException("No book logged yet"));
     }
 
+    @Operation(summary = "Start a book")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public BookResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody BookRequest request) {

@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import com.routinemachine.core.domain.Measurement;
 import com.routinemachine.core.domain.MeasurementSource;
 import com.routinemachine.core.service.MeasurementService;
@@ -37,6 +38,8 @@ public class MeasurementIngestController {
         this.configuredToken = configuredToken;
     }
 
+    @Operation(summary = "Push a health measurement (health-ingest token only)")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "The health-ingest token is missing, wrong or not configured.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public MeasurementResponse ingest(

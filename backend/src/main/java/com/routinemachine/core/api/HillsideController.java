@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -27,6 +28,7 @@ public class HillsideController {
         this.hillsideService = hillsideService;
     }
 
+    @Operation(summary = "Get the days-shown-up hillside (version 1)")
     @GetMapping
     public HillsideResponse get(
             @RequestParam Optional<HillsideField> field,

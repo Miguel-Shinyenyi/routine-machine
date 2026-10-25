@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -51,6 +52,7 @@ public class EvidenceEventController {
         this.evidenceCreditService = evidenceCreditService;
     }
 
+    @Operation(summary = "Record a piece of evidence and decide its credit")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public EvidenceEventResponse ingest(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody EvidenceEventRequest request) {
@@ -70,6 +72,7 @@ public class EvidenceEventController {
     // The ledger table (hillside.html's "How your credits were counted"): every evidence event
     // for this user in the window, whatever it was decided — accepted, rejected, pending, or
     // self-reported.
+    @Operation(summary = "List the credit ledger: every evidence event and how it was decided")
     @GetMapping
     public List<EvidenceEventResponse> ledger(
             @AuthenticationPrincipal Jwt jwt, @RequestParam LocalDate seasonStart, @RequestParam LocalDate seasonEnd) {
@@ -80,6 +83,7 @@ public class EvidenceEventController {
 
     // "Question a credit": records the request, nothing more — see
     // docs/product-direction.md's Hillside v2 transparency bullet.
+    @Operation(summary = "Question a credit")
     @PatchMapping("/{id}/question")
     public EvidenceEventResponse question(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
         EvidenceEvent event = evidenceEventRepository.findWithGoalById(id)

@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -33,6 +34,7 @@ public class CurrentReadingController {
         this.userRepository = userRepository;
     }
 
+    @Operation(summary = "Get the latest current-reading entry")
     @GetMapping
     public CurrentReadingResponse latest(@AuthenticationPrincipal Jwt jwt) {
         return currentReadingLogRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(TokenUser.idOf(jwt))
@@ -40,6 +42,7 @@ public class CurrentReadingController {
                 .orElseThrow(() -> new NoSuchElementException("No current reading logged yet"));
     }
 
+    @Operation(summary = "Record what is being read now")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CurrentReadingResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CurrentReadingRequest request) {

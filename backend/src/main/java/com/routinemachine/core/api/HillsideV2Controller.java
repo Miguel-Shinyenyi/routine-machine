@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -30,6 +31,7 @@ public class HillsideV2Controller {
         this.hillsideV2Service = hillsideV2Service;
     }
 
+    @Operation(summary = "Get the credit-based hillside (version 2)")
     @GetMapping
     public HillsideV2Response get(
             @RequestParam Optional<Long> goalId, @RequestParam Optional<LocalDate> seasonStart,

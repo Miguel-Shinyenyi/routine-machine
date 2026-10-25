@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -35,6 +36,7 @@ public class WateringHoleStatusController {
     // for the whole deployment, so they are connected for the owner account and for nobody else.
     // Anyone but the owner: every source reads "not connected" with no activity, which is true for
     // that account. With no owner configured nobody is the owner.
+    @Operation(summary = "List the status of each data source")
     @GetMapping
     public List<WateringHoleStatusResponse> list(@AuthenticationPrincipal Jwt jwt) {
         List<WateringHoleStatusResponse> statuses = statusService.statuses();

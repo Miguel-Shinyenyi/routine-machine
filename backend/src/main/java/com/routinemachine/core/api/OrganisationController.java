@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -52,6 +53,7 @@ public class OrganisationController {
         this.userRepository = userRepository;
     }
 
+    @Operation(summary = "Create an organisation")
     @PostMapping
     public OrganisationResponse createOrganisation(
             @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CreateOrganisationRequest request) {
@@ -59,6 +61,7 @@ public class OrganisationController {
         return OrganisationResponse.from(organisation);
     }
 
+    @Operation(summary = "Create a cohort in an organisation")
     @PostMapping("/{organisationId}/cohorts")
     public CohortResponse createCohort(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long organisationId, @Valid @RequestBody CreateCohortRequest request) {
@@ -67,6 +70,7 @@ public class OrganisationController {
         return CohortResponse.from(cohort);
     }
 
+    @Operation(summary = "Add a person to a cohort")
     @PostMapping("/cohorts/{cohortId}/members")
     public CohortMemberResponse addCohortMember(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId, @Valid @RequestBody AddCohortMemberRequest request) {
@@ -75,6 +79,7 @@ public class OrganisationController {
         return toMemberResponse(membership);
     }
 
+    @Operation(summary = "List a cohort's members")
     @GetMapping("/cohorts/{cohortId}/members")
     public List<CohortMemberResponse> listCohortMembers(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
         return organisationService.listCohortMembers(cohortId, TokenUser.idOf(jwt)).stream()
@@ -82,6 +87,7 @@ public class OrganisationController {
                 .toList();
     }
 
+    @Operation(summary = "Set an organisation's seat limit")
     @PutMapping("/{organisationId}/seat-limit")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void setSeatLimit(
@@ -89,27 +95,32 @@ public class OrganisationController {
         organisationService.setSeatLimit(organisationId, TokenUser.idOf(jwt), request.seatLimit());
     }
 
+    @Operation(summary = "Invite people to a cohort in bulk")
     @PostMapping("/cohorts/{cohortId}/bulk-invite")
     public List<CsvInviteRowResult> bulkInvite(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId, @Valid @RequestBody BulkInviteRequest request) {
         return organisationService.bulkInviteByCsv(cohortId, TokenUser.idOf(jwt), request.csv());
     }
 
+    @Operation(summary = "Get a cohort's pilot measures")
     @GetMapping("/cohorts/{cohortId}/dashboard")
     public CohortDashboardSummary dashboard(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
         return cohortDashboardService.summarize(cohortId, TokenUser.idOf(jwt), LocalDate.now());
     }
 
+    @Operation(summary = "Get a cohort's measures by study group")
     @GetMapping("/cohorts/{cohortId}/dashboard/by-group")
     public List<CohortGroupMeasure> dashboardByGroup(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
         return cohortDashboardService.summarizeByGroup(cohortId, TokenUser.idOf(jwt), LocalDate.now());
     }
 
+    @Operation(summary = "Get a cohort's weekly check-in chart")
     @GetMapping("/cohorts/{cohortId}/dashboard/weekly-check-ins")
     public CohortWeeklyCheckInChart weeklyCheckIns(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
         return cohortDashboardService.weeklyCheckIns(cohortId, TokenUser.idOf(jwt), LocalDate.now());
     }
 
+    @Operation(summary = "Answer the cohort pilot survey")
     @PostMapping("/cohorts/{cohortId}/survey-response")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void submitSurveyResponse(

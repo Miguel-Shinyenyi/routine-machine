@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -35,11 +36,13 @@ public class GoalController {
     // userId is optional and additive (Phase 8 groundwork, see docs/backend.md): omitted,
     // this returns every goal exactly as before this phase. Passed, it scopes to that one
     // user's own goals, matching RoutineItemController/DailyLogController's pattern.
+    @Operation(summary = "List goals")
     @GetMapping
     public List<GoalResponse> list(@AuthenticationPrincipal Jwt jwt) {
         return goalRepository.findByUserId(TokenUser.idOf(jwt)).stream().map(GoalResponse::from).toList();
     }
 
+    @Operation(summary = "Create a goal")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public GoalResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody GoalRequest request) {

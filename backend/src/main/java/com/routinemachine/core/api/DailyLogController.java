@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -49,6 +50,7 @@ public class DailyLogController {
 
     // userId is optional and additive, same as RoutineItemController's (Phase 8 groundwork,
     // see docs/backend.md): combines with date when both are given.
+    @Operation(summary = "List daily logs")
     @GetMapping
     public List<DailyLogResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<LocalDate> date) {
         Long userId = TokenUser.idOf(jwt);
@@ -57,6 +59,7 @@ public class DailyLogController {
         return logs.stream().map(DailyLogResponse::from).toList();
     }
 
+    @Operation(summary = "Record a day's log")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public DailyLogResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody DailyLogRequest request) {

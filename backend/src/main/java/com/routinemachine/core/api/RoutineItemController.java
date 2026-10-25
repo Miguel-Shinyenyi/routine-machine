@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -43,12 +44,14 @@ public class RoutineItemController {
     // this returns every legacy, unowned item exactly as before this phase. Passed, it scopes
     // to that one user's own items instead, for testing the new per-user data alongside the
     // untouched single-user behaviour everything else still relies on.
+    @Operation(summary = "List routine items")
     @GetMapping
     public List<RoutineItemResponse> list(@AuthenticationPrincipal Jwt jwt) {
         List<RoutineItem> items = routineItemRepository.findAllWithGoalByUserId(TokenUser.idOf(jwt));
         return items.stream().map(RoutineItemResponse::from).toList();
     }
 
+    @Operation(summary = "Create a routine item")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoutineItemResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody RoutineItemRequest request) {

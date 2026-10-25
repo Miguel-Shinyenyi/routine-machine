@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.service.OwnerAccount;
 import com.routinemachine.core.service.ServiceHealthService;
@@ -41,6 +42,7 @@ public class WatchtowerController {
         this.syncService = syncService;
     }
 
+    @Operation(summary = "Owner only: the health of each service")
     @GetMapping("/services")
     public List<ServiceHealthService.ServiceStatus> services(@AuthenticationPrincipal Jwt jwt) {
         requireOwner(jwt);
@@ -48,6 +50,7 @@ public class WatchtowerController {
     }
 
     // The only thing a caller chooses is the time range (1h, 6h or 24h). The queries are a fixed list.
+    @Operation(summary = "Owner only: chart data read from Prometheus")
     @GetMapping("/metrics")
     public WatchtowerMetricsService.Metrics metrics(
             @AuthenticationPrincipal Jwt jwt,
@@ -59,6 +62,7 @@ public class WatchtowerController {
     // Recent logs from Loki. The caller may filter by one level from a fixed list and by an id of plain characters (a
     // request id or a trace id), and choose the range. The owner check comes first, so a non-owner never learns that a
     // bad parameter would have been refused.
+    @Operation(summary = "Owner only: recent log lines read from Loki")
     @GetMapping("/logs")
     public WatchtowerLogsService.Logs logs(
             @AuthenticationPrincipal Jwt jwt,
@@ -70,6 +74,7 @@ public class WatchtowerController {
     }
 
     // Each source's switch, newest data, run state and one result word. Nothing in the request reaches Prometheus.
+    @Operation(summary = "Owner only: the state of each sync source")
     @GetMapping("/sync")
     public WatchtowerSyncService.Sync sync(@AuthenticationPrincipal Jwt jwt) {
         requireOwner(jwt);

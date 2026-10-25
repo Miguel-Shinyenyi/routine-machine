@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -40,6 +41,7 @@ public class ScheduleTemplateController {
         this.userRepository = userRepository;
     }
 
+    @Operation(summary = "List schedule templates")
     @GetMapping
     public List<ScheduleTemplateResponse> list(
             @AuthenticationPrincipal Jwt jwt, @RequestParam Optional<DayOfWeek> dayOfWeek) {
@@ -50,6 +52,7 @@ public class ScheduleTemplateController {
         return templates.stream().map(ScheduleTemplateResponse::from).toList();
     }
 
+    @Operation(summary = "Create a schedule template")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ScheduleTemplateResponse create(

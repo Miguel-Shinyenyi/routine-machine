@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -61,6 +62,7 @@ public class TaskController {
 
     // Per-user scoping (docs/backend.md): userId given = that user's tasks; omitted = only the
     // unowned (pre-account) ones, never another user's.
+    @Operation(summary = "List tasks")
     @GetMapping
     public List<TaskResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<LocalDate> date) {
         Long userId = TokenUser.idOf(jwt);
@@ -69,6 +71,7 @@ public class TaskController {
         return tasks.stream().map(TaskResponse::from).toList();
     }
 
+    @Operation(summary = "Create a task")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TaskResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody TaskRequest request) {
@@ -82,6 +85,7 @@ public class TaskController {
         return TaskResponse.from(taskRepository.save(task));
     }
 
+    @Operation(summary = "Change a task's status")
     @PatchMapping("/{id}")
     public TaskResponse updateStatus(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @Valid @RequestBody TaskStatusUpdateRequest request) {

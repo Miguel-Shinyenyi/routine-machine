@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -33,6 +34,7 @@ public class LearningTopicController {
         this.goalRepository = goalRepository;
     }
 
+    @Operation(summary = "List learning topics")
     @GetMapping
     public List<LearningTopicResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<Long> goalId) {
         // A topic belongs to whoever owns its goal.
@@ -42,6 +44,7 @@ public class LearningTopicController {
         return topics.stream().map(LearningTopicResponse::from).toList();
     }
 
+    @Operation(summary = "Create a learning topic")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public LearningTopicResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody LearningTopicRequest request) {

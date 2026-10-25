@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import com.routinemachine.core.domain.PauseDecision;
 import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.PauseDecisionRepository;
@@ -51,6 +52,7 @@ public class GranaryController {
         this.pauseDecisionRepository = pauseDecisionRepository;
     }
 
+    @Operation(summary = "Store a saving for today")
     @PostMapping("/savings")
     public GranaryMonthSummaryResponse storeSaving(@AuthenticationPrincipal Jwt jwt) {
         User user = findUser(TokenUser.idOf(jwt));
@@ -59,6 +61,7 @@ public class GranaryController {
         return summaryResponse(user, YearMonth.from(today), today);
     }
 
+    @Operation(summary = "Set the daily amount to store")
     @PutMapping("/saving-target-amount")
     public GranaryMonthSummaryResponse setSavingTargetAmount(
             @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SetSavingTargetAmountRequest request) {
@@ -69,6 +72,7 @@ public class GranaryController {
         return summaryResponse(user, YearMonth.from(today), today);
     }
 
+    @Operation(summary = "Get the granary summary for this month")
     @GetMapping("/summary")
     public GranaryMonthSummaryResponse summary(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<YearMonth> month) {
         User user = findUser(TokenUser.idOf(jwt));
@@ -81,6 +85,7 @@ public class GranaryController {
                 granaryService.monthSummary(user, month, today), user.getSavingTargetAmount(), user.getCurrency());
     }
 
+    @Operation(summary = "Log a pause before a tempting decision")
     @PostMapping("/pauses")
     public PauseDecisionResponse createPause(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CreatePauseRequest request) {
         User user = findUser(TokenUser.idOf(jwt));
@@ -92,6 +97,7 @@ public class GranaryController {
 
     // Every pause decision this user has ever logged, newest first — the granary page's own
     // "the pause" table. GET .../pauses/due below is the narrower list Today prompts about.
+    @Operation(summary = "List every pause logged, newest first")
     @GetMapping("/pauses")
     public List<PauseDecisionResponse> pauses(@AuthenticationPrincipal Jwt jwt) {
         Instant now = Instant.now();
@@ -100,6 +106,7 @@ public class GranaryController {
                 .toList();
     }
 
+    @Operation(summary = "List the pauses due for a follow-up")
     @GetMapping("/pauses/due")
     public List<PauseDecisionResponse> duePauses(@AuthenticationPrincipal Jwt jwt) {
         User user = findUser(TokenUser.idOf(jwt));
@@ -109,6 +116,7 @@ public class GranaryController {
                 .toList();
     }
 
+    @Operation(summary = "Record the decision on a pause (decline or proceed)")
     @PatchMapping("/pauses/{id}/decide")
     public PauseDecisionResponse decide(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @Valid @RequestBody DecidePauseRequest request) {
@@ -118,6 +126,7 @@ public class GranaryController {
         return PauseDecisionResponse.from(pause, now);
     }
 
+    @Operation(summary = "Add a reflection to a pause")
     @PatchMapping("/pauses/{id}/reflect")
     public PauseDecisionResponse reflect(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @Valid @RequestBody ReflectPauseRequest request) {
@@ -130,6 +139,7 @@ public class GranaryController {
     // to GranaryService — never written to disk, so "delete the file after parsing" is true by
     // construction. password is optional form data, used once for this one call and never
     // stored (see docs/product-direction.md's M-Pesa section and MpesaPdfReader).
+    @Operation(summary = "Import an M-Pesa statement from a PDF")
     @PostMapping("/mpesa-statement")
     public MpesaImportResponse importMpesaStatement(
             @AuthenticationPrincipal Jwt jwt, @RequestParam MultipartFile file, @RequestParam Optional<String> password) {
@@ -143,6 +153,7 @@ public class GranaryController {
         return MpesaImportResponse.from(granaryService.importMpesaStatement(user, pdfBytes, password.orElse(null)));
     }
 
+    @Operation(summary = "List the M-Pesa spending categories")
     @GetMapping("/mpesa-categories")
     public Map<MpesaCategory, Integer> mpesaCategories(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<YearMonth> month) {
         User user = findUser(TokenUser.idOf(jwt));

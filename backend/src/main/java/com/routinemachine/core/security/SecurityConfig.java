@@ -37,6 +37,16 @@ import java.nio.charset.StandardCharsets;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    // Every route that needs a valid token, and the routes where a token is optional. The API documentation reads these
+    // (ApiDocsConfig) so the 401 it documents is on exactly the routes the chains refuse, and a test compares them.
+    public static final String[] TOKEN_REQUIRED_PATTERNS = {
+            "/api/users/**", "/api/granary/**", "/api/goals/**", "/api/routine-items/**",
+            "/api/learning-topics/**", "/api/daily-logs/**", "/api/tasks/**", "/api/schedule-templates/**", "/api/books/**", "/api/reading-notes/**",
+            "/api/current-reading/**", "/api/watering-holes/**", "/api/evidence-events/**",
+            "/api/organisations/**"};
+    public static final String[] OPTIONAL_TOKEN_PATTERNS = {"/api/hillside/**", "/api/watchtower/**"};
+
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -52,11 +62,7 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain jwtProtectedChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher(
-                        "/api/users/**", "/api/granary/**", "/api/goals/**", "/api/routine-items/**",
-                        "/api/learning-topics/**", "/api/daily-logs/**", "/api/tasks/**", "/api/schedule-templates/**", "/api/books/**", "/api/reading-notes/**",
-                        "/api/current-reading/**", "/api/watering-holes/**", "/api/evidence-events/**",
-                        "/api/organisations/**")
+                .securityMatcher(TOKEN_REQUIRED_PATTERNS)
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
@@ -76,7 +82,7 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain optionalTokenChain(HttpSecurity http, OwnerAccount ownerAccount) throws Exception {
         http
-                .securityMatcher(concat(new String[] {"/api/hillside/**", "/api/watchtower/**"}, OwnerOnlyDocsFilter.PATTERNS))
+                .securityMatcher(concat(OPTIONAL_TOKEN_PATTERNS, OwnerOnlyDocsFilter.PATTERNS))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())

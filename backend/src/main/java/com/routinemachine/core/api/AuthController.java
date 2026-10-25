@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import com.routinemachine.core.domain.User;
 import com.routinemachine.core.service.AuthService;
 import com.routinemachine.core.service.OrganisationService;
@@ -36,6 +37,7 @@ public class AuthController {
         this.internalToken = internalToken;
     }
 
+    @Operation(summary = "Create an account with an email and a password")
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse register(@Valid @RequestBody RegisterRequest request) {
@@ -44,6 +46,8 @@ public class AuthController {
         return UserResponse.from(user);
     }
 
+    @Operation(summary = "Check an email and a password")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "The email or the password is not right. The same answer for every kind of failure.")
     @PostMapping("/login")
     public UserResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request.email(), request.password())
@@ -56,6 +60,8 @@ public class AuthController {
     // password, that the caller is allowed to assert "this GitHub account belongs to this
     // email." Fails closed with no internal token configured, same rule
     // MeasurementIngestController applies to HEALTH_INGEST_TOKEN.
+    @Operation(summary = "Find or create the account for a GitHub sign-in (internal token only)")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "The internal service token is missing, wrong or not configured.")
     @PostMapping("/github-login")
     public UserResponse githubLogin(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,

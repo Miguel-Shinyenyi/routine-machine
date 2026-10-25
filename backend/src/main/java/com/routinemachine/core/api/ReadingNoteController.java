@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -31,6 +32,7 @@ public class ReadingNoteController {
         this.readingNoteService = readingNoteService;
     }
 
+    @Operation(summary = "List reading notes")
     @GetMapping
     public List<ReadingNoteResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<Long> bookId) {
         // A note belongs to whoever owns its book. Asking for a specific book that is not yours
@@ -41,6 +43,7 @@ public class ReadingNoteController {
         return notes.stream().map(ReadingNoteResponse::from).toList();
     }
 
+    @Operation(summary = "Save a reading note")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ReadingNoteResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ReadingNoteRequest request) {
