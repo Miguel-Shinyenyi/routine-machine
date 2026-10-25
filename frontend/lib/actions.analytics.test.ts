@@ -23,7 +23,7 @@ vi.mock("./auth/session", () => ({
   requireSessionUserId: async () => 34,
 }));
 
-import { createPause, questionCredit, setHillsideOptIn, submitReadingNote, updateTaskStatus } from "./actions";
+import { createGoal, createPause, questionCredit, setHillsideOptIn, submitReadingNote, updateTaskStatus } from "./actions";
 
 function form(values: Record<string, string>): FormData {
   const data = new FormData();
@@ -111,6 +111,35 @@ describe("updateTaskStatus", () => {
     await updateTaskStatus(5, "IN_PROGRESS");
     backendFetch.mockRejectedValueOnce(new Error("refused"));
     await expect(updateTaskStatus(5, "DONE")).rejects.toThrow();
+    expect(queue).not.toHaveBeenCalled();
+  });
+});
+
+describe("createGoal", () => {
+  it("sends the name and description to the backend, then queues goal_created with nothing from the form", async () => {
+    await createGoal(form({ name: "Learn Rust", description: "for the CMU application" }));
+    expect(backendFetch).toHaveBeenCalledWith("/api/goals", {
+      method: "POST",
+      body: JSON.stringify({ name: "Learn Rust", description: "for the CMU application" }),
+    });
+    expect(queue.mock.calls).toEqual([["goal_created"]]);
+    expect(JSON.stringify(queue.mock.calls)).not.toMatch(/Rust|CMU/);
+  });
+  it("trims the name and sends no description when it is blank", async () => {
+    await createGoal(form({ name: "  Read daily ", description: "   " }));
+    expect(backendFetch).toHaveBeenCalledWith("/api/goals", {
+      method: "POST",
+      body: JSON.stringify({ name: "Read daily", description: null }),
+    });
+  });
+  it("does nothing for a blank name: no request, no event", async () => {
+    await createGoal(form({ name: "   " }));
+    expect(backendFetch).not.toHaveBeenCalled();
+    expect(queue).not.toHaveBeenCalled();
+  });
+  it("queues nothing when the backend refuses", async () => {
+    backendFetch.mockRejectedValueOnce(new Error("refused"));
+    await expect(createGoal(form({ name: "Learn Rust" }))).rejects.toThrow();
     expect(queue).not.toHaveBeenCalled();
   });
 });

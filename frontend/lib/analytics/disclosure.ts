@@ -22,7 +22,7 @@ export const EVENT_DISCLOSURE: Record<string, EventDisclosure> = {
       "Your internal user number, which this app assigns and which is not your email address or your name, tied to the random device number above. Nothing else about you.",
     sentToday: true,
   },
-  goal_created: { when: "You create a goal.", carries: "Nothing about the goal: not its name and not its description. (Nothing in the app creates a goal yet, so this is never sent today.)", sentToday: false },
+  goal_created: { when: "You create a goal.", carries: "Nothing about the goal: not its name and not its description.", sentToday: true },
   day_logged: { when: "A day is logged.", carries: "Only where the log came from (for example you tapped it, or an automatic source). Nothing about what was logged.", sentToday: true },
   credit_questioned: { when: "You question a credit.", carries: "Nothing about the credit, the goal or the evidence.", sentToday: true },
   reading_note_submitted: { when: "You submit a reading note.", carries: "No text of the note, no score and no book.", sentToday: true },

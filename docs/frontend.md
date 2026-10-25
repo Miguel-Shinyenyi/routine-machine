@@ -399,12 +399,19 @@ departure from precedent.
 - **Favicon.** `app/icon.svg` is the shepherd's crook on the amber tile, the same mark as the sidebar logo. The default `favicon.ico` was removed so browsers do not prefer it.
 - **Checked** (25 Oct 2026, Chrome, a throwaway account on `127.0.0.1`): the card shows for a new account; a fresh sign-up shows `Africa/Nairobi` on Profile (browser zone), an account made before the change shows `UTC`; the page's icon link points to `/icon.svg`. **Not checked**: the icon's look in the browser tab itself (I read the link, not the tab strip), the card at phone width, the card in light theme.
 
+## Goals on Flock (staged Prompt 6, part 4)
+
+- **A goal can now be created in the browser.** Flock has a "Goals" section above Learning topics: the list, a first-step line when empty ("A goal is what your hours add up to"), and a form (name, optional "Why it matters"). The action is `createGoal` in `lib/actions.ts`: it trims the name, does nothing for a blank one, sends `POST /api/goals`, then queues `goal_created` (no properties) **only after the backend accepted it**. The backend already scoped goals to the signed-in user.
+- **The eighth event is wired**, so every named analytics event is now sent. `EVENT_DISCLOSURE.goal_created.sentToday` is true, and the privacy page hides its "not sent yet" list when it is empty.
+- **Known rough edge**: a goal name the person already has makes the backend answer 400, and the action does not catch it, so they see the app's error page. There is no friendlier message yet.
+- **Checked** (25 Oct 2026, Chrome, throwaway account on `127.0.0.1`, analytics declined): adding "Learn Rust" listed it, and the `rm_events` cookie was cleared with nothing sent. 4 new unit tests (request body, trimming, blank name, backend refusal) and a deliberate break (removing the queue call fails one). **Not checked**: the accepted path sending `goal_created` to PostHog in a real browser (unit-tested only), the form at phone width, a duplicate name.
+
 ## Analytics (staged Prompt 5, parts 1 to 3 of 6)
 
 Product analytics with PostHog, to learn how people move through the app **without collecting what the app promises to keep
 private**. Built in parts. **What exists**: a consent banner, a gate that keeps the library unloaded until a visitor accepts, a
 filter on everything that leaves the browser, identification by internal user id only, the session-replay decision (off), and a public
-privacy page where a visitor can change their choice, and (part 3) seven of the eight named events wired to the app, with a test that fails the build on a private field name. **Not built:** `goal_created` has nothing to attach to (see below). **Seen in PostHog's own Live events**: not by
+privacy page where a visitor can change their choice, and (part 3) the eight named events wired to the app, with a test that fails the build on a private field name. **Seen in PostHog's own Live events**: not by
 me (I cannot open your PostHog); PostHog answered 200 to the two events my real browser sent, see "Checked against the real
 project" below.
 
@@ -440,7 +447,7 @@ project" below.
   receives it (the deployment's own PostHog host, and the region for PostHog's two hosted ones, outside Kenya), and the rights under Kenya's
   Data Protection Act, 2019. It is built from `lib/analytics/disclosure.ts`, and **a test holds that list equal to the list of events the
   app may send**, so an event cannot be allowed without being described to the people it is collected from; `sentToday` marks the events
-  sent now (all but `goal_created`, listed as "not sent yet"). A **"Your choice" box** shows the
+  sent now (all of them; the page's "not sent yet" list shows only when an event is not connected). A **"Your choice" box** shows the
   current choice in plain words and lets the visitor change it at any time (`components/AnalyticsChoice.tsx`, sharing one store with the
   banner, `lib/analytics/consent-store.ts`); when the browser itself sends Do Not Track or Global Privacy Control the buttons are off
   and the page says why. With analytics off the page says only that. Linked from the banner, the sidebar footer and the sign-in and
@@ -462,7 +469,7 @@ project" below.
   | `pause_logged` | a pause is created (`createPause`) | nothing: no amount, no item |
   | `hillside_joined` / `hillside_left` | the Hillside switch changes (`setHillsideOptIn`) | nothing |
   | `cohort_dashboard_viewed` | the browser opens `/cohort/<id>` (`paths.ts`) | nothing |
-  | `goal_created` | **never yet**: the app has no goal screen | nothing |
+  | `goal_created` | a goal is created on Flock (`createGoal`) | nothing: not its name, not its description |
 
 - **How a server action's event reaches PostHog.** The browser holds the library, the server action does not. The action calls `queueAnalyticsEvent` (`lib/analytics/queue.ts`), which writes a short-lived cookie `rm_events` (120 seconds, at most 10 entries, name only). The consent component reads it, sends the events **only if the visitor has accepted**, and clears it. Declined visitors get the cookie cleared and nothing sent. The cookie is revalidated on both sides with `buildEvent`, so a forged or expired entry is dropped (`pending.ts`, `plan.ts`). It holds event names, never values. The privacy page names it.
 - **The build-failing check.** `lib/analytics/named-events.test.ts` runs every event through `buildEvent` with the worst-case inputs and fails if any property key is a whole word `amount`, `text`, `note`, `email` or `name` (plural too, camelCase and snake_case split, `fields.ts`). `sanitize.ts` also deletes such keys at send time. `npm test` runs in the build, so the build fails.

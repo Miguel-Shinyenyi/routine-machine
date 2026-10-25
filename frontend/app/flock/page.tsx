@@ -7,6 +7,7 @@ import { NewScheduleTemplateForm } from "@/components/NewScheduleTemplateForm";
 import { NewAdHocTaskForm } from "@/components/NewAdHocTaskForm";
 import { NewRoutineItemForm } from "@/components/NewRoutineItemForm";
 import { NewLearningTopicForm } from "@/components/NewLearningTopicForm";
+import { NewGoalForm } from "@/components/NewGoalForm";
 
 const CATEGORIES = ["BODY", "MIND", "WORK", "HOME"] as const;
 const CATEGORY_LABELS: Record<string, string> = { BODY: "Body", MIND: "Mind", WORK: "Work", HOME: "Home" };
@@ -159,6 +160,24 @@ export default async function FlockPage() {
         <div id="add-routine">
           <NewRoutineItemForm goals={goals} />
         </div>
+      </section>
+
+      <section id="goals">
+        <h2 className="section-title mb-3">Goals</h2>
+        <ul className="card mb-4 flex flex-col gap-1 p-4 text-[15px]">
+          {goals.map((goal) => (
+            <li key={goal.id}>
+              {goal.name}
+              {goal.description && <span className="text-[13px] text-muted"> ({goal.description})</span>}
+            </li>
+          ))}
+          {goals.length === 0 && (
+            <li className="text-[13px] text-muted">
+              None yet. A goal is what your hours add up to. Add one below, then point a routine at it.
+            </li>
+          )}
+        </ul>
+        <NewGoalForm />
       </section>
 
       <section>

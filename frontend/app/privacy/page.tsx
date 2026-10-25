@@ -63,6 +63,7 @@ export default function PrivacyPage() {
             </ul>
           </section>
 
+          {notYet.length > 0 && (
           <section aria-labelledby="notyet">
             <h2 id="notyet" className="mb-2.5 text-[17px] font-semibold">
               Named actions, not sent yet
@@ -78,6 +79,7 @@ export default function PrivacyPage() {
               ))}
             </ul>
           </section>
+          )}
 
           <section aria-labelledby="never">
             <h2 id="never" className="mb-2.5 text-[17px] font-semibold">

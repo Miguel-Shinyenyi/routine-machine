@@ -59,6 +59,22 @@ export async function createAdHocTask(formData: FormData): Promise<void> {
   revalidatePath("/flock");
 }
 
+export async function createGoal(formData: FormData): Promise<void> {
+  await requireSessionUserId();
+  const name = String(formData.get("name") ?? "").trim();
+  if (name === "") return;
+  const description = String(formData.get("description") ?? "").trim();
+  await backendFetch("/api/goals", {
+    method: "POST",
+    body: JSON.stringify({ name, description: description === "" ? null : description }),
+  });
+  // Staged Prompt 5: the event says a goal was made, never which one. Left only after the backend accepted it.
+  await queueAnalyticsEvent("goal_created");
+
+  revalidatePath("/flock");
+  revalidatePath("/today");
+}
+
 export async function createLearningTopic(formData: FormData): Promise<void> {
   await requireSessionUserId();
   await backendFetch("/api/learning-topics", {
