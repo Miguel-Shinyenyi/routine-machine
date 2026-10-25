@@ -4,7 +4,7 @@
 
 A system that logs daily routine completion and daily learning, and over phases moves from
 recording, to detecting patterns, to a fixed schedule with a tracking frontend, to actively
-suggesting what to do next. Built for one user.
+suggesting what to do next. Each person sees only their own records; one owner account runs the deployment.
 
 ## Why it exists
 
@@ -171,77 +171,14 @@ learning explained through each person's interests, small-money discipline, and 
 that cannot recreate hype culture), one phase at a time, each built, verified, and reported
 on its own before the next starts.
 
-Current phase: **Phase 5 done; Phase 6 done** (hub-sync Phase 1, the measurements table and
-idempotent upsert, all four sync sources — WakaTime/ActivityWatch/GitHub on by default,
-RescueTime optional and off by default — the health-data ingest endpoint, Strava explicitly
-deferred to Phase 8's accounts/auth decision, and the watering holes status page). **Phase 7
-done** (the `Book` entity, superseding `current_reading_log` as hub-sync's write target; the
-intelligence-service's `POST /reading-notes/assess` LLM call, verified against the real
-Anthropic API; `ReadingNote` storage; the named ratio threshold (70% own words) and the
-goal-hours rollup, reusing the existing `daily_logs`/`/tally` machinery with no new
-intelligence-service code; and the `/reading` frontend page, also verified live end to end
-through a real — if billing-blocked — Anthropic call). **Phase 8 done, apart from the
-explicitly-deferred GitHub/Google OAuth**: the
-accounts/auth architecture decision is now agreed with the user (one shared deployment, real
-user accounts, both password and GitHub OAuth, Next.js owns the session), backend groundwork
-is built (`users` table, register/login/github-login, JWT verification proven against a real
-signed token, optional `user_id` scoping on `routine_items`/`daily_logs`), and **the hillside
-itself is now built** (`GET /api/hillside`, `/hillside` page: real computed bands, histogram,
-and pseudonymous neighbours from seeded data), and `goals` now also has an optional `user_id`
-and its first creation endpoint (`POST /api/goals`), and the hillside now has a real opt-in
-(`users.hillside_opt_in`, `PUT /api/users/me/hillside-opt-in`) gating who counts as a
-participant, **real Next.js password login now exists** (`/login`, `/register`, an httpOnly
-session cookie, the signed-in email and a "Sign out" control in the sidebar), **the hillside
-is now wired to that real session** (a signed-in user's own id, not the `?asUserId=` query
-param, decides their band; a real "Join the hillside"/"Leave the hillside" toggle calls the
-opt-in endpoint), and **pseudonyms now rotate** (a 90-day "season" folded into the existing
-hash, no new storage). GitHub/Google OAuth sign-in remains explicitly deferred — the one piece
-of this phase the user asked to leave pending. The frontend was also compared page by page against a
-design reference the user supplied; **every view now has had that fidelity pass** (nav icons,
-tokens, and each page's own copy/structure — Today, Reading, Watering holes, Path, Flock,
-Tally, Hillside). The frontend is redesigned to the shepherd's language (Today, Path, Flock,
-Tally, Reading, Hillside, Watering holes) per `docs/design.md`. **Phase 9 done**: the
-evidence-to-credit pipeline (`scoring_rules`/`evidence_events`/`daily_credits`,
-`EvidenceCreditService`) and the credit-based hillside v2 (`HillsideV2Service`,
-`GET /api/hillside/v2`, `/hillside` rebuilt to match the design reference's new layout — scope
-and goal filters, a real "Show the hillside" toggle switch, band/returns cards, and the full
-credit ledger with "Question a credit"). **Phase 10 done**: Profile (`/profile` — interests,
-thinkers, learning preferences, time zone, currency, the day-end hour that feeds Phase 9's
-local-date rule) and analogies (`POST /analogy` in the intelligence service, cached per
-topic/interest, wired into Today's staff card, Profile's switch turns it off; structurally
-proven to never reach the hillside). **Phase 11 done**: the granary's savings, "the pause,"
-and M-Pesa statement import (`/granary`, `GranaryService`, `MpesaStatementParser`/
-`MpesaPdfReader` — password-protected PDFs handled, format changes fail loudly rather than
-silently, the file never touches disk, structurally proven to never reach the hillside).
-**Phase 12 in progress**: `organisations`/`organisation_admins`/`cohorts`/`cohort_memberships`
-(migration V24, `OrganisationService` with the organisation-admin access rule); bulk CSV
-invites (migration V25, `organisations.seat_limit`, `cohort_invites` — "invite" reserves a
-seat since there's no email infrastructure to actually send anything, fulfilled the moment
-that email registers); and the cohort dashboard's four pilot measures (migration V26,
-`CohortDashboardService` — activation, weekly participation, returns, and a new minimal
-supportive/neutral/pressuring survey, each a `{count, denominator}` pair, "checked in" built
-on plain `DailyLog` rather than the hillside's credit pipeline per the user's explicit
-choice); and study groups with a "by study group" breakdown and small-groups-hidden
-(migration V27, `cohort_memberships.study_group`/`cohort_invites.study_group`, set via the
-CSV's optional second column — a group under 5 shows its member count but no rates); and the
-weekly check-in chart (`CohortDashboardService.weeklyCheckIns`, one bar per pilot week with a
-shared activated-member denominator, `null` not `0` for a week that hasn't started).
-**Phase 12 frontend built**: `/cohort/[cohortId]`, with `Shell.tsx` swapping in a separate
-cohort/admin sidebar for the route (matching the design reference's own "Programme admin"
-nav, fixed after the user caught the first version still showing the personal app's regular
-sidebar) — the four pilot measures, the weekly check-in chart, the by-group breakdown, and the
-survey form, read-mostly (no admin UI for creating an org/cohort or CSV invites yet). Live
-testing before reporting caught two further real bugs, both fixed: an ineligible admin's
-survey submission crashed the page instead of being swallowed, and
-`setSeatLimit`/`submitSurveyResponse` returned a bare `200` with no body instead of `204`,
-which broke the frontend's JSON parsing the first time either was actually called. **With
-this, Phase 12 is fully done.** hub-sync
-now lists UMWAYI's journal entries and essays on a schedule and marks `journaling`/`writing`
-routine items done. Phase 4 remains gated on real, weeks-of-usage data behind Phase 2's statistics,
-which still doesn't exist — only what manual verification has produced so far. The weekly
-layout itself (which days, which durations) still needs to be entered through Flock's
-schedule-template form; nothing in this repo does that automatically, and real durations are
-still an open question (see `schedule.md`).
+Current state (25 October 2026; the dated detail is in the status log below):
+
+- **Phases 1 to 3 and 5 to 12 are done.** Logging and suggestion, pattern statistics, the fixed weekly schedule and tracking frontend, the shepherd frontend, watering holes, reader's notes, the hillside and accounts, the credit ledger, profile and analogies, the granary, and organisations with cohort dashboards.
+- **Phase 4 (active reprioritisation) is not started on purpose.** It waits on weeks of real logged data behind Phase 2's statistics. That data does not exist yet, only what manual verification produced.
+- **Accounts and access control are in.** Password login exists; GitHub and Google sign-in are deferred. Every personal route takes its user from the signed token, never from the request. One account, named by `OWNER_EMAIL`, is the owner and sees the operations page and API documentation.
+- **Staged work since Phase 12, all done:** access control (Prompt 2), observability and the owner-only operations page (Prompt 3), API documentation for both services (Prompt 4), consent-first product analytics (Prompt 5), and most of the repository standard and first-run flow (Prompt 6: README, CI, MIT license, the new-user walk-through fixes).
+- **Not built:** an admin screen to create an organisation or invite people by CSV (the cohort dashboard is read-mostly), the opt-in demo profile, Prompt 7, hosting and deployment. The weekly layout is entered through Flock's schedule-template form, and real durations are still an open question (`docs/schedule.md`).
+- **Open work** is in the Backlog table below. Deployment secrets must be replaced before real users (Backlog).
 
 ## Repo structure decision
 
@@ -362,6 +299,7 @@ Keep entries short. Record fixes and gaps found, not just what was completed.
 | 2026-10-25 | Repository standard (staged Prompt 6), part 5 of 6: empty states, duplicate goal, time-zone validation | Done (parts 1 to 5; the rest not built) | **Backend refuses a time zone it cannot read** (before, `Mars/Base` saved fine and then broke the Granary and the credit ledger for that person); **a duplicate goal name is caught in the form**; **empty states name the next step** on Flock, Path and Tally. 481 backend tests (+1), 203 frontend tests (+4), tsc, lint and both Docker builds pass; the new backend test failed first. **Checked live in Chrome**: Path banner, duplicate-name message and disabled Add, new goal clears the box, a bad zone on Profile is refused and the Granary still loads. **Found**: the refusal shows the error page, not a message (Backlog L). Zones saved before this are not re-checked. **Not done**: Reading's empty state, before and after screenshots, README, `PROJECT.md` rewrite, `docs/product-direction.md` section, demo profile, fresh-clone run. Undo: revert the commit |
 | 2026-10-25 | Repository standard (staged Prompt 6), part 6 of 6 as split here: the README | Done (parts 1 to 6; the rest not built) | **`README.md` rewritten** in the prompt's order: one sentence on the problem, a real screenshot (`docs/screenshots/today.jpg`, a test account with three routines, two ticked; and the first-step state), what works / in progress / planned, setup commands, every environment variable by name, migrations, the three test commands with real counts (481, 87, 203), a diagram and key decisions, privacy, contributing and security. Named targets and personal goals kept at Miguel's decision. **Checked**: every variable the README names is in `infra/.env.example`; every file path and doc link it names exists. **Not checked**: that the setup commands work from a fresh clone (that is the next part, Prompt 6 acceptance check 1); that GitHub renders the diagram; the screenshot's look on GitHub. **Found while taking the screenshot**: the schedule form's required Label box blocks the Add button with no message, which a new user will hit (a label could default to the routine's name). Not fixed. Undo: revert the commit |
 | 2026-10-25 | Repository standard (staged Prompt 6), part 7: the fresh-clone run | Done (acceptance check 1 passed after one fix) | **Cloned the repository into an empty folder and followed only the README.** **First attempt failed**: `docker compose up` stopped because port 5432 was already in use on this machine, so a developer with a native Postgres could not follow the README. **Fix**: the Postgres host port is now `${POSTGRES_HOST_PORT:-5432}` (`infra/docker-compose.yml`, `infra/.env.example`), with a line in the README and `PROJECT.md` (the old advice was to write an override file). **Second attempt** (with `POSTGRES_HOST_PORT=5434`, after two Docker Hub timeouts that a retry cleared): all four services up with only `AUTH_JWT_SECRET` set; **29 migrations applied by themselves**; frontend `/login` 200, backend `/api/goals` without a token 401, intelligence `/health` 200; an account registered through the API (201). **Tests from the clone**: backend 481, 0 failures; `pytest` 87 passed; frontend `npm ci` ok, lint clean, 203 passed, build compiled. **Deviations, in the open**: cloned from the local repository (the GitHub copy lacks these unpushed commits); a separate compose project name (`readme-check`) so the clone could not touch the dev database; the modified compose file and `.env.example` were copied into the clone because the fix was not yet committed; I started the stack with `-d` (the README's command runs in the foreground). The test stack and its volume were removed; the dev stack was restarted (your Postgres data volume was never touched). Not checked: a fresh clone on a machine with no Docker images cached, Windows. Undo: revert the commit |
+| 2026-10-26 | Repository standard (staged Prompt 6), part 8: the `PROJECT.md` rewrite and the product-direction section | Done (parts 1 to 8; the demo profile and CI-on-GitHub not done) | **"Built for one user" is gone**: the line now says each person sees only their own records and one owner account runs the deployment. **The stale "Current phase" paragraph (about 60 lines, which said Phase 12 was both "in progress" and "fully done") is replaced** by a short current-state list: Phases 1 to 3 and 5 to 12 done, Phase 4 not started on purpose, accounts and access control in, the staged work since Phase 12, what is not built, and a pointer to the Backlog. The phase-by-phase detail stays in the status log. **`docs/product-direction.md` has a new section "Toward producing work (proposed, not decided)"**: today's product tracks and guides and does not produce work; the proposal is outcome goals with deliverables and acceptance criteria, an artifact record with checks and approval, one workflow for developers and bootcamp learners, and an explain-back note before any artifact counts; four open questions with starting positions. **Checked**: no em dash in the new section; every claim in the current-state list traced to a status row (read, not run). **Not checked**: that Miguel agrees with the wording of the proposal (it is marked proposed). Undo: revert the commit |
 
 ## Backlog
 
@@ -374,7 +312,7 @@ Work agreed but not started. Remove a row when it ships (the status log records 
 | 2026-10-21 | Production secrets handling: decide where production secrets live (a secrets manager or the host's environment, not files in the repo), and rotate them on a schedule | Part of building the production infrastructure; concern list item on key management |
 | 2026-10-25 | **D. Loki's `/ready` answered 503 briefly three times.** Mitigated: the owner page retries a failing probe once. **Likely reason found**: Loki's calls to itself time out at the same moments Prometheus's scrapes of the backend, the intelligence service and Prometheus itself are all slow (20 such moments in 12 hours), so the whole Docker environment stalls and Loki reports it loudest. **Not found**: what starves it outside my own builds and test runs | Details in `docs/observability.md` (piece 1). Open: watch a quiet day without builds; check Docker Desktop's resource limits |
 | 2026-10-25 | **F. Prompt 5 (PostHog analytics): parts 1 to 3 of 6 done, and `goal_created` is now wired too (see the Prompt 6 part 4 row), so all eight named events are sent; parts 4 to 6 as I originally split them are not needed by the prompt's acceptance checks** | **Needs from Miguel**: check the two events in PostHog Live events; switch on "Discard client IP data"; decide **how long PostHog keeps events** and add it to `/privacy`; set `PRIVACY_CONTACT`; have the Kenya Data Protection Act wording on `/privacy` reviewed. Details in `docs/frontend.md`, "Analytics" |
-| 2026-10-25 | **G. Prompt 6 (repository standard, flow and feel): parts 1 to 7 done (standard files; CI and the MIT license; the walk-through's fixes; goal creation; empty states; the README; the fresh-clone run). Still to do: before and after screenshots and Reading's empty state (row L), the `PROJECT.md` rewrite, the `docs/product-direction.md` section, the demo profile, the fresh-clone run. Prompt 7**, and the "Later" list (cloud hosting and file storage, CI/CD deployment, Kubernetes, caching), not built | The rest of the staged prompts |
+| 2026-10-25 | **G. Prompt 6 (repository standard, flow and feel): parts 1 to 8 done (standard files; CI and the MIT license; the walk-through's fixes; goal creation; empty states; the README; the fresh-clone run; the `PROJECT.md` rewrite and the product-direction section). Still to do: before and after screenshots and Reading's empty state (row L), the CI run on GitHub (row M), the demo profile, the fresh-clone run. Prompt 7**, and the "Later" list (cloud hosting and file storage, CI/CD deployment, Kubernetes, caching), not built | The rest of the staged prompts |
 | 2026-10-25 | **H. Still to do from observability and the API docs**: measure the Prometheus and Loki volumes again after seven days (baseline 25 Oct 2026 16:52 UTC: Prometheus 28.55 MB, Loki 0.41 MB, Grafana 302.6 MB); ReDoc is not provided (both specs are in the Swagger UI) | Said in `docs/observability.md` and `docs/backend.md`; listed here so they are not forgotten |
 | 2026-10-25 | **I. HUB and GitHub fetches fail often: causes found, fix built, waiting for a token.** The recent failures are GitHub's unauthenticated quota (60 an hour per address; the sync spends 4 a run, every 15 minutes and at every start). The earlier `ConnectException` ones were the JVM failing to resolve `api.github.com` in the first seconds after a container was created; each call now retries once. An optional `GITHUB_TOKEN` (5,000 an hour) is built and proved on the wire with a fake token (GitHub answered 401) | **Miguel**: create a fine-grained token with no permissions and public-repositories read-only, put it in `infra/.env` as `GITHUB_TOKEN`, restart the backend (`docs/hub-sync.md`). Not checked: a real token's limit. Not seen live: the retry firing |
 | 2026-10-25 | **K. Two things only Miguel can switch on.** (1) GitHub private vulnerability reporting: repository Settings, Code security, "Private vulnerability reporting". `SECURITY.md` points to it, so until it is on the link leads nowhere. (2) `PRIVACY_CONTACT` in `infra/.env`: an address or web page for people to reach about their data; the public `/privacy` page says "the person who runs this app" until it is set (do not commit the value) | Both are settings in accounts I cannot change |
