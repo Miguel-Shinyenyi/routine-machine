@@ -1,7 +1,15 @@
 package com.routinemachine.core.observability;
 
 import com.routinemachine.core.AbstractIntegrationTest;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.TraceFlags;
+import io.opentelemetry.api.trace.TraceState;
+import io.opentelemetry.context.Scope;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,6 +20,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,6 +36,11 @@ class ObservabilityEndpointsIntegrationTest extends AbstractIntegrationTest {
     private int apiPort;
     @LocalManagementPort
     private int managementPort;
+
+    @Autowired
+    private MeterRegistry registry;
+    @Autowired
+    private io.prometheus.metrics.tracer.common.SpanContext prometheusSpanContext;
 
     private final HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
 
@@ -55,6 +69,26 @@ class ObservabilityEndpointsIntegrationTest extends AbstractIntegrationTest {
         String body = get(managementPort, "/actuator/prometheus").body();
 
         assertThat(body).contains("http_server_requests_seconds_bucket");
+    }
+
+    // The trace id on a metric (docs/observability.md): an observation made inside a trace carries the id as an
+    // exemplar, which only the OpenMetrics format can show. The request path itself cannot be driven from the
+    // test thread (the server runs the observation on its own thread), so a timer is recorded here instead.
+    @Test
+    void aLatencyObservationInsideATraceCarriesItsTraceIdAsAnExemplarInOpenMetrics() throws Exception {
+        String traceId = "0af7651916cd43dd8448eb211c80319c";
+        Timer timer = Timer.builder("exemplar.check").publishPercentileHistogram().register(registry);
+        SpanContext span = SpanContext.create(traceId, "b7ad6b7169203331", TraceFlags.getSampled(), TraceState.getDefault());
+        try (Scope ignored = Span.wrap(span).makeCurrent()) {
+            timer.record(Duration.ofMillis(5));
+        }
+
+        String openMetrics = get(managementPort, "/actuator/prometheus", "Accept", "application/openmetrics-text; version=1.0.0").body();
+        String plain = get(managementPort, "/actuator/prometheus").body();
+
+        assertThat(prometheusSpanContext).isInstanceOf(OtelSpanContext.class);
+        assertThat(openMetrics).contains("exemplar_check_seconds_bucket").contains("trace_id=\"" + traceId + "\"");
+        assertThat(plain).doesNotContain(traceId);
     }
 
     @Test

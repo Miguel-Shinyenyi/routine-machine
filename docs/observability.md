@@ -152,14 +152,18 @@ does not start them). Files are in `infra/observability/`.
   put a note or an amount in one would put it in the trace; keep such values in bodies.
 - Cost, measured idle with tracing on: the backend about 445 MB against 327 MB off (about 120 MB more), the
   intelligence service about 55 MB against 42 MB, Jaeger about 20 MB; Jaeger's image 164 MB.
-- **The trace id on a metric (exemplars), in progress, step 1 of 4.** The staged prompt asks to show the trace id in
-  the metric, the log line and the trace. Log line and trace are done. A metric carries it as a Prometheus
-  *exemplar*, a trace id attached to one observation of a histogram bucket. Steps: (1) the intelligence service
-  attaches the id to `http_request_duration_seconds` observations made inside a trace (done, tested; the id shows
-  only in the OpenMetrics text, which `prometheus_client` serves when the scraper asks for it, and the plain text
-  is unchanged); (2) the backend does the same for `http_server_requests` (not done); (3) Prometheus stores and
-  scrapes exemplars (not done: needs `--enable-feature=exemplar-storage`); (4) Grafana shows them on the p95
-  panels and links to Jaeger (not done). Until step 3, nothing stores an exemplar, so nothing shows on a chart yet.
+- **The trace id on a metric (exemplars), in progress, steps 1 and 2 of 4 done.** The staged prompt asks to show the
+  trace id in the metric, the log line and the trace. A metric carries it as a Prometheus *exemplar*, a trace id
+  attached to one observation of a histogram bucket. Steps: (1) the intelligence service attaches the id to
+  `http_request_duration_seconds` observations made inside a trace (done); (2) the backend does the same for
+  `http_server_requests` (done: `OtelSpanContext` is a `SpanContext` bean that reads the OpenTelemetry API, which the
+  Java agent backs; Spring Boot's own version needs Micrometer Tracing, which this service does not use); (3) Prometheus
+  stores and scrapes exemplars (not done: needs `--enable-feature=exemplar-storage`); (4) Grafana shows them on the p95
+  panels and links to Jaeger (not done). An exemplar appears only in the OpenMetrics text, which both services serve
+  when the scraper asks for it; the plain text is unchanged. With tracing off there is no span, so none is attached.
+  Checked live (tracing on): a request's latency bucket carried `trace_id="c4989b2f…"` on the backend and
+  `trace_id="92f77443…"` on the intelligence service, and the backend's id was a real trace in Jaeger and on the
+  backend's `request completed` log line. Until step 3, nothing stores an exemplar, so nothing shows on a chart yet.
 
 ### Part 4c-ii: Grafana and the dashboard
 
@@ -230,6 +234,7 @@ does not start them). Files are in `infra/observability/`.
 | 2026-10-21 | Prometheus and Alertmanager UIs bound to 127.0.0.1, behind a compose profile | Operations data is for the owner on this machine; a plain `docker compose up` stays light |
 | 2026-10-25 | Grafana's admin password is checked by the container's entrypoint, not by `${VAR:?}` in the compose file | `:?` is evaluated for every service, so it made every `docker compose` command fail without the variable. An empty value would otherwise fall back to Grafana's default `admin/admin` login |
 | 2026-10-25 | No Jaeger datasource in Grafana; the log-to-trace link is a plain URL to the Jaeger UI | Found by running `verify-grafana.sh`: the datasource's health check gets `404` because Jaeger 2.22 dropped the v1 query API that Grafana's plugin calls (`/api/v3/services` answers 200, `/api/services` answers 404). Keeps Jaeger 2.22 (decided earlier) instead of pinning an older v2 |
+| 2026-10-25 | `opentelemetry-api` added to the backend, version managed by Spring Boot's BOM (1.49.0) | Exemplars need the current trace id inside the JVM. Spring Boot's own source for it needs Micrometer Tracing; this service is traced by the OpenTelemetry Java agent, which backs the OpenTelemetry API. The API alone is inert without the agent. Approved by Miguel |
 | 2026-10-25 | Dashboard and datasources are provisioned from files and read-only in the UI | The dashboard is code: reviewed, versioned and restorable, and a click in the UI cannot change what the repo says |
 | 2026-10-21 | Only `health` and `prometheus` exposed | Everything else Actuator offers (env, beans, heap dump, loggers) can leak configuration or data |
 | 2026-10-21 | Incoming `X-Request-Id` accepted only if short and plain | An unchecked header written into logs can forge log lines |
