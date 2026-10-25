@@ -5,6 +5,7 @@ import com.routinemachine.core.service.OwnerAccount;
 import com.routinemachine.core.service.ServiceHealthService;
 import com.routinemachine.core.service.WatchtowerLogsService;
 import com.routinemachine.core.service.WatchtowerMetricsService;
+import com.routinemachine.core.service.WatchtowerSyncService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -28,13 +29,16 @@ public class WatchtowerController {
     private final ServiceHealthService serviceHealthService;
     private final WatchtowerMetricsService metricsService;
     private final WatchtowerLogsService logsService;
+    private final WatchtowerSyncService syncService;
 
     public WatchtowerController(OwnerAccount ownerAccount, ServiceHealthService serviceHealthService,
-                                WatchtowerMetricsService metricsService, WatchtowerLogsService logsService) {
+                                WatchtowerMetricsService metricsService, WatchtowerLogsService logsService,
+                                WatchtowerSyncService syncService) {
         this.ownerAccount = ownerAccount;
         this.serviceHealthService = serviceHealthService;
         this.metricsService = metricsService;
         this.logsService = logsService;
+        this.syncService = syncService;
     }
 
     @GetMapping("/services")
@@ -63,6 +67,13 @@ public class WatchtowerController {
             @RequestParam(defaultValue = WatchtowerLogsService.DEFAULT_RANGE) String range) {
         requireOwner(jwt);
         return logsService.logs(level, requestId, range);
+    }
+
+    // Each source's switch, newest data, run state and one result word. Nothing in the request reaches Prometheus.
+    @GetMapping("/sync")
+    public WatchtowerSyncService.Sync sync(@AuthenticationPrincipal Jwt jwt) {
+        requireOwner(jwt);
+        return syncService.sync();
     }
 
     private void requireOwner(Jwt jwt) {

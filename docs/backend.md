@@ -1155,5 +1155,8 @@ the optional-token chain in `SecurityConfig` (with `/api/hillside/**`) and is li
 (`WATCHTOWER_PROMETHEUS_BASE_URL`) using a fixed list of queries that a test keeps equal to the Grafana dashboard's;
 a caller picks only the range. `GET /api/watchtower/logs` (`WatchtowerLogsService`) reads Loki
 (`WATCHTOWER_LOKI_BASE_URL`) with a fixed service list and two checked values, a level from a fixed list and an id of plain
-characters; anything else is a 400. Details and the checks that ran: `docs/observability.md`, "Part 5".
+characters; anything else is a 400. `GET /api/watchtower/sync` (`WatchtowerSyncService`) joins each source's switch and
+newest data (`WateringHoleStatusService`, extracted from `WateringHoleStatusController`, which still masks it for
+non-owners) with its run state from Prometheus, and gives one result word per source. Details and the checks that ran:
+`docs/observability.md`, "Part 5".
 

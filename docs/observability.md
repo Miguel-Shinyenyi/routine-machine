@@ -17,7 +17,7 @@ Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is m
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
 | 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
-| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 3 done: backend owner gate and service health; metrics for the charts; logs and trace links.** Not built: sync status, the frontend page, the API-docs link (needs Prompt 4) |
+| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 4 done: backend owner gate and service health; metrics for the charts; logs and trace links; sync status.** Not built: the frontend page, the API-docs link (needs Prompt 4) |
 
 ### Part 1: the backend
 
@@ -281,6 +281,32 @@ runs before any validation, so a non-owner gets 404 whatever they send.
   account 404; signed out 404.
 - **Seen**: right after the backend container was recreated, the endpoint returned only the intelligence service's line
   for a few seconds, because Alloy had not yet attached to the new container. Logs from before a restart are still there.
+
+**Piece 4, done.** `GET /api/watchtower/sync` (`WatchtowerSyncService`), same owner gate. It adds no new data. It joins what
+`/api/watering-holes` already knew with the run state Prometheus already held.
+- **The answer** is `{available, sources: [{source, enabled, lastActivityAt, result, consecutiveFailures, lastSuccessAt,
+  successes24h, failures24h}]}` for the six sources (HUB, WAKATIME, ACTIVITYWATCH, GITHUB, RESCUETIME, HEALTH).
+  `enabled` and `lastActivityAt` come from the database through `WateringHoleStatusService`, which I extracted from
+  `WateringHoleStatusController` so the two pages read one copy; the watering holes page still masks it for non-owners.
+- **Prometheus is asked three fixed questions** (`WatchtowerSyncService.QUERIES`): failures in a row, the last success
+  (`max_over_time` over 7 days, Prometheus's retention) and successes and failures over 24 hours by source. Nothing in
+  the request reaches it. The address is `WATCHTOWER_PROMETHEUS_BASE_URL`, as for the charts.
+- **The result word**, in this order: `off` (switched off), `push only` (HEALTH, which the backend never fetches),
+  `unknown` (Prometheus did not answer), `failing` (failures in a row above 0), `ok` (a last success is known),
+  `never succeeded`. `consecutiveFailures` and `lastSuccessAt` are null for a source Prometheus has no series for, not
+  0, because a source that has not run is not one with no failures.
+- **What survives a restart.** The 24-hour counts and the last success do (Prometheus keeps them). Failures in a row
+  do not: the gauge lives in the backend process, so it starts again after a restart. A source that failed before a
+  restart reads `ok` or `never succeeded` until it fails again. The first live run showed this for the last success, so the
+  query now looks back 7 days.
+- **Known gap.** Nothing records when a source last failed or last ran. A last-failure gauge would change the metrics,
+  the alert docs and the dashboard, so I did not add one. `lastActivityAt` is when data last arrived, not when the sync
+  last ran.
+- **Checked live** (owner token, real Prometheus): 200 with six sources; HUB, GITHUB and ACTIVITYWATCH `failing`, WAKATIME
+  `ok`, RESCUETIME and HEALTH `off`; another account 404; signed out 404. Before the 7-day lookback, HUB and GITHUB
+  showed no last success right after a backend recreate, although they had succeeded earlier that day.
+- **Seen, not looked into**: HUB and GITHUB were failing in the live stack (HUB 3 failures in a row; GITHUB 1), and
+  ACTIVITYWATCH fails every poll by design (no server in the Docker stack).
 
 ## What it records about people
 
