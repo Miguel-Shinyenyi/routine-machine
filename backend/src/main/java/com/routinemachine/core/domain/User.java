@@ -53,6 +53,10 @@ public class User {
     @Column(name = "hillside_opt_in", nullable = false)
     private boolean hillsideOptIn = false;
 
+    // True only for the sample account opened by DemoProfileService. Never true for a real person.
+    @Column(name = "demo", nullable = false)
+    private boolean demo = false;
+
     // Phase 9 groundwork (see V18__user_time_zone.sql): an IANA zone id ("Africa/Nairobi"),
     // defaulting to UTC. Decides which calendar day a credit lands on — see
     // EvidenceCreditService. Phase 10's Profile page is where a user actually sets this.
@@ -110,6 +114,14 @@ public class User {
         this.passwordHash = passwordHash;
         this.githubId = githubId;
         this.displayName = displayName;
+    }
+
+    public boolean isDemo() {
+        return demo;
+    }
+
+    public void markDemo() {
+        this.demo = true;
     }
 
     public void linkGithubId(String githubId) {

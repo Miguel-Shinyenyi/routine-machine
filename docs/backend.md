@@ -1197,3 +1197,14 @@ non-owners) with its run state from Prometheus, and gives one result word per so
 ## Time zone validation (staged Prompt 6, part 5)
 
 `User.updateProfile` and `User.changeTimeZone` refuse a time zone `ZoneId.of` cannot read (`IllegalArgumentException`, which the API answers as 400) and leave the saved zone unchanged. The Granary and the credit ledger call `ZoneId.of(user.getTimeZone())` on every request, so one bad saved value used to break them for that person. Test: `UserControllerApiIntegrationTest.aTimeZoneThatIsNotARealZoneIsRejectedAndTheSavedZoneStays`. Zones saved before this change are not re-checked.
+
+## Demo profile (staged Prompt 6, part 9, backend only)
+
+An opt-in sample account for demonstrations. **Off by default.** `DEMO_PROFILE_ENABLED=true` in `infra/.env` (passed to the backend as `DEMO_ENABLED`, property `demo.enabled`) switches it on.
+
+- **Endpoint.** `POST /api/auth/demo-login`, internal token only (the same `AUTH_INTERNAL_TOKEN` rule as `github-login`: with none configured it fails closed). When the profile is off the route answers **404**, before any token check, as if it did not exist.
+- **The account.** `DemoProfileService.open()` finds or creates `demo@routine-machine.invalid` (a reserved `.invalid` name that can never receive mail), flags it `users.demo = true` (migration V30), sets its zone to `Africa/Nairobi` and gives it a random password nobody sees, so a password sign-in can never succeed. `UserResponse` now carries `demo`, so the frontend can label the account.
+- **The sample data.** Two goals and four routines (all named "sample" or plain), a three-routine schedule for every day, and 21 days of made-up logs in a fixed pattern (most days shown up, a few missed). Opening the demo again adds only the recent days' logs that are missing, never a second account or duplicate rows. The data belongs to the demo account like any other account's, so no one else sees it.
+- **Tests** (7, `DemoLoginDisabledApiIntegrationTest`, `DemoLoginEnabledApiIntegrationTest`): 404 when off even with a valid token; 401 without or with a wrong token; the account is flagged and on a `.invalid` address; the seeded rows exist and belong to it; a second open adds no rows and no second account; password guesses fail; another person's `/api/goals` is empty and their `demo` is false. Two deliberate breaks (always-on switch, no duplicate guard) each failed the matching test.
+- **Not built yet:** the frontend button, a visible "sample data" label, and the sign-in action. Until they exist the endpoint is not reachable from the app.
+

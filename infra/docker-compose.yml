@@ -31,6 +31,8 @@ services:
       # placeholder is not safe for any real deployment with real accounts. See docs/backend.md.
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env (see .env.example)}
       AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
+      # Staged Prompt 6: the opt-in demo profile. Off unless set to true (docs/backend.md, "Demo profile").
+      DEMO_ENABLED: ${DEMO_PROFILE_ENABLED:-false}
       OWNER_EMAIL: ${OWNER_EMAIL:-}
       # Optional: lifts GitHub's limit for the hub and GitHub syncs from 60 to 5,000 requests an hour (docs/hub-sync.md).
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}

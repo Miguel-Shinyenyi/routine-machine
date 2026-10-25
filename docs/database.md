@@ -294,3 +294,7 @@ accounts has `user_id IS NULL` until `OwnerClaimService` gives it to the owner (
 accounts become `USER`. The owner is set at startup from `OWNER_EMAIL` (see `docs/backend.md`), never in
 SQL.
 
+## V30: demo flag
+
+`users.demo BOOLEAN NOT NULL DEFAULT FALSE` (staged Prompt 6, `V30__user_demo_flag.sql`). True only for the one sample account `DemoProfileService` makes (`demo@routine-machine.invalid`). Every real account is false. Undo: drop the column and delete that one user and its rows.
+
