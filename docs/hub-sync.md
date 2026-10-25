@@ -107,10 +107,22 @@ anything else on the same address (a browser, a script, a test) draws on the sam
 - **What the log says now**: `hub-sync: listing journal/entries returned HTTP 403 (rate limited until 2026-10-25T18:03:23Z)`,
   read from GitHub's `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers (`GitHubRateLimit`, 3 tests). Before, it said only
   `returned HTTP 403` or `ConnectException`. Failed fetches also log their whole cause now (`FailureDescription`).
-- **Not solved**: an optional token would lift the limit to 5,000 an hour, and neither client can send one. That is a design
-  change that needs a GitHub token from Miguel (an environment variable, never a file), so I did not build it. Until then,
-  expect HUB and GITHUB to read `failing` for up to an hour after a burst of restarts, and for any machine whose address is
-  shared with other GitHub callers.
-- **Still unexplained**: earlier failures logged as `ConnectException` (for example at 16:53 UTC, five seconds after a start)
-  were not 403s, and I never saw their cause. Read the next one.
+- **An optional token is built** (`GITHUB_TOKEN`, 25 Oct 2026). With one GitHub allows 5,000 requests an hour instead of 60.
+  Set it in `infra/.env` (git-ignored; the name only is in `.env.example`) and restart the backend; the backend log says
+  `using GITHUB_TOKEN` or `no GITHUB_TOKEN, so GitHub allows 60 requests an hour`, never the value. A blank value is the same
+  as none. Make it a **fine-grained personal access token with no permissions and read-only access to public repositories**,
+  at github.com/settings/personal-access-tokens: both clients only read public data. `GitHubRequests` builds the requests
+  (`GitHubRequestsTest`, 5 tests, 4 breaks); the token goes only to the two hard-coded `https://api.github.com/...`
+  addresses. **Checked on the wire without a real token**: I started the backend with a deliberately fake one, and GitHub
+  answered `HTTP 401` to the sync, which proves the `Authorization` header is sent; the fake value appeared in no log line.
+  **Not checked**: a real token's 5,000 an hour, because I do not have one. Until one is set, expect HUB and GITHUB to read
+  `failing` for up to an hour after a burst of restarts.
+- **The earlier `ConnectException` failures, explained (25 Oct 2026).** Once the log carried the whole cause it read
+  `ConnectException <- ConnectException <- UnresolvedAddressException`: the JVM could not resolve `api.github.com` in the first
+  seconds after a container was created, although `getent` inside the same container resolved it before and after. It happened
+  on 1 of 3 recreates in my test and on none of 4 later ones, so it is intermittent. **Each GitHub and hub call is therefore
+  tried once more after 5 seconds if the connection itself failed** (`GitHubRequests.sendWithOneRetry`, `GitHubSendTest`, 5
+  tests, 3 breaks); an HTTP answer, a 403 included, and any other failure are never retried. The retry logs
+  `github: the connection failed (...); trying once more`. **I have not seen it fire live**; the unit tests are the only proof.
+  Why the JVM's lookup fails when the operating system's does not, I did not find.
 

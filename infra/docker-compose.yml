@@ -31,6 +31,8 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env (see .env.example)}
       AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
       OWNER_EMAIL: ${OWNER_EMAIL:-}
+      # Optional: lifts GitHub's limit for the hub and GitHub syncs from 60 to 5,000 requests an hour (docs/hub-sync.md).
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       # Owner-only operations page (docs/observability.md): the addresses it probes for "is it up". A service that
       # is not running (the observability ones, without the profile) shows as DOWN.
       WATCHTOWER_INTELLIGENCE_URL: http://intelligence-service:8000/health

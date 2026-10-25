@@ -41,6 +41,7 @@ public class GitHubCommitClientImpl implements GitHubCommitClient {
 
     private final String username;
     private final HttpClient httpClient;
+    private final String token;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public GitHubCommitClientImpl() {
@@ -52,6 +53,8 @@ public class GitHubCommitClientImpl implements GitHubCommitClient {
     GitHubCommitClientImpl(String username) {
         this.username = username;
         this.httpClient = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
+        this.token = GitHubRequests.tokenFrom(System::getenv);
+        log.info("github-sync: {}", token == null ? "no GITHUB_TOKEN, so GitHub allows 60 requests an hour" : "using GITHUB_TOKEN");
     }
 
     private static String resolveUsername() {
@@ -104,13 +107,9 @@ public class GitHubCommitClientImpl implements GitHubCommitClient {
     }
 
     private HttpResponse<String> get(String url) throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(TIMEOUT)
-                .header("Accept", "application/vnd.github+json")
-                .header("User-Agent", "routine-machine-github-sync")
-                .GET()
-                .build();
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpRequest request = GitHubRequests.get(URI.create(url), "routine-machine-github-sync", token, TIMEOUT);
+        return GitHubRequests.sendWithOneRetry(r -> httpClient.send(r, HttpResponse.BodyHandlers.ofString()), request,
+                GitHubRequests.RETRY_PAUSE_MILLIS);
     }
 
     // " (rate limited until ...)" when GitHub's headers say the quota is used up, else nothing.
