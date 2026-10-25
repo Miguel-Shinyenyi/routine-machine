@@ -120,7 +120,7 @@ deliberate deviation rather than an oversight.
   `null` (the page then calls `notFound()`) and rethrows every other failure, so an outage is never shown as a 404. The
   owner reaches it by typing the address. The charts (`components/charts/WatchtowerChart.tsx`, a client component for the hover) sit under a range row of three links
   (`?range=1h|6h|24h`). The logs section (`lib/logs.ts`) is a plain `GET` form (level, request id) over the newest 100 lines; the range
-  row sets the logs' range too, and a request id in a row filters to that request. The API-docs link is piece 6. Details and checks:
+  row sets the logs' range too, and a request id in a row filters to that request. The link to the API docs is not there yet: it waits for Prompt 4 (`docs/observability.md`, "Piece 6"). Details and checks:
   `docs/observability.md`, "Part 5".
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)

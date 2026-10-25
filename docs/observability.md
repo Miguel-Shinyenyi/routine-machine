@@ -9,7 +9,7 @@ differs and why. Built in parts; this file describes only what exists.
 
 ## Current state
 
-Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is mostly done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard; metric exemplars).** Part 5, the owner-only page, is in progress: pieces 1 to 3 of 6 are done (the owner gate and service health; the charts' data; the logs and trace links, in the backend); the frontend page is not built.
+Staged Prompt 3 is built in five parts and **all five are done, except one item that belongs to Prompt 4**: the API-docs link on the page, which has nothing to link to until Prompt 4 builds the API docs. The owner opens `/watchtower` and sees service health, charts, sync status and logs with trace links; everyone else gets a plain 404. Part 4 is the Compose `observability` profile (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard; metric exemplars).
 
 | Part | What | State |
 |---|---|---|
@@ -17,7 +17,7 @@ Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is m
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
 | 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
-| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 4 done: backend owner gate and service health; metrics for the charts; logs and trace links; sync status. Piece 5: the frontend page is built (404 gate, service list, sync table, charts, logs).** Not built: the API-docs link (needs Prompt 4) |
+| 5 | Owner-only operations page in the frontend (`/watchtower`) | Done, except the API-docs link, which waits for Prompt 4. Six pieces: backend owner gate and service health; metrics for the charts; logs and trace links; sync status; the frontend page (404 gate, services, charts, sync table, logs); this documentation |
 
 ### Part 1: the backend
 
@@ -212,7 +212,7 @@ does not start them). Files are in `infra/observability/`.
 
 Six pieces: (1) the owner gate and service health in the backend; (2) metrics for the charts, read from Prometheus
 by the backend; (3) logs, read from Loki with allow-listed filters, and trace links; (4) each sync source's last run
-and result; (5) the frontend page and its 404; (6) docs, with the API-docs link waiting for Prompt 4.
+and result; (5) the frontend page and its 404; (6) docs, with the API-docs link waiting for Prompt 4 (done: see "Piece 6" below).
 
 **Piece 1, done.** `GET /api/watchtower/services` (`WatchtowerController`, `ServiceHealthService`):
 - **Owner only.** The owner is the account named by `OWNER_EMAIL` (`OwnerAccount`). A signed-in person who is not the
@@ -320,8 +320,6 @@ failure is thrown, not shown as a 404. There is no sidebar link, so the owner ty
 - **Seen again, not explained**: the page showed Loki `Down` on its first load, then the backend's own probe read Loki `UP`
   six times in a row and Loki's `/ready` answered 200 five times. This is the second sighting of the short blip recorded
   under piece 1.
-- **Not done in this slice**: sync status, the charts, the logs filter and the `truncated` flag on the charts; the page
-  was not looked at in a browser, only fetched.
 
 **Piece 5, slice 2 of 4 (sync table on the page).** `/watchtower` now also reads `GET /api/watchtower/sync`
 (`fetchSync`, `syncTone`, `formatUtc` in `frontend/lib/watchtower.ts`) and shows one row per source: result chip (ok
@@ -375,7 +373,6 @@ green, failing in the warning colour, everything else plain), failures in a row,
   was refused by the permission check; signing in by hand was the way round it.)
 - **Seen, not changed**: with a series that ends early, its end label sits at the right edge while its dot is further
   left. The legend and the tooltip name it, so I left it.
-- **Not done in this slice**: the logs filter (slice 4).
 
 **Piece 5, slice 4 of 4 (logs on the page).** `/watchtower` ends with a Logs section from `GET /api/watchtower/logs`
 (`lib/logs.ts`): a level select (the backend's six levels), a box for a request id or trace id, a Filter button and a Clear
@@ -402,6 +399,35 @@ link, over a table of the newest 100 lines (time to the second in UTC, service, 
 - **Seen, not looked into**: the intelligence service logs "Unsupported upgrade request." at WARNING every few minutes
   (100 of the newest 100 `WARNING` lines). Something sends it a connection upgrade it does not support.
 
+**Piece 6, done: documentation and the end of Prompt 3's checklist.**
+- **The API-docs link is not built, on purpose.** Prompt 3 says the page shows "the API docs from Prompt 4". Prompt 4 (springdoc for the backend, FastAPI docs for the intelligence service, both owner-only) is not built, so there is nothing to link to, and building it here would be building a later prompt. When Prompt 4 lands, the link goes in the services section of `frontend/app/watchtower/page.tsx`, next to the Grafana, Jaeger and Prometheus addresses the page already knows.
+- **Prompt 3's acceptance checks, one by one:**
+  1. *Tests first* for the request-id filter, each custom metric and the owner check: done in parts 1, 3 and 5 (owner sees the page; another account and a signed-out visitor get 404).
+  2. *One action, with the trace id in a metric, a log line and a trace*: shown with a `/patterns` request, which crosses both services (`verify-traces.sh` and `verify-exemplars.sh`, 25 Oct 2026). **It was not "log a day" itself**; I used a request I knew crosses both services, because logging a day need not call the intelligence service.
+  3. *Stop the intelligence service and watch its alert*: **done live on 25 Oct 2026**. Stopped at t=0: no alert; **pending at 43 s; firing at 104 s; Alertmanager listed it by 114 s.** Started again at 115 s: Prometheus cleared it at about 150 s and Alertmanager no longer listed it by 170 s. The alert rules had only been unit-tested with `promtool` before this. Pending takes 43 s and not 15 s because the first failed scrape lands somewhere in the 15 s cycle and the rule then waits for its one minute (`for: 1m`).
+  4. *`docs/observability.md` is new and written in the same change; `PROJECT.md` and `CLAUDE.md` route to it*: done (the `CLAUDE.md` routing table has the row).
+
+## What the stack costs
+
+Measured on this machine on 25 Oct 2026, the whole stack up with the `observability` profile and tracing on, idle apart from my own testing. Docker reports memory in use, not what a process could grow to.
+
+| Container | Memory | Cap | CPU |
+|---|---|---|---|
+| Grafana | 342 MB | 512 MB | 1.8% |
+| Loki | 123 MB | 512 MB | 1.1% |
+| Prometheus | 115 MB | 512 MB | 0.6% |
+| Alloy | 58 MB | 256 MB | 0.7% |
+| Jaeger | 35 MB | 512 MB | 0.1% |
+| Alertmanager | 22 MB | 128 MB | 0.3% |
+| Docker socket proxy | 7 MB | 64 MB | 0% |
+| **Observability total** | **about 700 MB** | | |
+| Backend, frontend, intelligence service, Postgres | about 490 MB | none | under 0.4% each |
+
+- **Memory: the whole stack is about 1.2 GB, of which about 700 MB is the observability profile.** Without the profile the application alone is about 490 MB. **Grafana is the heavy one and sits at two thirds of its 512 MB cap**, so it is the first container to hit its limit if a dashboard grows.
+- **Disk: images about 1.4 GB** (observability images about 900 MB: Grafana 445, Alloy 207, Prometheus 98, Jaeger 51, Loki 43, Alertmanager 37, socket proxy 21; the application and Postgres images about 470 MB). **Volumes about 320 MB, of which Grafana is 303 MB and 290 MB of that is its plugins**; Prometheus is 18 MB; Loki is under 1 MB so far, because its write-ahead log has not been turned into chunks yet; Alertmanager and Alloy are empty. Jaeger keeps traces in memory only, so they cost no disk and do not survive a restart.
+- **Growth is bounded by settings, not measured over time**: Prometheus keeps 7 days and is capped at 512 MB of memory; Loki keeps 7 days (`retention_period: 168h`). I have not watched either volume grow over days, so the 7-day size is a guess until that is measured.
+- **Without the profile**: `docker compose up` starts only the application; `docker compose --profile observability up` adds the rest. See "Turning it off".
+
 ## What it records about people
 
 - Logs: method, path, status, duration, request id, and the application's own messages. No query
@@ -412,6 +438,7 @@ link, over a table of the newest 100 lines (time to the second in UTC, service, 
 - The operations page's data (`/api/watchtower`) is owner-only. So far it holds service names and statuses, the
   metrics the stack already records (with the same labels), and recent log lines. Those lines are the scrubbed
   ones already in Loki, reduced to time, service, level, message, request id and trace id.
+- The operations page adds nothing new to what is recorded. Its sync table reads per-source counters and times (`source` and `outcome` labels, never a user), the switch and newest-data time from the watering holes data, and its charts use the labels listed under piece 2. Its logs are the scrubbed Loki lines above. The page keeps nothing of its own: no database table, no cookie beyond the normal session, no copy of a log line.
 - The intelligence service follows the same rules; it receives note text only on `POST /reading-notes/assess`, whose body is never logged.
 - Later parts must keep to this list; each part's report states what it added.
 
@@ -424,7 +451,8 @@ link, over a table of the newest 100 lines (time to the second in UTC, service, 
   to drop the Prometheus endpoint.
 - JSON logs: set `LOGGING_STRUCTURED_FORMAT_CONSOLE=` (empty) to return to plain text lines.
 - The request id and the completion line have no switch; removing `RequestIdFilter` removes both.
-- The cost of the whole stack is stated when part 4 is finished. So far (4a and 4b, measured on this machine with the services idle): Prometheus about 50 to 97 MB, Alertmanager 13 to 38 MB, Loki 97 MB, Alloy 110 MB and the socket proxy 28 MB of memory, 1 to 3% CPU each; images about 335 + 114 + 191 + 928 + 67 MB = 1.6 GB on disk; data a fraction of a MB after a few minutes, growing for the 7 days kept.
+- The page: leave `OWNER_EMAIL` empty and nobody is the owner, so every `/api/watchtower/*` call and the page itself answer 404. Remove a `WATCHTOWER_*` address and that part of the page says it is not configured (services read `NOT_CONFIGURED`, charts and logs say so) instead of failing. Deleting `frontend/app/watchtower` and the `/api/watchtower/**` matcher in `SecurityConfig` removes the page; nothing else depends on it.
+- What the whole stack costs is in "What the stack costs", below.
 
 ## Decisions log
 
@@ -451,12 +479,21 @@ link, over a table of the newest 100 lines (time to the second in UTC, service, 
 | 2026-10-25 | Dashboard and datasources are provisioned from files and read-only in the UI | The dashboard is code: reviewed, versioned and restorable, and a click in the UI cannot change what the repo says |
 | 2026-10-21 | Only `health` and `prometheus` exposed | Everything else Actuator offers (env, beans, heap dump, loggers) can leak configuration or data |
 | 2026-10-21 | Incoming `X-Request-Id` accepted only if short and plain | An unchecked header written into logs can forge log lines |
+| 2026-10-25 | A chart on the page carries at most 8 series, the largest peaks first, and the answer says when it cut | The page has eight colours that stay apart for colour-blind readers; the dataviz rule is to fold or facet rather than invent a ninth. The 12-series cap of piece 2 cut routes in no useful order |
+| 2026-10-25 | The sync table joins database fields with Prometheus run state in the backend, with no new metric | A last-failure gauge would change the metrics, the alerts and the dashboard for a small gain. The gap is documented instead: nothing records when a source last failed or ran |
+| 2026-10-25 | The API-docs link is left out of this change | It needs Prompt 4's docs to exist. Building them here would be building a later prompt |
 | 2026-10-21 | Intelligence service metrics with `prometheus_client` directly, not `prometheus-fastapi-instrumentator` | The instrumentator's support for Starlette 1.x (this service runs 1.6) is unverified; a counter and a histogram in a small ASGI middleware are about 30 lines, fully tested, and add no compatibility risk. Differs from the staged prompt's wording only in the library; the endpoint and port are as asked |
 | 2026-10-21 | Intelligence service metrics on port 9000 (own server), not a `/metrics` route on the API app | The staged prompt requires metrics never share the port other services call; a route on the API app would |
 | 2026-10-21 | Log records can carry only `method`, `path`, `status`, `durationMs` into the JSON line | An allow-list is safer than a block-list for keeping note text and amounts out of logs |
 | 2026-10-21 | Request completion line logs method and path only | Query strings and bodies can carry note text or amounts, which must never reach logs |
 
 ## Open questions
+
+- **Prompt 4 and the API-docs link** (above): the page has no link to the API docs yet. Add it when Prompt 4 lands.
+- **The Loki readiness blip**: `/ready` has answered 503 for a short time, twice, and the page showed Loki as `DOWN` for that refresh. Not explained; the probe does not retry.
+- **"Unsupported upgrade request."**: the intelligence service logs this WARNING every few minutes. Something sends it a connection upgrade it does not support. Not looked into.
+- **Not looked at**: the page at phone width, and a trace link opened from a log line (tracing is off in the stack as it runs now, so no log line carries one).
+- **Seven-day growth** of the Prometheus and Loki volumes has not been measured.
 
 - Alert delivery: like the reference, no pager or email integration is planned for a personal tool;
   alerts will be visible in Alertmanager's own page. Say if you want one.

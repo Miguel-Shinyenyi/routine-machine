@@ -1144,7 +1144,7 @@ on port 8081 only (`MANAGEMENT_PORT`), never on 8080 and not published by Compos
 recorded about people, and how to turn it off: `docs/observability.md`. The route sweep
 (`EveryRouteNeedsATokenTest`) covers only `/api/**`; the management port is a separate server.
 
-## Observability, part 5 (in progress)
+## Observability, part 5
 
 `GET /api/watchtower/services` (`WatchtowerController`, `ServiceHealthService`) is the owner-only operations
 page's first endpoint. Only the owner (`OwnerAccount`, from `OWNER_EMAIL`) gets data; a signed-in non-owner, a
