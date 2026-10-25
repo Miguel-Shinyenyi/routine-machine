@@ -163,9 +163,39 @@ services:
       - "127.0.0.1:16686:16686"
     mem_limit: 512m
 
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:13.2.4
+    # Required only when this service starts. A `:?` on the variable would fail every compose command, profile or
+    # not, and an empty value would silently fall back to Grafana's default admin/admin login.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - '[ -n "$$GF_SECURITY_ADMIN_PASSWORD" ] || { echo "set GRAFANA_ADMIN_PASSWORD in infra/.env (see .env.example)" >&2; exit 1; }; exec /run.sh'
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - observability_grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    mem_limit: 512m
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
+
 volumes:
   routine_machine_postgres_data:
   observability_prometheus_data:
   observability_alertmanager_data:
   observability_loki_data:
   observability_alloy_data:
+  observability_grafana_data:

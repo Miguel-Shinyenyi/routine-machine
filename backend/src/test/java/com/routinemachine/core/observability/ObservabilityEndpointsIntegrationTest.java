@@ -47,6 +47,16 @@ class ObservabilityEndpointsIntegrationTest extends AbstractIntegrationTest {
         assertThat(response.body()).contains("jvm_memory_used_bytes").contains("http_server_requests");
     }
 
+    // The dashboards' p95 latency needs the histogram buckets, which Spring Boot does not publish by default.
+    @Test
+    void requestLatencyIsPublishedAsHistogramBucketsForPercentiles() throws Exception {
+        get(apiPort, "/api/books");
+
+        String body = get(managementPort, "/actuator/prometheus").body();
+
+        assertThat(body).contains("http_server_requests_seconds_bucket");
+    }
+
     @Test
     void metricsAreNotServedOnTheApiPort() throws Exception {
         HttpResponse<String> response = get(apiPort, "/actuator/prometheus");

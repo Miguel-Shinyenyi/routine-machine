@@ -9,14 +9,14 @@ differs and why. Built in parts; this file describes only what exists.
 
 ## Current state
 
-Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is mostly done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing).** Grafana and its dashboards, metric exemplars, and the page are not built.
+Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is mostly done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard).** Metric exemplars and the page are not built.
 
 | Part | What | State |
 |---|---|---|
 | 1 | Backend: request id, JSON logs, metrics endpoint on its own port | Done |
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
-| 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and dashboards: not built |
+| 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
 | 5 | Owner-only operations page in the frontend (working name `/watchtower`) | Not built |
 
 ### Part 1: the backend
@@ -157,6 +157,37 @@ does not start them). Files are in `infra/observability/`.
   Prometheus's exemplar storage and OpenMetrics scraping plus a tracer bridge in each service. That is a
   separate step (see the report).
 
+### Part 4c-ii: Grafana and the dashboard
+
+- **Grafana** (`grafana/grafana:13.2.4`, profile `observability`) at `http://localhost:3001`, bound to this machine.
+  Anonymous access, sign-up, Gravatar and update checks are off.
+- **Admin password**: `GRAFANA_ADMIN_PASSWORD` in `infra/.env` (name only in `.env.example`; generate one with
+  `openssl rand -base64 24`). The service's entrypoint refuses to start when it is empty, so Grafana never runs on its
+  default `admin/admin` login. The variable is **not** required by other compose commands: a `:?` on it would fail
+  every `docker compose` call, profile or not.
+- **Provisioned, not clicked together** (`infra/observability/grafana/provisioning/`): two datasources (Prometheus,
+  Loki; not editable) and one dashboard, `Routine Machine` (`dashboards/routine-machine.json`, not editable
+  in the UI). Change the JSON in the repo.
+- **Dashboard**: services up; p95 latency by route for the backend and the intelligence service; credits decided per
+  hour by status and by rule version; questioned credits; sync fetches, failures in a row and time since last success
+  per source; assessments, p95 latency, tokens and estimated cost; and the application logs, filtered by level and by
+  request or trace id. The level filter lists `WARN` (backend) and `WARNING` (intelligence service) and `CRITICAL`,
+  because the two services name levels differently.
+- **Log to trace**: a log line that carries a trace id (`traceId` or `trace_id`) gets a link that opens that trace in
+  Jaeger (`http://localhost:16686/trace/<id>`). Tracing must be on (`TRACING_ENABLED=true`) for lines to carry one.
+- **No Jaeger datasource in Grafana.** Jaeger 2.22 serves only the `/api/v3` query API; the v1 API
+  (`/api/services`, `/api/traces/<id>`) that Grafana's Jaeger datasource (plugin 13.0.5) calls is gone, and
+  the datasource's health check fails with `404 Not Found`. Traces are read in the Jaeger UI, not inside Grafana.
+  Revisit when Grafana's plugin supports the v3 API.
+- **Latency buckets**: the backend now publishes `http_server_requests_seconds_bucket`
+  (`management.metrics.distribution.percentiles-histogram`), which Spring Boot does not do by default. The p95 panel
+  needs it. A test covers it.
+- **Check**: `infra/observability/verify-grafana.sh` (stack running): no login is refused, the default login does not
+  work, the two datasources are healthy, the dashboard is loaded and every query on it runs without error. A chart
+  with no data is fine on a new stack; a query that errors is not. Run on 2026-10-25: all checks pass, 14 queries.
+  The backend p95 panel shows no data until the backend image is rebuilt, because the running image predates the
+  latency-bucket setting.
+
 ## What it records about people
 
 - Logs: method, path, status, duration, request id, and the application's own messages. No query
@@ -193,6 +224,9 @@ does not start them). Files are in `infra/observability/`.
 | 2026-10-21 | Alert rules are unit-tested with `promtool test rules` before they were written | An alert that has never been shown to fire (and to stay quiet when it should) is a guess. The tests cover firing, the `for` delay, recovery and the deliberate exceptions |
 | 2026-10-21 | `SyncSourceFailing` skips ActivityWatch and alerts hub at 9, not 3 | ActivityWatch has no server in the Docker stack and fails every poll by design; hub counts three listing calls per run, so 3 is one failed run, not three |
 | 2026-10-21 | Prometheus and Alertmanager UIs bound to 127.0.0.1, behind a compose profile | Operations data is for the owner on this machine; a plain `docker compose up` stays light |
+| 2026-10-25 | Grafana's admin password is checked by the container's entrypoint, not by `${VAR:?}` in the compose file | `:?` is evaluated for every service, so it made every `docker compose` command fail without the variable. An empty value would otherwise fall back to Grafana's default `admin/admin` login |
+| 2026-10-25 | No Jaeger datasource in Grafana; the log-to-trace link is a plain URL to the Jaeger UI | Found by running `verify-grafana.sh`: the datasource's health check gets `404` because Jaeger 2.22 dropped the v1 query API that Grafana's plugin calls (`/api/v3/services` answers 200, `/api/services` answers 404). Keeps Jaeger 2.22 (decided earlier) instead of pinning an older v2 |
+| 2026-10-25 | Dashboard and datasources are provisioned from files and read-only in the UI | The dashboard is code: reviewed, versioned and restorable, and a click in the UI cannot change what the repo says |
 | 2026-10-21 | Only `health` and `prometheus` exposed | Everything else Actuator offers (env, beans, heap dump, loggers) can leak configuration or data |
 | 2026-10-21 | Incoming `X-Request-Id` accepted only if short and plain | An unchecked header written into logs can forge log lines |
 | 2026-10-21 | Intelligence service metrics with `prometheus_client` directly, not `prometheus-fastapi-instrumentator` | The instrumentator's support for Starlette 1.x (this service runs 1.6) is unverified; a counter and a histogram in a small ASGI middleware are about 30 lines, fully tested, and add no compatibility risk. Differs from the staged prompt's wording only in the library; the endpoint and port are as asked |

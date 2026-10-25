@@ -37,6 +37,11 @@ management:
   endpoint:
     health:
       show-details: never
+  metrics:
+    distribution:
+      # Latency buckets for the dashboards' p95 (docs/observability.md); off by default in Spring Boot.
+      percentiles-histogram:
+        http.server.requests: true
 
 logging:
   structured:
