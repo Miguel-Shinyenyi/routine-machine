@@ -12,6 +12,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import com.routinemachine.core.service.OwnerAccount;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -68,16 +70,25 @@ public class SecurityConfig {
     // The owner-only operations page (/api/watchtower) shares this chain on purpose: a signed-out visitor must
     // reach the controller, which answers 404 to everyone but the owner. On the token-required chain they
     // would get 401, which would tell them the page exists. A bad token is still refused (401), as above.
+    // The API documentation (springdoc's /v3/api-docs and Swagger UI, staged Prompt 4) shares it for the same reason:
+    // OwnerOnlyDocsFilter answers 404 to everyone but the owner.
     @Bean
     @Order(2)
-    public SecurityFilterChain optionalTokenChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain optionalTokenChain(HttpSecurity http, OwnerAccount ownerAccount) throws Exception {
         http
-                .securityMatcher("/api/hillside/**", "/api/watchtower/**")
+                .securityMatcher(concat(new String[] {"/api/hillside/**", "/api/watchtower/**"}, OwnerOnlyDocsFilter.PATTERNS))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}));
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}))
+                .addFilterAfter(new OwnerOnlyDocsFilter(ownerAccount), BearerTokenAuthenticationFilter.class);
         return http.build();
+    }
+
+    private static String[] concat(String[] first, String[] second) {
+        String[] all = java.util.Arrays.copyOf(first, first.length + second.length);
+        System.arraycopy(second, 0, all, first.length, second.length);
+        return all;
     }
 
     @Bean

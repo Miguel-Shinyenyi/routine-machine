@@ -952,6 +952,8 @@ the backend can send any `userId`. That is the access-control stage.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-25 | springdoc `2.10.0`, not a 3.x release | springdoc 3.x is built for Spring Boot 4; its own compatibility table lists Boot 3.5.x with 2.8.x to 2.10.x. 2.10.0 is the latest of that line. Checked against springdoc.org on 25 Oct 2026, not from memory |
+| 2026-10-25 | The documentation gate is a filter in the optional-token chain that answers 404, not a `permitAll`-then-controller check | springdoc's endpoints are not our controllers, so there is no controller to put an owner check in. A filter after the bearer-token filter sees the caller and can refuse everything springdoc serves, including its static UI files, with one rule |
 | 2026-10-21 | The owner account is defined once (`OwnerAccount`, from `OWNER_EMAIL`) and used by the claim, every integration and the Watering holes status | The same address answers "whose data does the deployment's own credentials produce" everywhere; three separate readings of the variable would let the claim and the integrations disagree about who the owner is |
 | 2026-10-21 | An integration may write to the owner's items and to unowned items, nobody else's | Unowned items are the pre-account data the integrations have always written to, so they must keep working before the owner claim runs; the owner's items are what that data becomes after it. A rule of "owner's items only" would stop every integration in the gap between deploying this and running the claim |
 | 2026-10-21 | Another account sees every watering hole as "not connected", not an error or a hidden page | It is true: that account has no integration of its own. Per-user integrations (each person's own WakaTime key) would be a separate feature |
@@ -1143,6 +1145,16 @@ Every request gets an `X-Request-Id` (`RequestIdFilter`, before Spring Security)
 on port 8081 only (`MANAGEMENT_PORT`), never on 8080 and not published by Compose. Details, what is
 recorded about people, and how to turn it off: `docs/observability.md`. The route sweep
 (`EveryRouteNeedsATokenTest`) covers only `/api/**`; the management port is a separate server.
+
+## API documentation (staged Prompt 4, in progress)
+
+Staged Prompt 4 has five parts: (1) springdoc on the backend, owner-only; (2) a summary, the request and response shapes and the error codes on every endpoint, with a check that fails if one is missing; (3) the intelligence service's own docs, off on its open port; (4) the operations page linking to both; (5) the docs. **Part 1 is done.**
+
+- **Where it lives.** `GET /v3/api-docs` (the OpenAPI 3.1 document) and the Swagger UI (`/swagger-ui.html`, which redirects to `/swagger-ui/index.html`) on the backend's app port. springdoc `2.10.0` (`springdoc-openapi-starter-webmvc-ui`): springdoc's own compatibility table pairs Spring Boot 3.5.x with its 2.8.x to 2.10.x releases, and 2.10.0 is the latest 2.x. It is not managed by the Boot parent, so the version is in `pom.xml`.
+- **Owner only.** `OwnerOnlyDocsFilter` answers a plain **404 with no body** to everyone but the owner: a signed-in stranger, a signed-out visitor, and everyone when no `OWNER_EMAIL` is set. A malformed token is still refused (401) before it, like the other owner-only addresses. The docs addresses share the optional-token chain with `/api/hillside/**` and `/api/watchtower/**` in `SecurityConfig`, for the same reason: on the token-required chain a signed-out visitor would get a 401, which would tell them the documentation exists. The chain and the filter read the same `OwnerOnlyDocsFilter.PATTERNS`, so they cannot disagree about what is documentation. The filter is not a Spring bean on purpose (a `Filter` bean would also be registered outside the security chain).
+- **Not reachable from the public frontend**: the frontend serves none of these addresses (404), and the management port does not serve them. A browser cannot send the bearer token on a plain page load, so **the owner cannot open the UI in a browser yet**; part 4 adds a page on the frontend that passes the owner's session on.
+- **Tested by** `ApiDocsOwnerOnlyTest` (6: the owner gets the spec with the operations page's routes in it and the UI page; another account and a signed-out visitor get 404 on all five addresses; the 404 body does not contain the spec; a malformed token gets 401) and `ApiDocsWithNoOwnerTest` (1). Three deliberate breaks (filter not installed; owner check inverted; the UI assets left out of the gate) each failed the matching tests. The route sweep (`EveryRouteNeedsATokenTest`) still passes unchanged.
+- **Baseline for part 2**: the spec has 45 paths and 58 operations, **0 with a summary**.
 
 ## Observability, part 5
 

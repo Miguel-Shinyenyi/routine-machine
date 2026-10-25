@@ -52,6 +52,14 @@
         <!-- Metric exemplars: lets OtelSpanContext read the current trace id. The API alone does nothing;
              the OpenTelemetry Java agent (Dockerfile, TRACING_ENABLED) supplies the real tracer, and with no
              agent the current span is a no-op, so nothing is attached. Version managed by Spring Boot's BOM. -->
+        <!-- API documentation (staged Prompt 4). springdoc 2.8 to 2.10 is the line built against Spring Boot 3.5
+             (springdoc.org, compatibility matrix); it is not managed by the Boot parent, so the version is set here.
+             The documentation is visible to the owner only: see OwnerOnlyDocsFilter. -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.10.0</version>
+        </dependency>
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-api</artifactId>
