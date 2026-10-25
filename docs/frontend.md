@@ -280,6 +280,10 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-25 | The analytics library is loaded by a dynamic `import()` only after a visitor accepts, rather than initialised opted out | `opt_out_capturing_by_default` still lets the library start and contact its host. Not importing it at all is the strongest guarantee of "nothing before consent": zero requests and not even the script |
+| 2026-10-25 | Never `cookieless_mode`; Do Not Track and Global Privacy Control are checked by this app, not left to the library | The library's documentation says `on_reject` counts a visitor who rejects. `respect_dnt` covers Do Not Track only, so GPC is handled in `consent.ts`, and both win over an earlier accept |
+| 2026-10-25 | Events pass a closed allow-list and URLs lose query strings and fragments in `before_send` | A real visit showed an unrequested `$pageleave` with scroll statistics, full URLs and the page title. Filtering at the last moment holds whatever else is added to the app |
+| 2026-10-25 | `posthog-js` 1.438.7 pinned, installed with `npm install --legacy-peer-deps` | The newest release over two weeks old; npm 10.9.2 crashes on this tree without the flag (see the Vitest 4 row), and a normal `npm ci` from the lockfile was checked |
 | 2026-10-25 | Vitest 3.2.7 to 4.1.12 (and with it Vite 7 to 8), plus a lockfile-only `npm audit fix`; `npm audit` now reports 0 vulnerabilities | The remaining audit findings were all in the test runner and the build tool's dev server (a prototype-pollution gadget leading to code execution in `tinypool`, path traversal in `@vitest/mocker`, and `launch-editor` and `zod` issues). They never ship in the app, but a critical one in the tool that runs on a developer's machine is still worth closing. I chose 4.1.12 over 5.x because 5.x needs Node 22 or newer and the image builds on Node 20. The 79 tests, lint and the production build pass, and the image builds and runs on Node 20. **npm 10.9.2 crashes on this upgrade** ("Cannot read properties of null (reading 'edgesOut')", in its peer-dependency resolver, with or without `node_modules`), so the lockfile was written with `npm install --legacy-peer-deps`; a normal `npm ci` from it works, which is the check that matters |
 | 2026-10-25 | Each owner chart keeps a 640 px minimum width and its card scrolls sideways on a narrow screen, instead of scaling down | Found at 390 px: the chart is drawn on a 720 px canvas, and scaled into a 320 px card its axis labels were about 5 px tall. At 640 px they are 9.8 px. The two tables on the page already scroll sideways the same way. Checked by measuring the rendered label size in a 390 px frame |
 | 2026-10-25 | Next.js 16.3.5 to 16.4.1 (and `eslint-config-next` with it), exact versions | `npm audit` listed critical and high advisories on 16.3.5 (remote code execution in image optimisation and `next/og`, an SSRF, a Server Actions denial of service, cache poisoning). 16.4.1 clears every `next` finding; the six that remain are in the dev-only test tooling. I chose 16.4.1 (released 14 Oct) over 16.4.3 (23 Oct) because `npm audit` was already clean and it is the older release. Checked by the 79 tests, lint, a production build and the running pages; no code changed |
@@ -384,6 +388,53 @@ departure from precedent.
 | 2026-10-19 | The cohort dashboard page is read-mostly this slice: no UI for creating an organisation/cohort, bulk CSV invites, or setting a seat limit, only the survey form writes anything | Those admin actions are a separate, later part — this slice's job was the dashboard view itself (all five backend pieces already built in prior parts). Reachable today only via the API directly; a real admin needs the backend's existing endpoints until that UI exists |
 | 2026-10-19 | A real bug found live-testing before reporting: an org admin who isn't also a cohort member crashed the page when submitting the survey | The backend correctly 403s a non-member's survey answer (it's a learner's question, not an admin's), but `submitCohortSurveyResponse` didn't catch it, so `ApiError` reached the Server Action unhandled. Fixed by catching and swallowing a `403` specifically (any other error still surfaces) — the admin's click has no visible effect instead of crashing, which is correct since the backend already decided they're not eligible to answer |
 | 2026-10-19 | A second real bug found the same session: the survey/seat-limit `POST`/`PUT` calls threw `"Unexpected end of JSON input"` even for an eligible learner | Both backend endpoints returned a plain `200` with an empty body (`void`-returning `@PostMapping`/`@PutMapping`), but `lib/api.ts`'s `request()` only skips `response.json()` on a `204`. Fixed on the backend (`@ResponseStatus(HttpStatus.NO_CONTENT)` on both `OrganisationController` methods) rather than loosening the frontend's parsing, since a write with no response body should honestly be a `204`, matching how the rest of this app already treats empty responses |
+
+## Analytics (staged Prompt 5, part 1 of 6: consent first)
+
+Product analytics with PostHog, to learn how people move through the app **without collecting what the app promises to keep
+private**. Built in parts; this is the first. **What exists**: a consent banner, a gate that keeps the library unloaded until a
+visitor accepts, and a filter on everything that leaves the browser. **Not built yet**: identifying people by internal id, the
+decision on session replay, the eight custom events wired to the app, the privacy page, and the test that fails the build on a
+field named like `amount`, `text`, `note`, `email` or `name`. **Not done**: a visit seen in PostHog's own Live events (that needs
+Miguel's project key; see below).
+
+- **Off unless configured.** Set `POSTHOG_KEY` and `POSTHOG_HOST` in `infra/.env` (names only in `.env.example`; passed through
+  `docker-compose.yml`; the key is **never** in a file in the repo). With either missing, or a host that is not an `http(s)` address,
+  `analyticsConfigured()` is false: no banner, no library, no request. Read at runtime by the root layout, not baked into the build.
+- **Consent first.** `components/AnalyticsConsent.tsx` asks once (Accept and Decline, equally prominent) and remembers the answer in
+  `localStorage` (`rm_analytics_consent`). The rules are in `lib/analytics/consent.ts`, pure and tested: **Do Not Track and Global
+  Privacy Control win** over an earlier "accept" and the visitor is not asked; anything else in storage counts as no choice.
+- **Nothing before "Accept".** The library is imported dynamically (`lib/analytics/client.ts`) only after consent, so before it the
+  code is not even downloaded. **A visitor who declines is not tracked at all.** I did **not** use PostHog's `cookieless_mode:
+  'on_reject'`: the library's own documentation says it counts a visitor who rejects, in cookieless form, which contradicts the
+  prompt, and a test fails if `cookieless_mode` is ever added. This is the check the prompt asked for ("do not trust this note").
+- **What leaves the browser** (`lib/analytics/options.ts`, `sanitize.ts`, `events.ts`): no automatic click or form capture, no session
+  replay (a later decision), no surveys, no feature-flag calls, **no page-leave event and no scroll statistics**, no cookies (the
+  identifier is in `localStorage`), and **no person profile** until someone is identified. Every event goes through PostHog's
+  `before_send`: **only these names pass: `$pageview`, `$identify`, `goal_created`, `day_logged`, `credit_questioned`,
+  `reading_note_submitted`, `pause_logged`, `hillside_joined`, `hillside_left`, `cohort_dashboard_viewed`**; anything else is dropped
+  (PostHog's automatic events, anything invented later); **every URL loses its query string and fragment** (here they can hold ids);
+  **the page title is dropped**. A pageview still carries PostHog's standard device properties: browser and version, operating system,
+  language, time zone, screen and window size, the user agent, a random device id and a random session id. No email, no name.
+- **Withdrawing.** If a visitor's choice or browser signal changes to "no" during a visit, `stopAnalytics()` resets the library and then
+  opts it out. **The order matters and I had it wrong at first**: the library's `reset()` also clears its consent setting back to
+  "opted in", so opting out first and resetting after left a visitor who had just said no capturing again. Found by simulating GPC
+  mid-visit; `lib/analytics/client.test.ts` now holds the order, and accepting again opts back in on the same instance.
+- **A setting you must change in PostHog**: the library's `ip` option is documented as having no effect. Discarding visitors' IP
+  addresses is the project setting **"Discard client IP data"** in PostHog's project settings. Switch it on; I cannot.
+- **Checked** (25 Oct 2026, Chrome, against a stand-in PostHog on `localhost:9099` and a placeholder key, never the real service):
+  a fresh visitor sees the banner and, before choosing, the page loaded 11 resources, none to the analytics host or named PostHog,
+  with no stored identifier and no cookie; after **Decline** a second page and a reload sent **0 requests** (the browser's network
+  log, the page's resource list and the stand-in's own record all agree); after **Accept** exactly one `POST /e/` (the pageview)
+  arrived, with no flags or config call; between two pages on the final code **two `$pageview` events and nothing else**, with the text
+  of a deliberately secret-looking query string appearing nowhere in what was sent; simulated GPC mid-visit set the library's opt-out
+  flag and **two further page changes sent nothing**. 31 unit tests (consent rules, options, the event filter, the library call
+  order), 17 deliberate breaks, each failing the matching test.
+- **Not checked**: real Do Not Track and GPC from a real browser (the rules are unit-tested and GPC was simulated), a visit in
+  PostHog's Live events, the phone width of the banner, and the dark theme of the banner.
+- **Setting it up, for Miguel**: in PostHog create a project, copy its project key and region host (for example
+  `https://eu.i.posthog.com`), put them in `infra/.env` as `POSTHOG_KEY` and `POSTHOG_HOST`, switch on "Discard client IP data", and
+  restart the frontend. `posthog-js` is pinned at 1.438.7 (the newest release over two weeks old on 25 Oct 2026).
 
 ## Open questions
 

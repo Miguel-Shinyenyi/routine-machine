@@ -92,6 +92,9 @@ services:
     environment:
       BACKEND_URL: http://backend:8080
       INTELLIGENCE_SERVICE_URL: http://intelligence-service:8000
+      # Product analytics (staged Prompt 5, docs/frontend.md "Analytics"). Both empty means analytics is off and no banner shows.
+      POSTHOG_KEY: ${POSTHOG_KEY:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-}
       # Same shared secret the backend verifies its bearer tokens against (see lib/auth/session.ts)
       # — must stay identical to the backend service's own AUTH_JWT_SECRET, so both read the one
       # value from infra/.env.

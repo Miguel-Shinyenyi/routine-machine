@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { AnalyticsConsent } from "@/components/AnalyticsConsent";
 import { Shell } from "@/components/Shell";
+import { analyticsConfigured } from "@/lib/analytics/consent";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
 import { todayIsoDate } from "@/lib/schedule";
 import { getSessionToken, getSessionUserId } from "@/lib/auth/session";
@@ -84,6 +86,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full bg-canvas text-ink">
         <Shell {...shellContext}>{children}</Shell>
+        {/* Analytics (staged Prompt 5): only when the deployment has a key and a host, and only after the visitor accepts. */}
+        {analyticsConfigured(process.env.POSTHOG_KEY, process.env.POSTHOG_HOST) && (
+          <AnalyticsConsent posthogKey={process.env.POSTHOG_KEY as string} posthogHost={process.env.POSTHOG_HOST as string} />
+        )}
       </body>
     </html>
   );
