@@ -16,6 +16,9 @@ export default function LoginPage() {
       <p className="text-center text-[14px] text-muted">
         New here? <Link href="/register">Create an account</Link>
       </p>
+      <p className="text-center text-[12px] text-muted">
+        <Link href="/privacy">Privacy</Link>
+      </p>
     </div>
   );
 }

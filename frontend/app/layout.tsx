@@ -79,6 +79,8 @@ async function fetchShellContext(): Promise<{
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const shellContext = await fetchShellContext();
 
+  // The signed-in person's internal id, for the analytics service to identify them by (and by nothing else). Null when signed out.
+  const analyticsUserId = await getSessionUserId();
   return (
     <html lang="en" className="h-full antialiased">
       <head>
@@ -88,7 +90,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <Shell {...shellContext}>{children}</Shell>
         {/* Analytics (staged Prompt 5): only when the deployment has a key and a host, and only after the visitor accepts. */}
         {analyticsConfigured(process.env.POSTHOG_KEY, process.env.POSTHOG_HOST) && (
-          <AnalyticsConsent posthogKey={process.env.POSTHOG_KEY as string} posthogHost={process.env.POSTHOG_HOST as string} />
+          <AnalyticsConsent
+            posthogKey={process.env.POSTHOG_KEY as string}
+            posthogHost={process.env.POSTHOG_HOST as string}
+            userId={analyticsUserId}
+          />
         )}
       </body>
     </html>

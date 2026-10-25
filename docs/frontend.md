@@ -280,6 +280,9 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-25 | Session replay stays off on every page | The prompt prefers off to masking on the granary, reading notes, profile and cohort pages. Nothing in the product questions so far needs a recording of a screen, and a mask that fails shows a note or an amount. Held by the options test |
+| 2026-10-25 | The privacy page is generated from a disclosure list that a test holds equal to the allowed events | A privacy page written by hand drifts from the code the day an event is added. Now an event cannot be allowed without being described, and "sent today" is a flag to flip when one is wired |
+| 2026-10-25 | `identify` is called with the internal user id alone, and anything but a positive whole number is refused | The prompt: identify by internal id only, never email, never name. One function (`distinctIdFor`) decides what an identifier may be, so no caller can pass an email by mistake |
 | 2026-10-25 | The analytics library is loaded by a dynamic `import()` only after a visitor accepts, rather than initialised opted out | `opt_out_capturing_by_default` still lets the library start and contact its host. Not importing it at all is the strongest guarantee of "nothing before consent": zero requests and not even the script |
 | 2026-10-25 | Never `cookieless_mode`; Do Not Track and Global Privacy Control are checked by this app, not left to the library | The library's documentation says `on_reject` counts a visitor who rejects. `respect_dnt` covers Do Not Track only, so GPC is handled in `consent.ts`, and both win over an earlier accept |
 | 2026-10-25 | Events pass a closed allow-list and URLs lose query strings and fragments in `before_send` | A real visit showed an unrequested `$pageleave` with scroll statistics, full URLs and the page title. Filtering at the last moment holds whatever else is added to the app |
@@ -389,14 +392,15 @@ departure from precedent.
 | 2026-10-19 | A real bug found live-testing before reporting: an org admin who isn't also a cohort member crashed the page when submitting the survey | The backend correctly 403s a non-member's survey answer (it's a learner's question, not an admin's), but `submitCohortSurveyResponse` didn't catch it, so `ApiError` reached the Server Action unhandled. Fixed by catching and swallowing a `403` specifically (any other error still surfaces) — the admin's click has no visible effect instead of crashing, which is correct since the backend already decided they're not eligible to answer |
 | 2026-10-19 | A second real bug found the same session: the survey/seat-limit `POST`/`PUT` calls threw `"Unexpected end of JSON input"` even for an eligible learner | Both backend endpoints returned a plain `200` with an empty body (`void`-returning `@PostMapping`/`@PutMapping`), but `lib/api.ts`'s `request()` only skips `response.json()` on a `204`. Fixed on the backend (`@ResponseStatus(HttpStatus.NO_CONTENT)` on both `OrganisationController` methods) rather than loosening the frontend's parsing, since a write with no response body should honestly be a `204`, matching how the rest of this app already treats empty responses |
 
-## Analytics (staged Prompt 5, part 1 of 6: consent first)
+## Analytics (staged Prompt 5, parts 1 and 2 of 6)
 
 Product analytics with PostHog, to learn how people move through the app **without collecting what the app promises to keep
-private**. Built in parts; this is the first. **What exists**: a consent banner, a gate that keeps the library unloaded until a
-visitor accepts, and a filter on everything that leaves the browser. **Not built yet**: identifying people by internal id, the
-decision on session replay, the eight custom events wired to the app, the privacy page, and the test that fails the build on a
-field named like `amount`, `text`, `note`, `email` or `name`. **Not done**: a visit seen in PostHog's own Live events (that needs
-Miguel's project key; see below).
+private**. Built in parts. **What exists**: a consent banner, a gate that keeps the library unloaded until a visitor accepts, a
+filter on everything that leaves the browser, identification by internal user id only, the session-replay decision (off), and a public
+privacy page where a visitor can change their choice. **Not built yet**: the eight custom events wired to the app, and the test
+that fails the build on a field named like `amount`, `text`, `note`, `email` or `name`. **Seen in PostHog's own Live events**: not by
+me (I cannot open your PostHog); PostHog answered 200 to the two events my real browser sent, see "Checked against the real
+project" below.
 
 - **Off unless configured.** Set `POSTHOG_KEY` and `POSTHOG_HOST` in `infra/.env` (names only in `.env.example`; passed through
   `docker-compose.yml`; the key is **never** in a file in the repo). With either missing, or a host that is not an `http(s)` address,
@@ -416,6 +420,28 @@ Miguel's project key; see below).
   (PostHog's automatic events, anything invented later); **every URL loses its query string and fragment** (here they can hold ids);
   **the page title is dropped**. A pageview still carries PostHog's standard device properties: browser and version, operating system,
   language, time zone, screen and window size, the user agent, a random device id and a random session id. No email, no name.
+- **Identified by internal user id only (part 2).** When someone is signed in, and has accepted, the root layout passes their **internal
+  user id** (a number) to the consent component, which tells the library "this is user 34" and nothing else: `identify` is called
+  with the id alone, no email, no name, no person properties (`lib/analytics/identity.ts`, `client.ts`, 14 tests). `distinctIdFor`
+  refuses anything that is not a positive whole number, so an email or a name can never become an identifier. A signed-out visitor
+  (or someone who signs out) is forgotten with `reset()`; nothing is identified before consent or after a visitor withdraws. The
+  filter also drops the person-property fields PostHog attaches to events (`$set`, `$set_once`, `$unset`), which carry full URLs. **The
+  internal id is still personal data** under Kenya's Data Protection Act (it points to one person), so the privacy page says so.
+- **Session replay: off everywhere, decided (part 2).** The prompt prefers turning replay off on the granary, reading notes, profile and
+  cohort pages over masking them, and prefers masking to nothing. Replay is off on **every** page (`disable_session_recording: true`,
+  held by a test). Revisit only if a product question needs it, and then per page, never on those four.
+- **The privacy page (part 2), `/privacy`.** Public, signed in or not. It says what is counted and when, what is never sent, why, who
+  receives it (the deployment's own PostHog host, and the region for PostHog's two hosted ones, outside Kenya), and the rights under Kenya's
+  Data Protection Act, 2019. It is built from `lib/analytics/disclosure.ts`, and **a test holds that list equal to the list of events the
+  app may send**, so an event cannot be allowed without being described to the people it is collected from; `sentToday` marks the two
+  events sent now, and the eight named actions are listed as "not sent yet" with what each will carry. A **"Your choice" box** shows the
+  current choice in plain words and lets the visitor change it at any time (`components/AnalyticsChoice.tsx`, sharing one store with the
+  banner, `lib/analytics/consent-store.ts`); when the browser itself sends Do Not Track or Global Privacy Control the buttons are off
+  and the page says why. With analytics off the page says only that. Linked from the banner, the sidebar footer and the sign-in and
+  register pages. **Not on the phone tab bar** (it has five slots), so on a phone it is reached from the banner or the sign-in pages.
+  Who to contact comes from `PRIVACY_CONTACT` (optional; without it the page says to contact "the person who runs this app").
+  **Left out on purpose: how long PostHog keeps the data**, because it is a project setting nobody has decided; add it to the page
+  when it is. **Not legal advice**: have the Kenya wording checked before relying on it.
 - **Withdrawing.** If a visitor's choice or browser signal changes to "no" during a visit, `stopAnalytics()` resets the library and then
   opts it out. **The order matters and I had it wrong at first**: the library's `reset()` also clears its consent setting back to
   "opted in", so opting out first and resetting after left a visitor who had just said no capturing again. Found by simulating GPC
@@ -430,11 +456,20 @@ Miguel's project key; see below).
   of a deliberately secret-looking query string appearing nowhere in what was sent; simulated GPC mid-visit set the library's opt-out
   flag and **two further page changes sent nothing**. 31 unit tests (consent rules, options, the event filter, the library call
   order), 17 deliberate breaks, each failing the matching test.
-- **Not checked**: real Do Not Track and GPC from a real browser (the rules are unit-tested and GPC was simulated), a visit in
-  PostHog's Live events, the phone width of the banner, and the dark theme of the banner.
+- **Checked against the real project (part 2, 25 Oct 2026, Chrome, signed in as the owner, key and host from `infra/.env`)**: a fresh
+  visitor on `/privacy` loaded 27 resources, **none to PostHog**, with no stored identifier and no cookie; declining through the page's own
+  control removed the banner and sent nothing, also while moving through the signed-in Today page; choosing "Count my visits" made
+  **two requests to `https://us.i.posthog.com/e/`, both answered 200** (the pageview and the identify), with the identifier in
+  `localStorage` and no cookie; withdrawing through the page set the library's opt-out flag and **two further page changes sent
+  nothing**; simulating Global Privacy Control turned the page's buttons off and said why; **at 390 px** the banner sits above the phone tab
+  bar with no overlap, the page does not overflow sideways, and its buttons are 38 px tall (a little under the usual 44 px touch size).
+  **What it sent to your project is test data**: a `$pageview` and a `$identify` for your internal user number. **I did not look at your
+  Live events; please check that both appear and that the person is only that number.**
+- **Not checked**: real Do Not Track and GPC from a real browser (the rules are unit-tested and GPC was simulated), signing out (the
+  reset is unit-tested; I did not sign you out), the dark theme of the banner and the page, and a screen reader.
 - **Setting it up, for Miguel**: in PostHog create a project, copy its project key and region host (for example
-  `https://eu.i.posthog.com`), put them in `infra/.env` as `POSTHOG_KEY` and `POSTHOG_HOST`, switch on "Discard client IP data", and
-  restart the frontend. `posthog-js` is pinned at 1.438.7 (the newest release over two weeks old on 25 Oct 2026).
+  `https://eu.i.posthog.com` or `https://us.i.posthog.com`), put them in `infra/.env` as `POSTHOG_KEY` and `POSTHOG_HOST`, switch on
+  "Discard client IP data", and restart the frontend. `posthog-js` is pinned at 1.438.7 (the newest release over two weeks old on 25 Oct 2026).
 
 ## Open questions
 

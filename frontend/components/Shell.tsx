@@ -232,6 +232,9 @@ export function Shell({
               Sign in
             </Link>
           )}
+          <Link href="/privacy" className="px-2.5 text-[12px] text-muted hover:underline">
+            Privacy
+          </Link>
           <ThemeToggle />
         </div>
       </aside>

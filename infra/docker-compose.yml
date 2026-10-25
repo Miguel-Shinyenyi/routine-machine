@@ -95,6 +95,8 @@ services:
       # Product analytics (staged Prompt 5, docs/frontend.md "Analytics"). Both empty means analytics is off and no banner shows.
       POSTHOG_KEY: ${POSTHOG_KEY:-}
       POSTHOG_HOST: ${POSTHOG_HOST:-}
+      # Who a visitor should contact about their data, shown on the public privacy page (/privacy). Optional.
+      PRIVACY_CONTACT: ${PRIVACY_CONTACT:-}
       # Same shared secret the backend verifies its bearer tokens against (see lib/auth/session.ts)
       # — must stay identical to the backend service's own AUTH_JWT_SECRET, so both read the one
       # value from infra/.env.

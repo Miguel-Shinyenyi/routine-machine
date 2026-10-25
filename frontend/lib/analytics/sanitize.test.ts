@@ -72,6 +72,22 @@ describe("sanitizeEvent: what stays on an event that leaves", () => {
     const out = sanitizeEvent(event("goal_created", { source: "form", n: 3 }));
     expect(out?.properties).toEqual({ source: "form", n: 3 });
   });
+  it("drops the person-property fields, which PostHog attaches to events and which carry full URLs (found live, part 2)", () => {
+    const withPersonProperties = {
+      uuid: "u", event: "$identify",
+      properties: { distinct_id: "34" },
+      $set: { email: "miguel@example.com" },
+      $set_once: { $initial_current_url: "http://localhost:3000/login?probe=secret", $initial_referrer: "https://x.test/?q=secret" },
+      $unset: ["name"],
+    };
+    const out = sanitizeEvent(withPersonProperties as never) as unknown as Record<string, unknown>;
+    expect(out).not.toHaveProperty("$set");
+    expect(out).not.toHaveProperty("$set_once");
+    expect(out).not.toHaveProperty("$unset");
+    expect(JSON.stringify(out)).not.toContain("secret");
+    expect(JSON.stringify(out)).not.toContain("@");
+    expect(out.properties).toEqual({ distinct_id: "34" });
+  });
   it("does not change the event it was given", () => {
     const original = event("$pageview", { $current_url: "http://x.test/a?b=1", title: "t" });
     sanitizeEvent(original);
