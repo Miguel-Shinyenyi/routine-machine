@@ -406,6 +406,14 @@ departure from precedent.
 - **Known rough edge**: a goal name the person already has makes the backend answer 400, and the action does not catch it, so they see the app's error page. There is no friendlier message yet.
 - **Checked** (25 Oct 2026, Chrome, throwaway account on `127.0.0.1`, analytics declined): adding "Learn Rust" listed it, and the `rm_events` cookie was cleared with nothing sent. 4 new unit tests (request body, trimming, blank name, backend refusal) and a deliberate break (removing the queue call fails one). **Not checked**: the accepted path sending `goal_created` to PostHog in a real browser (unit-tested only), the form at phone width, a duplicate name.
 
+## Empty states, duplicate goal, bad time zone (staged Prompt 6, part 5)
+
+- **Empty states name the next step.** Flock: routines ("Add one below: a small thing you can do most days"), learning topics (says a goal comes first when there is none), schedule templates ("Pick a routine, the day and how long it takes"). Path with no schedule shows a banner linking to Flock's schedule section. Tally's per-routine list says to add one in the Flock. Today already has the first-step card (part 3).
+- **A duplicate goal name is caught before the click.** `lib/goalName.ts` (4 tests) returns the problem; `NewGoalForm` shows it and disables Add. The backend stays the authority (it still answers 400). The box clears after a goal is added.
+- **A bad time zone is refused by the backend** (`User.validTimeZone`, used by `updateProfile` and `changeTimeZone`; HTTP 400 and the saved zone stays; test `aTimeZoneThatIsNotARealZoneIsRejectedAndTheSavedZoneStays`). Before this a name like `Mars/Base` was saved and then broke the Granary and the credit ledger for that person.
+- **Known rough edge**: typing a bad zone on Profile now shows the app's error page ("This page couldn't load") instead of a message. Nothing is saved and the Granary still loads. A friendly message is not built (Backlog L).
+- **Checked** (25 Oct 2026, Chrome, throwaway account): Path empty banner; typing an existing goal name shows the message and disables Add; adding a new goal lists it and clears the box; a bad zone on Profile gave the error page and the Granary still loaded. **Not checked**: Flock's other empty texts and Tally's in a browser (strings only, built and linted), phone width.
+
 ## Analytics (staged Prompt 5, parts 1 to 3 of 6)
 
 Product analytics with PostHog, to learn how people move through the app **without collecting what the app promises to keep

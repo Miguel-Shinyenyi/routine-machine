@@ -149,6 +149,24 @@ class UserControllerApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void aTimeZoneThatIsNotARealZoneIsRejectedAndTheSavedZoneStays() throws Exception {
+        User user = userRepository.save(new User("profile-bad-zone@example.com", "irrelevant-hash", null, null));
+
+        for (String bad : new String[] {"Mars/Base", "not a zone", "   "}) {
+            mockMvc.perform(put("/api/users/me/profile")
+                            .header("Authorization", "Bearer " + signedToken(user.getId().toString()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"timeZone\": \"" + bad + "\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        mockMvc.perform(get("/api/users/me/profile")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.timeZone", is("UTC")));
+    }
+
+    @Test
     void theProfileEndpointsRequireAValidToken() throws Exception {
         mockMvc.perform(get("/api/users/me/profile")).andExpect(status().isUnauthorized());
         mockMvc.perform(put("/api/users/me/profile")

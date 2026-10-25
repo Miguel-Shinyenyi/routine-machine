@@ -117,6 +117,13 @@ export default async function PathPage(props: PageProps<"/path">) {
         </div>
       </div>
 
+      {templates.length === 0 && (
+        <p className="card p-4 text-[15px]">
+          Your path is empty. <Link href="/flock#schedule-templates" className="text-tint-text hover:underline">Put a routine on it in the Flock</Link>{" "}
+          and it appears here, day by day.
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center gap-4 text-[13px] text-muted">
         <span className="flex items-center gap-1.5">{statusDot("ok")}Tended</span>
         <span className="flex items-center gap-1.5">{statusDot("now")}Today, still open</span>

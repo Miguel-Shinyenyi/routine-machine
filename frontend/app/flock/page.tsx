@@ -149,7 +149,9 @@ export default async function FlockPage() {
             </div>
           </div>
         )}
-        {routineItems.length === 0 && <p className="text-[13px] text-muted">None yet</p>}
+        {routineItems.length === 0 && (
+          <p className="text-[13px] text-muted">None yet. Add one below: a small thing you can do most days.</p>
+        )}
         <div className="card p-4">
           <h2 className="text-[17px] font-semibold">Private stays private.</h2>
           <p className="mt-1.5 text-[14px] text-muted">
@@ -177,7 +179,7 @@ export default async function FlockPage() {
             </li>
           )}
         </ul>
-        <NewGoalForm />
+        <NewGoalForm existingNames={goals.map((goal) => goal.name)} />
       </section>
 
       <section>
@@ -188,7 +190,12 @@ export default async function FlockPage() {
               {topic.name} <span className="text-[13px] text-muted">({topic.goalName})</span>
             </li>
           ))}
-          {learningTopics.length === 0 && <li className="text-[13px] text-muted">None yet</li>}
+          {learningTopics.length === 0 && (
+            <li className="text-[13px] text-muted">
+              None yet. A topic is something you study; the Shepherd suggests one a day.{" "}
+              {goals.length === 0 ? "Add a goal above first." : "Add one below."}
+            </li>
+          )}
         </ul>
         <NewLearningTopicForm goals={goals} />
       </section>
@@ -203,7 +210,11 @@ export default async function FlockPage() {
               {template.targetDurationMinutes}min)
             </li>
           ))}
-          {templates.length === 0 && <li className="text-[13px] text-muted">None yet</li>}
+          {templates.length === 0 && (
+            <li className="text-[13px] text-muted">
+              None yet. Pick a routine, the day and how long it takes, and it appears on Today and the Path.
+            </li>
+          )}
         </ul>
         <NewScheduleTemplateForm routineItems={routineItems} />
       </section>

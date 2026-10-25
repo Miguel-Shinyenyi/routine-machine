@@ -12,7 +12,9 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
+import java.time.DateTimeException;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
 
@@ -135,7 +137,18 @@ public class User {
     }
 
     public void changeTimeZone(String timeZone) {
-        this.timeZone = Objects.requireNonNull(timeZone, "timeZone must not be null");
+        this.timeZone = validTimeZone(Objects.requireNonNull(timeZone, "timeZone must not be null"));
+    }
+
+    // A zone the Granary and the credit ledger later hand to ZoneId.of; a bad name saved here would break them
+    // for this person on every request, so it is refused when it is set.
+    private static String validTimeZone(String timeZone) {
+        try {
+            ZoneId.of(timeZone);
+        } catch (DateTimeException e) {
+            throw new IllegalArgumentException("timeZone must be a real zone name such as Africa/Nairobi");
+        }
+        return timeZone;
     }
 
     public List<String> getInterests() {
@@ -175,7 +188,7 @@ public class User {
             }
             this.dayEndHour = dayEndHour;
         }
-        if (timeZone != null) this.timeZone = timeZone;
+        if (timeZone != null) this.timeZone = validTimeZone(timeZone);
         if (analogiesEnabled != null) this.analogiesEnabled = analogiesEnabled;
     }
 

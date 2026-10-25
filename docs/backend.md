@@ -1194,3 +1194,6 @@ newest data (`WateringHoleStatusService`, extracted from `WateringHoleStatusCont
 non-owners) with its run state from Prometheus, and gives one result word per source. Details and the checks that ran:
 `docs/observability.md`, "Part 5".
 
+## Time zone validation (staged Prompt 6, part 5)
+
+`User.updateProfile` and `User.changeTimeZone` refuse a time zone `ZoneId.of` cannot read (`IllegalArgumentException`, which the API answers as 400) and leave the saved zone unchanged. The Granary and the credit ledger call `ZoneId.of(user.getTimeZone())` on every request, so one bad saved value used to break them for that person. Test: `UserControllerApiIntegrationTest.aTimeZoneThatIsNotARealZoneIsRejectedAndTheSavedZoneStays`. Zones saved before this change are not re-checked.

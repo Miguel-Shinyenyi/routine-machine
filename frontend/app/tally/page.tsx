@@ -190,7 +190,7 @@ export default async function TallyPage(props: PageProps<"/tally">) {
                   </div>
                 );
               })}
-              {tally.routineShownUp.length === 0 && <p className="p-4 text-[13px] text-muted">No routine items yet</p>}
+              {tally.routineShownUp.length === 0 && <p className="p-4 text-[13px] text-muted">No routines yet. Add one in the Flock and each shows here.</p>}
             </div>
           </div>
           <p className="mt-2 px-0.5 text-[13px] text-muted">
