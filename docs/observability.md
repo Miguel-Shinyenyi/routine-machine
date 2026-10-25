@@ -230,9 +230,7 @@ and result; (5) the frontend page and its 404; (6) docs (see "Piece 6" below). T
   owner's token.
 - **Checked live**: owner 200 with all eight services `UP`; another account 404; signed out 404; a malformed token
   401; stopping Loki made it `DOWN`.
-- **Seen once, not explained**: Loki's own `/ready` answered 503 twice for a short time, so the page showed Loki
-  `DOWN` although logs were flowing; it then answered 200 on every try. The probe does not retry, so a brief dip
-  shows as `DOWN` for that refresh.
+- **Seen, investigated 25 Oct 2026, cause not found**: Loki's own `/ready` answered 503 three times for a short time, so the page showed Loki `DOWN` although logs were flowing. What I found: Loki's own log shows its internal calls to itself (`127.0.0.1:9095`) timing out about once an hour (`DeadlineExceeded`, at 11:01, 12:03, 12:37, 12:42, 12:48, 13:56 and 15:04 UTC), and at 13:56 it logged "removing ingester failing healthcheck" (a client pool dropping its own ingester). That is the kind of event that could make `/ready` answer 503, but I did not catch a 503 at any of those moments, so the link is a guess, not a finding. I could not tie that to the laptop sleeping (the power log has no sleep or wake events that day) or to load (ten minutes of the full backend suite, polling `/ready` every half second, produced no 503 and no error). So **the page was telling the truth for a moment and I do not know why Loki stalled**. The page now tries a failing probe once more after a pause (`watchtower.probe-retry-pause-ms`, 1 s), so a flap shorter than that is not shown; a service that is really down still reads `DOWN`, and the page then takes about 5 s to answer instead of 2 s (two 2 s tries and the pause). Tested by `WatchtowerProbeRetryTest`; the retry does not help a stall longer than a second.
 
 **Piece 2, done.** `GET /api/watchtower/metrics?range=1h|6h|24h` (`WatchtowerMetricsService`), same owner gate:
 - **A fixed list of 12 queries** (`WatchtowerMetricsService.QUERIES`): the p95 latency of both services, credits by status
@@ -369,7 +367,7 @@ green, failing in the warning colour, everything else plain), failures in a row,
   its series. I also looked at the page in Chrome (a saved copy of the owner's page, dark theme).
 - **Hover and keys, checked in Chrome** (25 Oct 2026, after the owner signed in to the browser): the tooltip, the crosshair
   and the arrow keys work, in the light theme; the owner had also tried the hover. The dark theme was looked at in a saved
-  copy only. The phone width has not been looked at. (My first attempt, putting a session token into the browser myself,
+  copy only. The phone width was looked at later (see below). (My first attempt, putting a session token into the browser myself,
   was refused by the permission check; signing in by hand was the way round it.)
 - **Seen, not changed**: with a series that ends early, its end label sits at the right edge while its dot is further
   left. The legend and the tooltip name it, so I left it.
@@ -395,9 +393,14 @@ link, over a table of the newest 100 lines (time to the second in UTC, service, 
 - **Two flaws the first look found, fixed**: the level select clipped its text (the shared `.field` style has 12px of
   padding), and a chart with one series printed its title as the end label, clipped at the edge (now just the value).
   The empty chart cards also stretched to match their neighbours; the grid now aligns them to the top.
-- **Not checked**: a trace link, because tracing is off in this stack (no line carried a trace id), and the phone width.
-- **Seen, not looked into**: the intelligence service logs "Unsupported upgrade request." at WARNING every few minutes
-  (100 of the newest 100 `WARNING` lines). Something sends it a connection upgrade it does not support.
+- **Checked later, 25 Oct 2026**: a trace link. With tracing switched on for the check (a one-off `TRACING_ENABLED=true`, then
+  back to off), 60 of the newest 100 log lines carried a trace id and a Jaeger link; clicking one in Chrome opened that trace
+  in Jaeger (the backend's own spans and its database queries). **And the phone width, with a flaw found and fixed**: at 390 px
+  the charts scaled their whole 720 px canvas into a 320 px card, so axis labels came out about 5 px tall. Each chart now keeps
+  a minimum width of 640 px (labels 9.8 px) and the card scrolls sideways, as the two tables always did; the page itself has
+  no horizontal overflow. Method: the window resize does not change the viewport (the limit `docs/frontend.md` records), so
+  I embedded the page in a 390 px frame in the same tab and measured the rendered label size.
+- **Fixed, 25 Oct 2026: "Unsupported upgrade request." in the intelligence service's log.** Cause found by experiment: a plain request logs nothing, a request with `Upgrade: h2c` logs one warning, and each load of the owner page added one. Java's HTTP client offers an HTTP/2 upgrade on plain `http` calls by default, and the page's probes go to the services over plain `http`; uvicorn does not support `h2c` and says so at WARNING each time. The five clients of the owner page (the probes, the charts, the logs, the sync table and the intelligence docs) now speak HTTP/1.1. Tested by `WatchtowerProbesSendNoUpgradeTest` (a stand-in server fails the test if any request carries an upgrade header); checked live: 12 owner-page calls added no warning. The older warnings are still in Loki for its seven days. The sync clients for WakaTime, ActivityWatch, GitHub and RescueTime build their own clients and were not changed: they call external or local addresses, not the services behind this page.
 
 **Piece 6, done: documentation and the end of Prompt 3's checklist.**
 - **The API-docs link** was left out of this piece, because Prompt 3 says the page shows "the API docs from Prompt 4" and Prompt 4 did not exist yet. Prompt 4 is now built (springdoc on the backend, the intelligence service's spec through the backend, both in one read-only viewer, owner only), and the page has an "API documentation" section linking to it. Where it lives and how it is checked: `docs/backend.md`, "API documentation", and `docs/frontend.md`.
@@ -425,7 +428,7 @@ Measured on this machine on 25 Oct 2026, the whole stack up with the `observabil
 
 - **Memory: the whole stack is about 1.2 GB, of which about 700 MB is the observability profile.** Without the profile the application alone is about 490 MB. **Grafana is the heavy one and sits at two thirds of its 512 MB cap**, so it is the first container to hit its limit if a dashboard grows.
 - **Disk: images about 1.4 GB** (observability images about 900 MB: Grafana 445, Alloy 207, Prometheus 98, Jaeger 51, Loki 43, Alertmanager 37, socket proxy 21; the application and Postgres images about 470 MB). **Volumes about 320 MB, of which Grafana is 303 MB and 290 MB of that is its plugins**; Prometheus is 18 MB; Loki is under 1 MB so far, because its write-ahead log has not been turned into chunks yet; Alertmanager and Alloy are empty. Jaeger keeps traces in memory only, so they cost no disk and do not survive a restart.
-- **Growth is bounded by settings, not measured over time**: Prometheus keeps 7 days and is capped at 512 MB of memory; Loki keeps 7 days (`retention_period: 168h`). I have not watched either volume grow over days, so the 7-day size is a guess until that is measured.
+- **Growth is bounded by settings, not yet measured over days**: Prometheus keeps 7 days and is capped at 512 MB of memory; Loki keeps 7 days (`retention_period: 168h`). One data point: Prometheus's volume went from 18.3 MB to 28.6 MB in about 5.7 hours on 25 Oct 2026 (my own testing adds series and traffic, so this overstates a quiet day). Extrapolated in a straight line that is a few hundred MB at seven days, which is a guess and not a measurement. **Baseline for the real check, 25 Oct 2026 16:52 UTC**: Prometheus 28.55 MB, Loki 0.41 MB, Grafana 302.6 MB. Measure again after seven days.
 - **Without the profile**: `docker compose up` starts only the application; `docker compose --profile observability up` adds the rest. See "Turning it off".
 
 ## What it records about people
@@ -488,10 +491,9 @@ Measured on this machine on 25 Oct 2026, the whole stack up with the `observabil
 
 ## Open questions
 
-- **The Loki readiness blip**: `/ready` has answered 503 for a short time, twice, and the page showed Loki as `DOWN` for that refresh. Not explained; the probe does not retry.
-- **"Unsupported upgrade request."**: the intelligence service logs this WARNING every few minutes. Something sends it a connection upgrade it does not support. Not looked into.
-- **Not looked at**: the page at phone width, and a trace link opened from a log line (tracing is off in the stack as it runs now, so no log line carries one).
-- **Seven-day growth** of the Prometheus and Loki volumes has not been measured.
+- **Loki stalls about once an hour** (see the investigation under piece 1): cause not found. The page retries once; a longer stall still shows.
+- **Seven-day growth** of the Prometheus and Loki volumes: baseline taken 25 Oct 2026 16:52 UTC (see "What the stack costs"); measure again from 1 Nov.
+- **Prompt 3's acceptance check 2** was shown with a `/patterns` request, not literally "log a day": the backend makes no functional call to the intelligence service (it only probes its health and reads its docs; the intelligence service calls the backend), so the only traces that cross both services start at the intelligence service or at the frontend page that calls it. Loading the Today page is the closest user action.
 
 - Alert delivery: like the reference, no pager or email integration is planned for a personal tool;
   alerts will be visible in Alertmanager's own page. Say if you want one.

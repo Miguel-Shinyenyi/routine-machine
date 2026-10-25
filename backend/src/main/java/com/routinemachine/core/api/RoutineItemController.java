@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -40,10 +41,8 @@ public class RoutineItemController {
         this.userRepository = userRepository;
     }
 
-    // userId is optional and additive (Phase 8 groundwork, see docs/backend.md): omitted,
-    // this returns every legacy, unowned item exactly as before this phase. Passed, it scopes
-    // to that one user's own items instead, for testing the new per-user data alongside the
-    // untouched single-user behaviour everything else still relies on.
+    // The signed-in person's own routine items. Who that is comes from the token, never from a parameter
+    // (docs/backend.md, access control).
     @Operation(summary = "List routine items")
     @GetMapping
     public List<RoutineItemResponse> list(@AuthenticationPrincipal Jwt jwt) {
@@ -52,6 +51,7 @@ public class RoutineItemController {
     }
 
     @Operation(summary = "Create a routine item")
+    @ApiResponse(responseCode = "400", description = "There is no goal with that id, or it belongs to someone else. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoutineItemResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody RoutineItemRequest request) {

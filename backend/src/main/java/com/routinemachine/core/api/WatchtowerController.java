@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.service.OwnerAccount;
 import com.routinemachine.core.service.ServiceHealthService;
@@ -55,6 +56,7 @@ public class WatchtowerController {
 
     // The only thing a caller chooses is the time range (1h, 6h or 24h). The queries are a fixed list.
     @Operation(summary = "Owner only: chart data read from Prometheus")
+    @ApiResponse(responseCode = "400", description = "The range must be 1h, 6h or 24h. A required field, parameter or path value is missing or cannot be read.")
     @GetMapping("/metrics")
     public WatchtowerMetricsService.Metrics metrics(
             @AuthenticationPrincipal Jwt jwt,
@@ -67,6 +69,7 @@ public class WatchtowerController {
     // request id or a trace id), and choose the range. The owner check comes first, so a non-owner never learns that a
     // bad parameter would have been refused.
     @Operation(summary = "Owner only: recent log lines read from Loki")
+    @ApiResponse(responseCode = "400", description = "The level is not one of the allowed levels. The range must be 1h, 6h or 24h. The request id may hold only letters, digits, dot, underscore and hyphen (1 to 64). A required field, parameter or path value is missing or cannot be read.")
     @GetMapping("/logs")
     public WatchtowerLogsService.Logs logs(
             @AuthenticationPrincipal Jwt jwt,

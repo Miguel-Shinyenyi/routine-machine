@@ -50,7 +50,9 @@ public class WatchtowerSyncService {
     private final WateringHoleStatusService statusService;
     private final String baseUrl;
     private final ObjectMapper mapper = new ObjectMapper();
-    private final HttpClient client = HttpClient.newBuilder().connectTimeout(TIMEOUT)
+    // HTTP/1.1 on purpose: by default Java offers an HTTP/2 upgrade (Upgrade: h2c) on plain http calls, which uvicorn logs as
+    // "Unsupported upgrade request." at WARNING each time (WatchtowerProbesSendNoUpgradeTest).
+    private final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(TIMEOUT)
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
     public WatchtowerSyncService(WateringHoleStatusService statusService,

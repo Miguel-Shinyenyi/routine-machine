@@ -295,6 +295,30 @@ testing mistake (a stale click coordinate landing on text below the Import butto
 error message had pushed it down), not an application bug, confirmed by a direct `curl` of
 the same request succeeding throughout.
 
+## Observability and API documentation tests (staged Prompts 3 and 4)
+
+How the owner-page and API-docs tests are written, so the next one follows the same pattern.
+
+- **Stand-in servers, not mocks.** A test that needs Prometheus, Loki, the intelligence service or a probed service starts a
+  `com.sun.net.httpserver.HttpServer` on an ephemeral port, points the app at it with `@DynamicPropertySource`, and records
+  what it was asked (`WatchtowerMetricsControllerTest`, `WatchtowerProbesSendNoUpgradeTest`). That is how the tests prove which
+  queries reach Prometheus and that no outgoing call offers an HTTP upgrade.
+- **Owner-only routes are tested for three people**: the owner (`TestTokens.asUser(ownerId)`, with `owner.email` set by
+  `@TestPropertySource`), another account, and a signed-out visitor, and the stand-in must record that it was never asked for
+  the last two. One class per configuration that changes the Spring context (no owner, no address, unreachable address).
+- **Check the check.** After a test passes, break the code on purpose and see the right test fail (remove the owner check,
+  invert it, leave a route undocumented). A test that cannot fail proves nothing. Restore the file and diff it against a copy.
+- **Run `./mvnw -q clean test`, with `clean`.** An IDE attached to `backend/` writes class files into `target/` that fail with
+  "Unresolved compilation problems", and an unclean run then errors every test. It cost two invalid runs of deliberate breaks.
+- **The API documentation is held to the code** by `ApiDocsCoverageTest` (every controller method is in the document and has a
+  summary) and `ApiDocsErrorsTest` (401, 404 and the per-route 400 and 403 follow from the security patterns and the handler
+  signatures). The wording of the service-level codes is not machine-checked.
+- **Frontend**: only pure functions are unit-tested (`lib/*.test.ts`); pages and route handlers are checked by running the app.
+  For anything visual or interactive, look at it in a real browser. Curl passed three bugs in the Swagger viewer that Chrome
+  showed at once. For a phone width, embed the page in a 390 px `<iframe>`: resizing the window does not change the viewport.
+- **Live checks mint a session token** from the dev signing secret inside the shell command and never print it, for example
+  `curl -H "Authorization: Bearer $TOKEN"` against the backend or `-H "Cookie: session=$TOKEN"` against the frontend.
+
 ## Decisions log
 
 | Date | Decision | Reason |

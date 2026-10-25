@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -42,6 +43,7 @@ public class ScheduleTemplateController {
     }
 
     @Operation(summary = "List schedule templates")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping
     public List<ScheduleTemplateResponse> list(
             @AuthenticationPrincipal Jwt jwt, @RequestParam Optional<DayOfWeek> dayOfWeek) {
@@ -53,6 +55,7 @@ public class ScheduleTemplateController {
     }
 
     @Operation(summary = "Create a schedule template")
+    @ApiResponse(responseCode = "400", description = "There is no routine item with that id, or it belongs to someone else. routineItemId is required when targetType is ROUTINE_ITEM. routineItemId must not be set when targetType is LEARNING_SLOT. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ScheduleTemplateResponse create(

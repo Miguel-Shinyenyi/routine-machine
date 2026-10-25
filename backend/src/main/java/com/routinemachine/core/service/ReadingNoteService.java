@@ -52,8 +52,8 @@ public class ReadingNoteService {
                 questionBack);
     }
 
-    // userId is who is writing (null = the legacy, userId-less view: unowned books only). Someone
-    // else's book answers exactly like one that does not exist.
+    // userId is who is writing; the controller passes the signed-in person's id from the token. A null id means "nobody", so
+    // only unowned books. Someone else's book answers exactly like one that does not exist.
     @Transactional
     public ReadingNote createNote(
             Long bookId, Long userId, String noteText, String chapterPlaced, Integer ownWordsPercentage,

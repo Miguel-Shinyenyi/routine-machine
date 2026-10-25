@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -53,6 +54,7 @@ public class EvidenceEventController {
     }
 
     @Operation(summary = "Record a piece of evidence and decide its credit")
+    @ApiResponse(responseCode = "400", description = "There is no goal with that id, or it belongs to someone else. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public EvidenceEventResponse ingest(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody EvidenceEventRequest request) {
@@ -73,6 +75,7 @@ public class EvidenceEventController {
     // for this user in the window, whatever it was decided — accepted, rejected, pending, or
     // self-reported.
     @Operation(summary = "List the credit ledger: every evidence event and how it was decided")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping
     public List<EvidenceEventResponse> ledger(
             @AuthenticationPrincipal Jwt jwt, @RequestParam LocalDate seasonStart, @RequestParam LocalDate seasonEnd) {
@@ -84,6 +87,8 @@ public class EvidenceEventController {
     // "Question a credit": records the request, nothing more — see
     // docs/product-direction.md's Hillside v2 transparency bullet.
     @Operation(summary = "Question a credit")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "404", description = "There is no evidence event with that id, or it belongs to someone else.")
     @PatchMapping("/{id}/question")
     public EvidenceEventResponse question(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
         EvidenceEvent event = evidenceEventRepository.findWithGoalById(id)

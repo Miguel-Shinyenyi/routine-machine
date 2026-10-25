@@ -6,7 +6,7 @@ import java.util.Objects;
 
 // Per-user scoping (docs/backend.md). A row is owned by one user, or by nobody (a pre-account
 // "unowned" row, which OwnerClaimService hands to the owner). An id of null always means
-// "nobody", so a request without a userId can only ever see and touch unowned rows.
+// "nobody", so a null id can only ever see and touch unowned rows. (Every controller passes the id from the token.)
 // idOf reads the id off a lazy proxy without loading it, so this is safe outside a transaction.
 public final class Ownership {
 

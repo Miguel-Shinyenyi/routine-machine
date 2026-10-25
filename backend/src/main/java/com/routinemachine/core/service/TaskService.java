@@ -28,8 +28,8 @@ public class TaskService {
         return changeStatus(taskId, newStatus, null);
     }
 
-    // userId is who is asking (null = the legacy, userId-less view, which can only touch unowned
-    // tasks). Someone else's task answers exactly like one that does not exist, so the id of a
+    // userId is who is asking; the controller passes the signed-in person's id from the token. A null id means "nobody",
+    // which can only touch unowned tasks. Someone else's task answers exactly like one that does not exist, so the id of a
     // task you do not own tells you nothing.
     @Transactional
     public Task changeStatus(Long taskId, TaskStatus newStatus, Long userId) {

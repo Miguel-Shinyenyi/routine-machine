@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -35,6 +36,7 @@ public class CurrentReadingController {
     }
 
     @Operation(summary = "Get the latest current-reading entry")
+    @ApiResponse(responseCode = "404", description = "No current reading logged yet.")
     @GetMapping
     public CurrentReadingResponse latest(@AuthenticationPrincipal Jwt jwt) {
         return currentReadingLogRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(TokenUser.idOf(jwt))
@@ -43,6 +45,7 @@ public class CurrentReadingController {
     }
 
     @Operation(summary = "Record what is being read now")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CurrentReadingResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CurrentReadingRequest request) {

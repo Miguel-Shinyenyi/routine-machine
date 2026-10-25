@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -43,6 +44,7 @@ public class BookController {
     }
 
     @Operation(summary = "Get the book being read now")
+    @ApiResponse(responseCode = "404", description = "No book logged yet.")
     @GetMapping("/current")
     public BookResponse current(@AuthenticationPrincipal Jwt jwt) {
         return bookRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(TokenUser.idOf(jwt))
@@ -51,6 +53,7 @@ public class BookController {
     }
 
     @Operation(summary = "Start a book")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public BookResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody BookRequest request) {

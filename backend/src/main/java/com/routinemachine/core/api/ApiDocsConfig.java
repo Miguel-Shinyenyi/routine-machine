@@ -23,18 +23,19 @@ import java.util.Map;
 // only (OwnerOnlyDocsFilter). Two kinds of error are documented:
 //  - 401 and the owner-only 404, exactly where the security chains produce them, read from the same patterns
 //    SecurityConfig uses, so a route cannot be protected and documented as open or the other way round;
-//  - one shared "default" error response on every operation, which lists what GlobalExceptionHandler can answer.
-//    That list is the shared set for the whole API, not a promise about each route: a route that takes no input will
-//    never answer 400. The routes whose own 401 differs (login, github-login, measurements) say so on the method.
+//  - 400, 403 and 404 per route, written on each controller method from reading what that route can throw (and from what
+//    it takes as input: a body, a query value, a path value or an upload can each be missing or unreadable, which Spring
+//    answers with 400). ApiDocsErrorsTest holds the structural part of it to the code. Routes that cannot fail those ways
+//    claim nothing. The routes whose own 401 differs (login, github-login, measurements) say so on the method;
+//  - one shared "default" response on every operation for anything not listed (a deleted account behind a valid token,
+//    a server failure).
 @Configuration
 public class ApiDocsConfig {
 
     private static final AntPathMatcher MATCHER = new AntPathMatcher();
 
-    static final String SHARED_ERROR = "Any other error, with a body of {\"error\": \"text\"} (or, for an invalid field, "
-            + "a map of field name to message). 400: a field is invalid or a precondition is not met. 403: not an "
-            + "organisation admin or a member of the cohort. 404: not found, which is also what another person's item "
-            + "looks like. A given route answers only some of these.";
+    static final String SHARED_ERROR = "Any error not listed above, with a body of {\"error\": \"text\"}. For example the "
+            + "account behind a valid token no longer exists (400 or 404), or the server fails (500).";
 
     @Bean
     public OpenAPI routineMachineApi() {

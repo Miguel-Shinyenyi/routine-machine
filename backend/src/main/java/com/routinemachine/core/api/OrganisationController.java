@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -54,6 +55,7 @@ public class OrganisationController {
     }
 
     @Operation(summary = "Create an organisation")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     public OrganisationResponse createOrganisation(
             @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CreateOrganisationRequest request) {
@@ -62,6 +64,9 @@ public class OrganisationController {
     }
 
     @Operation(summary = "Create a cohort in an organisation")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "403", description = "You are not an admin of the organisation.")
+    @ApiResponse(responseCode = "404", description = "There is no organisation with that id.")
     @PostMapping("/{organisationId}/cohorts")
     public CohortResponse createCohort(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long organisationId, @Valid @RequestBody CreateCohortRequest request) {
@@ -71,6 +76,9 @@ public class OrganisationController {
     }
 
     @Operation(summary = "Add a person to a cohort")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "403", description = "You are not an admin of the organisation.")
+    @ApiResponse(responseCode = "404", description = "There is no cohort with that id.")
     @PostMapping("/cohorts/{cohortId}/members")
     public CohortMemberResponse addCohortMember(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId, @Valid @RequestBody AddCohortMemberRequest request) {
@@ -80,6 +88,9 @@ public class OrganisationController {
     }
 
     @Operation(summary = "List a cohort's members")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "403", description = "You are not an admin of the organisation.")
+    @ApiResponse(responseCode = "404", description = "There is no cohort with that id.")
     @GetMapping("/cohorts/{cohortId}/members")
     public List<CohortMemberResponse> listCohortMembers(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
         return organisationService.listCohortMembers(cohortId, TokenUser.idOf(jwt)).stream()
@@ -88,6 +99,8 @@ public class OrganisationController {
     }
 
     @Operation(summary = "Set an organisation's seat limit")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "403", description = "You are not an admin of the organisation. An organisation that does not exist answers the same, because the admin check comes first.")
     @PutMapping("/{organisationId}/seat-limit")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void setSeatLimit(
@@ -96,6 +109,9 @@ public class OrganisationController {
     }
 
     @Operation(summary = "Invite people to a cohort in bulk")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "403", description = "You are not an admin of the organisation.")
+    @ApiResponse(responseCode = "404", description = "There is no cohort with that id.")
     @PostMapping("/cohorts/{cohortId}/bulk-invite")
     public List<CsvInviteRowResult> bulkInvite(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId, @Valid @RequestBody BulkInviteRequest request) {
@@ -103,24 +119,36 @@ public class OrganisationController {
     }
 
     @Operation(summary = "Get a cohort's pilot measures")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "403", description = "You are neither an admin of the organisation nor a member of the cohort.")
+    @ApiResponse(responseCode = "404", description = "There is no cohort with that id.")
     @GetMapping("/cohorts/{cohortId}/dashboard")
     public CohortDashboardSummary dashboard(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
         return cohortDashboardService.summarize(cohortId, TokenUser.idOf(jwt), LocalDate.now());
     }
 
     @Operation(summary = "Get a cohort's measures by study group")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "403", description = "You are neither an admin of the organisation nor a member of the cohort.")
+    @ApiResponse(responseCode = "404", description = "There is no cohort with that id.")
     @GetMapping("/cohorts/{cohortId}/dashboard/by-group")
     public List<CohortGroupMeasure> dashboardByGroup(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
         return cohortDashboardService.summarizeByGroup(cohortId, TokenUser.idOf(jwt), LocalDate.now());
     }
 
     @Operation(summary = "Get a cohort's weekly check-in chart")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "403", description = "You are neither an admin of the organisation nor a member of the cohort.")
+    @ApiResponse(responseCode = "404", description = "There is no cohort with that id.")
     @GetMapping("/cohorts/{cohortId}/dashboard/weekly-check-ins")
     public CohortWeeklyCheckInChart weeklyCheckIns(@AuthenticationPrincipal Jwt jwt, @PathVariable Long cohortId) {
         return cohortDashboardService.weeklyCheckIns(cohortId, TokenUser.idOf(jwt), LocalDate.now());
     }
 
     @Operation(summary = "Answer the cohort pilot survey")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "403", description = "You are not a member of the cohort.")
+    @ApiResponse(responseCode = "404", description = "There is no cohort with that id.")
     @PostMapping("/cohorts/{cohortId}/survey-response")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void submitSurveyResponse(

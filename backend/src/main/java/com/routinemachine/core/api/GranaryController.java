@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import com.routinemachine.core.domain.PauseDecision;
 import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.PauseDecisionRepository;
@@ -53,6 +54,7 @@ public class GranaryController {
     }
 
     @Operation(summary = "Store a saving for today")
+    @ApiResponse(responseCode = "400", description = "Set a daily saving amount before storing one.")
     @PostMapping("/savings")
     public GranaryMonthSummaryResponse storeSaving(@AuthenticationPrincipal Jwt jwt) {
         User user = findUser(TokenUser.idOf(jwt));
@@ -62,6 +64,7 @@ public class GranaryController {
     }
 
     @Operation(summary = "Set the daily amount to store")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @PutMapping("/saving-target-amount")
     public GranaryMonthSummaryResponse setSavingTargetAmount(
             @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SetSavingTargetAmountRequest request) {
@@ -73,6 +76,7 @@ public class GranaryController {
     }
 
     @Operation(summary = "Get the granary summary for this month")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping("/summary")
     public GranaryMonthSummaryResponse summary(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<YearMonth> month) {
         User user = findUser(TokenUser.idOf(jwt));
@@ -86,6 +90,7 @@ public class GranaryController {
     }
 
     @Operation(summary = "Log a pause before a tempting decision")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @PostMapping("/pauses")
     public PauseDecisionResponse createPause(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody CreatePauseRequest request) {
         User user = findUser(TokenUser.idOf(jwt));
@@ -117,6 +122,8 @@ public class GranaryController {
     }
 
     @Operation(summary = "Record the decision on a pause (decline or proceed)")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "404", description = "There is no pause decision with that id, or it belongs to someone else.")
     @PatchMapping("/pauses/{id}/decide")
     public PauseDecisionResponse decide(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @Valid @RequestBody DecidePauseRequest request) {
@@ -127,6 +134,8 @@ public class GranaryController {
     }
 
     @Operation(summary = "Add a reflection to a pause")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "404", description = "There is no pause decision with that id, or it belongs to someone else.")
     @PatchMapping("/pauses/{id}/reflect")
     public PauseDecisionResponse reflect(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @Valid @RequestBody ReflectPauseRequest request) {
@@ -140,6 +149,7 @@ public class GranaryController {
     // construction. password is optional form data, used once for this one call and never
     // stored (see docs/product-direction.md's M-Pesa section and MpesaPdfReader).
     @Operation(summary = "Import an M-Pesa statement from a PDF")
+    @ApiResponse(responseCode = "400", description = "Could not read this file as a PDF. No recognisable transaction rows found. The statement's format may have changed. The statement is password-protected, or the password given is wrong. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping("/mpesa-statement")
     public MpesaImportResponse importMpesaStatement(
             @AuthenticationPrincipal Jwt jwt, @RequestParam MultipartFile file, @RequestParam Optional<String> password) {
@@ -154,6 +164,7 @@ public class GranaryController {
     }
 
     @Operation(summary = "List the M-Pesa spending categories")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping("/mpesa-categories")
     public Map<MpesaCategory, Integer> mpesaCategories(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<YearMonth> month) {
         User user = findUser(TokenUser.idOf(jwt));

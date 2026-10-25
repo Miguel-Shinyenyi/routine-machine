@@ -34,8 +34,11 @@ public class ServiceHealthService {
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
     private final HealthEndpoint healthEndpoint;
+    private final long retryPauseMillis;
     private final Map<String, String> probes = new LinkedHashMap<>();
-    private final HttpClient client = HttpClient.newBuilder().connectTimeout(TIMEOUT)
+    // HTTP/1.1 on purpose: by default Java offers an HTTP/2 upgrade (Upgrade: h2c) on plain http calls, which uvicorn logs as
+    // "Unsupported upgrade request." at WARNING each time (WatchtowerProbesSendNoUpgradeTest).
+    private final HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(TIMEOUT)
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
     public ServiceHealthService(
@@ -45,8 +48,10 @@ public class ServiceHealthService {
             @Value("${watchtower.alertmanager-url:}") String alertmanagerUrl,
             @Value("${watchtower.loki-url:}") String lokiUrl,
             @Value("${watchtower.jaeger-url:}") String jaegerUrl,
-            @Value("${watchtower.grafana-url:}") String grafanaUrl) {
+            @Value("${watchtower.grafana-url:}") String grafanaUrl,
+            @Value("${watchtower.probe-retry-pause-ms:1000}") long retryPauseMillis) {
         this.healthEndpoint = healthEndpoint;
+        this.retryPauseMillis = retryPauseMillis;
         probes.put("intelligence-service", intelligenceUrl);
         probes.put("prometheus", prometheusUrl);
         probes.put("alertmanager", alertmanagerUrl);
@@ -70,10 +75,27 @@ public class ServiceHealthService {
         return component != null && Status.UP.equals(component.getStatus()) ? UP : DOWN;
     }
 
+    // A probe that fails is tried once more after a short pause. Loki's /ready was seen answering 503 for a moment (cause
+    // not found, docs/observability.md), which showed Loki as DOWN for a refresh although it was up again straight after.
+    // A flap shorter than the pause is not shown; a service that is really down fails both tries and is. A healthy one is
+    // asked once.
     private String probe(String url) {
         if (url == null || url.isBlank()) {
             return NOT_CONFIGURED;
         }
+        if (UP.equals(attempt(url))) {
+            return UP;
+        }
+        try {
+            Thread.sleep(retryPauseMillis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return DOWN;
+        }
+        return attempt(url);
+    }
+
+    private String attempt(String url) {
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(url.trim())).timeout(TIMEOUT).GET().build();
             int code = client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();

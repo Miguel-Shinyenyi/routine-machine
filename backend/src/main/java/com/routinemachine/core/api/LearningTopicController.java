@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -35,6 +36,7 @@ public class LearningTopicController {
     }
 
     @Operation(summary = "List learning topics")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping
     public List<LearningTopicResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<Long> goalId) {
         // A topic belongs to whoever owns its goal.
@@ -45,6 +47,7 @@ public class LearningTopicController {
     }
 
     @Operation(summary = "Create a learning topic")
+    @ApiResponse(responseCode = "400", description = "There is no goal with that id, or it belongs to someone else. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public LearningTopicResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody LearningTopicRequest request) {

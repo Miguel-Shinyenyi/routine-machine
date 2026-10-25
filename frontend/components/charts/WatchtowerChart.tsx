@@ -25,6 +25,9 @@ const RIGHT = 560;
 const TOP = 12;
 const BOTTOM = 200;
 const LABEL_GAP = 14;
+// The chart is drawn on a 720 wide canvas. Scaled into a phone-width card its labels came out about 5px tall, so below
+// this width it keeps its size and the card scrolls sideways, as the tables do (found at 390px on 25 Oct 2026).
+const MIN_WIDTH = 640;
 
 function shorten(label: string): string {
   return label.length > 24 ? `${label.slice(0, 23)}…` : label;
@@ -86,7 +89,8 @@ export function WatchtowerChart({ chart }: { chart: ChartData }) {
   return (
     <div className="card p-4">
       {header}
-      <div className="relative">
+      <div className="overflow-x-auto">
+      <div className="relative" style={{ minWidth: MIN_WIDTH }}>
         <svg
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           width="100%"
@@ -190,6 +194,7 @@ export function WatchtowerChart({ chart }: { chart: ChartData }) {
             })}
           </div>
         )}
+      </div>
       </div>
 
       {series.length >= 2 && (

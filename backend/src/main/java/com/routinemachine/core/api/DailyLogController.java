@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -48,9 +49,10 @@ public class DailyLogController {
         this.userRepository = userRepository;
     }
 
-    // userId is optional and additive, same as RoutineItemController's (Phase 8 groundwork,
-    // see docs/backend.md): combines with date when both are given.
+    // The signed-in person's own logs, for one date when date is given. Who that is comes from the token, never from a
+    // parameter (docs/backend.md, access control).
     @Operation(summary = "List daily logs")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping
     public List<DailyLogResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<LocalDate> date) {
         Long userId = TokenUser.idOf(jwt);
@@ -60,6 +62,7 @@ public class DailyLogController {
     }
 
     @Operation(summary = "Record a day's log")
+    @ApiResponse(responseCode = "400", description = "Exactly one of routineItemId or learningTopicId must be set. There is no learning topic with that id, or it belongs to someone else. There is no routine item with that id, or it belongs to someone else. Unknown daily log source. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public DailyLogResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody DailyLogRequest request) {

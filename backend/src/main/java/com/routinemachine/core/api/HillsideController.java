@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -14,10 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 import java.util.Optional;
 
-// Phase 8 groundwork: asUserId is a demo-mode parameter, not a real logged-in identity — the
-// Next.js session this would normally come from isn't built yet. See docs/backend.md's
-// decisions log. field omitted means "general" (3+ distinct non-private routines tended that
-// day, same threshold intelligence-service's tally.py uses for its own tally stick).
+// The days-shown-up hillside (version 1; the page now reads the credit-based version 2). "You" comes only from a valid
+// token: a visitor with none sees the ranking without a band, and no parameter can name another person. field omitted
+// means "general" (3+ distinct non-private routines tended that day, same threshold intelligence-service's tally.py uses
+// for its own tally stick). See docs/backend.md's decisions log.
 @RestController
 @RequestMapping("/api/hillside")
 public class HillsideController {
@@ -29,6 +30,7 @@ public class HillsideController {
     }
 
     @Operation(summary = "Get the days-shown-up hillside (version 1)")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping
     public HillsideResponse get(
             @RequestParam Optional<HillsideField> field,

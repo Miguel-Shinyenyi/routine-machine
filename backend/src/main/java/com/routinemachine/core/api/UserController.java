@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.UserRepository;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,6 +36,7 @@ public class UserController {
     // The hillside should never enroll anyone who hasn't explicitly agreed, even if they
     // already have non-private routine items (see DailyLogRepository.findForHillside).
     @Operation(summary = "Join or leave the hillside")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @PutMapping("/me/hillside-opt-in")
     public UserResponse setHillsideOptIn(@AuthenticationPrincipal Jwt jwt, @RequestBody HillsideOptInRequest request) {
         User user = findUser(jwt);
@@ -57,6 +59,7 @@ public class UserController {
     }
 
     @Operation(summary = "Update the signed-in person's profile")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @PutMapping("/me/profile")
     public ProfileResponse updateProfile(@AuthenticationPrincipal Jwt jwt, @RequestBody ProfileRequest request) {
         User user = findUser(jwt);

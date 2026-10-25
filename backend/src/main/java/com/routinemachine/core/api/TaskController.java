@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.routinemachine.core.security.TokenUser;
@@ -60,9 +61,10 @@ public class TaskController {
         this.userRepository = userRepository;
     }
 
-    // Per-user scoping (docs/backend.md): userId given = that user's tasks; omitted = only the
-    // unowned (pre-account) ones, never another user's.
+    // The signed-in person's own tasks, for one date when date is given. Who that is comes from the token, never from a
+    // parameter (docs/backend.md, access control).
     @Operation(summary = "List tasks")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping
     public List<TaskResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<LocalDate> date) {
         Long userId = TokenUser.idOf(jwt);
@@ -72,6 +74,7 @@ public class TaskController {
     }
 
     @Operation(summary = "Create a task")
+    @ApiResponse(responseCode = "400", description = "A learning-slot template's task needs a resolved learning topic for the day. A routine-item template's task can't be given a resolved learning topic. An ad-hoc task can target at most one of routineItem or learningTopic. There is no learning topic with that id, or it belongs to someone else. There is no routine item with that id, or it belongs to someone else. There is no schedule template with that id, or it belongs to someone else. label is required for an ad-hoc task. learningTopicId is required to materialize a LEARNING_SLOT task. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TaskResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody TaskRequest request) {
@@ -86,6 +89,8 @@ public class TaskController {
     }
 
     @Operation(summary = "Change a task's status")
+    @ApiResponse(responseCode = "400", description = "Unknown task status. A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "404", description = "There is no task with that id, or it belongs to someone else.")
     @PatchMapping("/{id}")
     public TaskResponse updateStatus(
             @AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @Valid @RequestBody TaskStatusUpdateRequest request) {

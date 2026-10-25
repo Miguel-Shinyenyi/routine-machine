@@ -13,6 +13,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.util.AntPathMatcher;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +46,8 @@ class ApiDocsErrorsTest extends AbstractIntegrationTest {
     private MockMvc mockMvc;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private RequestMappingHandlerMapping handlerMapping;
 
     private JsonNode spec() throws Exception {
         User owner = userRepository.findByEmailIgnoreCase("apidocs-errors-owner@example.com")
@@ -127,5 +138,94 @@ class ApiDocsErrorsTest extends AbstractIntegrationTest {
             }
         }
         assertThat(missing).as("operations with no shared error response").isEmpty();
+    }
+
+    // ---- Per-route 400, 403 and 404 (Backlog item A). The messages come from reading each route's throw sites; these
+    // tests hold the structural part of it to the code, so a route cannot gain input, or lose a lookup, unnoticed.
+
+    @Test
+    void everyRouteThatTakesInputDocuments400() throws Exception {
+        Map<String, JsonNode> operations = operations();
+        List<String> missing = new ArrayList<>();
+        int checked = 0;
+        for (Map.Entry<RequestMappingInfo, HandlerMethod> entry : handlerMapping.getHandlerMethods().entrySet()) {
+            HandlerMethod handler = entry.getValue();
+            if (!handler.getBeanType().getPackageName().startsWith("com.routinemachine") || !takesInput(handler)) {
+                continue;
+            }
+            for (String pattern : entry.getKey().getPathPatternsCondition().getPatternValues()) {
+                for (RequestMethod method : entry.getKey().getMethodsCondition().getMethods()) {
+                    checked++;
+                    JsonNode responses = operations.get(method + " " + pattern);
+                    if (responses == null || responses.path("400").isMissingNode()) {
+                        missing.add(method + " " + pattern);
+                    }
+                }
+            }
+        }
+        assertThat(checked).as("routes that take input").isGreaterThan(30);
+        assertThat(missing).as("routes with input and no 400").isEmpty();
+    }
+
+    // A body, a query value, a path value or an upload can each be missing or unreadable, which Spring answers with 400.
+    private static boolean takesInput(HandlerMethod handler) {
+        for (java.lang.reflect.Parameter parameter : handler.getMethod().getParameters()) {
+            if (parameter.isAnnotationPresent(RequestBody.class) || parameter.isAnnotationPresent(RequestParam.class)
+                    || parameter.isAnnotationPresent(PathVariable.class) || parameter.isAnnotationPresent(RequestPart.class)
+                    || MultipartFile.class.isAssignableFrom(parameter.getType())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Test
+    void theOrganisationRoutesDocument403And404ExceptCreatingAnOrganisation() throws Exception {
+        List<String> missing = new ArrayList<>();
+        for (Map.Entry<String, JsonNode> operation : operations().entrySet()) {
+            String path = pathOf(operation.getKey());
+            if (!path.startsWith("/api/organisations") || operation.getKey().equals("POST /api/organisations")
+                    || operation.getKey().equals("PUT /api/organisations/{organisationId}/seat-limit")) {
+                continue;
+            }
+            for (String code : List.of("403", "404")) {
+                if (operation.getValue().path(code).isMissingNode()) {
+                    missing.add(operation.getKey() + " has no " + code);
+                }
+            }
+        }
+        assertThat(missing).isEmpty();
+        assertThat(operations().get("POST /api/organisations").path("403").isMissingNode()).as("creating an organisation needs no rights").isTrue();
+        // Found by calling it: setting the seat limit checks the admin first, so an organisation that does not exist answers
+        // 403, and a 404 for it could never be seen. The 403 says so instead.
+        JsonNode seatLimit = operations().get("PUT /api/organisations/{organisationId}/seat-limit");
+        assertThat(seatLimit.path("404").isMissingNode()).as("setSeatLimit documents a 404 it cannot answer").isTrue();
+        assertThat(seatLimit.path("403").path("description").asText()).contains("does not exist");
+    }
+
+    @Test
+    void theRoutesThatLookSomethingUpByIdDocument404() throws Exception {
+        Map<String, JsonNode> operations = operations();
+        for (String operation : List.of("PATCH /api/tasks/{id}", "PATCH /api/evidence-events/{id}/question",
+                "PATCH /api/granary/pauses/{id}/decide", "PATCH /api/granary/pauses/{id}/reflect",
+                "GET /api/books/current", "GET /api/current-reading")) {
+            assertThat(operations.get(operation).path("404").isMissingNode()).as(operation + " has no 404").isFalse();
+        }
+    }
+
+    @Test
+    void routesThatCannotFailThoseWaysDoNotClaimTo() throws Exception {
+        Map<String, JsonNode> operations = operations();
+        List<String> overclaiming = new ArrayList<>();
+        // No input, and nothing in them that refuses: they only read the signed-in person's own rows.
+        for (String operation : List.of("GET /api/users/me", "GET /api/users/me/profile", "GET /api/goals", "GET /api/routine-items",
+                "GET /api/books", "GET /api/granary/pauses", "GET /api/granary/pauses/due", "GET /api/watering-holes")) {
+            for (String code : List.of("400", "403", "404")) {
+                if (!operations.get(operation).path(code).isMissingNode()) {
+                    overclaiming.add(operation + " claims " + code);
+                }
+            }
+        }
+        assertThat(overclaiming).isEmpty();
     }
 }
