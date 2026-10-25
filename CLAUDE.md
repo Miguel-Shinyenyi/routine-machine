@@ -16,6 +16,7 @@ Claude Code reads this file at the start of every task. Practices that apply to 
 | Reading the UMWAYI hub | `docs/hub-sync.md` |
 | Dashboard (`frontend/`) | `docs/frontend.md`, then `frontend/AGENTS.md` |
 | Metrics, logs, traces, alerts, the owner-only operations page | `docs/observability.md` |
+| API documentation (the owner-only viewer for both APIs) | `docs/backend.md` ("API documentation"), `docs/intelligence-service.md`, `docs/frontend.md` |
 | Tests | `docs/testing.md` |
 
 ## Rules that already apply

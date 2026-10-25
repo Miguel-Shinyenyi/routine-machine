@@ -9,7 +9,7 @@ differs and why. Built in parts; this file describes only what exists.
 
 ## Current state
 
-Staged Prompt 3 is built in five parts and **all five are done, except one item that belongs to Prompt 4**: the API-docs link on the page, which has nothing to link to until Prompt 4 builds the API docs. The owner opens `/watchtower` and sees service health, charts, sync status and logs with trace links; everyone else gets a plain 404. Part 4 is the Compose `observability` profile (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard; metric exemplars).
+Staged Prompt 3 is built in five parts and **all five are done**. The owner opens `/watchtower` and sees service health, charts, sync status and logs with trace links; everyone else gets a plain 404. Part 4 is the Compose `observability` profile (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard; metric exemplars).
 
 | Part | What | State |
 |---|---|---|
@@ -17,7 +17,7 @@ Staged Prompt 3 is built in five parts and **all five are done, except one item 
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
 | 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
-| 5 | Owner-only operations page in the frontend (`/watchtower`) | Done, except the API-docs link, which waits for Prompt 4. Six pieces: backend owner gate and service health; metrics for the charts; logs and trace links; sync status; the frontend page (404 gate, services, charts, sync table, logs); this documentation |
+| 5 | Owner-only operations page in the frontend (`/watchtower`) | Done. Six pieces: backend owner gate and service health; metrics for the charts; logs and trace links; sync status; the frontend page (404 gate, services, charts, sync table, logs, and the link to the API documentation); this documentation |
 
 ### Part 1: the backend
 
@@ -212,7 +212,7 @@ does not start them). Files are in `infra/observability/`.
 
 Six pieces: (1) the owner gate and service health in the backend; (2) metrics for the charts, read from Prometheus
 by the backend; (3) logs, read from Loki with allow-listed filters, and trace links; (4) each sync source's last run
-and result; (5) the frontend page and its 404; (6) docs, with the API-docs link waiting for Prompt 4 (done: see "Piece 6" below).
+and result; (5) the frontend page and its 404; (6) docs (see "Piece 6" below). The link to the API documentation, which Prompt 3 asks for and Prompt 4 builds, is on the page too: see `docs/backend.md`, "API documentation".
 
 **Piece 1, done.** `GET /api/watchtower/services` (`WatchtowerController`, `ServiceHealthService`):
 - **Owner only.** The owner is the account named by `OWNER_EMAIL` (`OwnerAccount`). A signed-in person who is not the
@@ -400,7 +400,7 @@ link, over a table of the newest 100 lines (time to the second in UTC, service, 
   (100 of the newest 100 `WARNING` lines). Something sends it a connection upgrade it does not support.
 
 **Piece 6, done: documentation and the end of Prompt 3's checklist.**
-- **The API-docs link is not built, on purpose.** Prompt 3 says the page shows "the API docs from Prompt 4". Prompt 4 (springdoc for the backend, FastAPI docs for the intelligence service, both owner-only) is not built, so there is nothing to link to, and building it here would be building a later prompt. When Prompt 4 lands, the link goes in the services section of `frontend/app/watchtower/page.tsx`, next to the Grafana, Jaeger and Prometheus addresses the page already knows.
+- **The API-docs link** was left out of this piece, because Prompt 3 says the page shows "the API docs from Prompt 4" and Prompt 4 did not exist yet. Prompt 4 is now built (springdoc on the backend, the intelligence service's spec through the backend, both in one read-only viewer, owner only), and the page has an "API documentation" section linking to it. Where it lives and how it is checked: `docs/backend.md`, "API documentation", and `docs/frontend.md`.
 - **Prompt 3's acceptance checks, one by one:**
   1. *Tests first* for the request-id filter, each custom metric and the owner check: done in parts 1, 3 and 5 (owner sees the page; another account and a signed-out visitor get 404).
   2. *One action, with the trace id in a metric, a log line and a trace*: shown with a `/patterns` request, which crosses both services (`verify-traces.sh` and `verify-exemplars.sh`, 25 Oct 2026). **It was not "log a day" itself**; I used a request I knew crosses both services, because logging a day need not call the intelligence service.
@@ -481,7 +481,6 @@ Measured on this machine on 25 Oct 2026, the whole stack up with the `observabil
 | 2026-10-21 | Incoming `X-Request-Id` accepted only if short and plain | An unchecked header written into logs can forge log lines |
 | 2026-10-25 | A chart on the page carries at most 8 series, the largest peaks first, and the answer says when it cut | The page has eight colours that stay apart for colour-blind readers; the dataviz rule is to fold or facet rather than invent a ninth. The 12-series cap of piece 2 cut routes in no useful order |
 | 2026-10-25 | The sync table joins database fields with Prometheus run state in the backend, with no new metric | A last-failure gauge would change the metrics, the alerts and the dashboard for a small gain. The gap is documented instead: nothing records when a source last failed or ran |
-| 2026-10-25 | The API-docs link is left out of this change | It needs Prompt 4's docs to exist. Building them here would be building a later prompt |
 | 2026-10-21 | Intelligence service metrics with `prometheus_client` directly, not `prometheus-fastapi-instrumentator` | The instrumentator's support for Starlette 1.x (this service runs 1.6) is unverified; a counter and a histogram in a small ASGI middleware are about 30 lines, fully tested, and add no compatibility risk. Differs from the staged prompt's wording only in the library; the endpoint and port are as asked |
 | 2026-10-21 | Intelligence service metrics on port 9000 (own server), not a `/metrics` route on the API app | The staged prompt requires metrics never share the port other services call; a route on the API app would |
 | 2026-10-21 | Log records can carry only `method`, `path`, `status`, `durationMs` into the JSON line | An allow-list is safer than a block-list for keeping note text and amounts out of logs |
@@ -489,7 +488,6 @@ Measured on this machine on 25 Oct 2026, the whole stack up with the `observabil
 
 ## Open questions
 
-- **Prompt 4 and the API-docs link** (above): the page has no link to the API docs yet. Add it when Prompt 4 lands.
 - **The Loki readiness blip**: `/ready` has answered 503 for a short time, twice, and the page showed Loki as `DOWN` for that refresh. Not explained; the probe does not retry.
 - **"Unsupported upgrade request."**: the intelligence service logs this WARNING every few minutes. Something sends it a connection upgrade it does not support. Not looked into.
 - **Not looked at**: the page at phone width, and a trace link opened from a log line (tracing is off in the stack as it runs now, so no log line carries one).
