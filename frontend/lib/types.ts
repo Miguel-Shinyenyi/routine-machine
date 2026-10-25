@@ -346,3 +346,9 @@ export interface CohortWeeklyCheckInChart {
 }
 
 export type CohortSurveyAnswer = "SUPPORTIVE" | "NEUTRAL" | "PRESSURING";
+
+// The owner-only operations page (docs/observability.md, part 5). Status is UP, DOWN or NOT_CONFIGURED.
+export interface WatchtowerService {
+  name: string;
+  status: string;
+}

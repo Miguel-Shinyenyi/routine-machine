@@ -17,7 +17,7 @@ Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is m
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
 | 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
-| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 4 done: backend owner gate and service health; metrics for the charts; logs and trace links; sync status.** Not built: the frontend page, the API-docs link (needs Prompt 4) |
+| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 4 done: backend owner gate and service health; metrics for the charts; logs and trace links; sync status. Piece 5 started: the frontend page has its 404 gate and the service list.** Not built: the rest of the frontend page, the API-docs link (needs Prompt 4) |
 
 ### Part 1: the backend
 
@@ -307,6 +307,21 @@ runs before any validation, so a non-owner gets 404 whatever they send.
   showed no last success right after a backend recreate, although they had succeeded earlier that day.
 - **Seen, not looked into**: HUB and GITHUB were failing in the live stack (HUB 3 failures in a row; GITHUB 1), and
   ACTIVITYWATCH fails every poll by design (no server in the Docker stack).
+
+**Piece 5, slice 1 of 4 (the frontend page).** `/watchtower` (`frontend/app/watchtower/page.tsx`, `lib/watchtower.ts`): the
+route, the 404 gate and the service health list. The frontend holds no owner logic. It calls `GET /api/watchtower/services`
+and turns the backend's 404 into the Next 404 page (a signed-out visitor too, with no redirect to `/login`). Any other
+failure is thrown, not shown as a 404. There is no sidebar link, so the owner types the address.
+- **Checked**: 4 Vitest tests written first (a 404 gives `null`, a 500 or a network error is thrown, a status maps to a
+  tone); two deliberate breaks (404 rethrown; every error treated as a 404) each failed the matching test; `npm test`
+  33 pass, `npm run lint` clean, `npm run build` lists `/watchtower`.
+- **Checked live** (rebuilt frontend container, session cookie minted from the dev signing secret): signed out 404;
+  another account 404; the owner 200 with all eight services. The page text appears only in the owner's response.
+- **Seen again, not explained**: the page showed Loki `Down` on its first load, then the backend's own probe read Loki `UP`
+  six times in a row and Loki's `/ready` answered 200 five times. This is the second sighting of the short blip recorded
+  under piece 1.
+- **Not done in this slice**: sync status, the charts, the logs filter and the `truncated` flag on the charts; the page
+  was not looked at in a browser, only fetched.
 
 ## What it records about people
 

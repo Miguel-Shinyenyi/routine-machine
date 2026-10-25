@@ -112,6 +112,14 @@ deliberate deviation rather than an oversight.
   `GET /api/organisations/cohorts/{id}/dashboard`, `GET .../dashboard/by-group`,
   `GET .../dashboard/weekly-check-ins`; writes `POST .../survey-response`.
 
+- **Watchtower** (`/watchtower`, observability part 5, owner only, slice 1 of 4): the owner's operations page. Built so far:
+  the route, the 404 gate and the service health list (`GET /api/watchtower/services`, one card per service: Up, Down or
+  Not configured). To everyone but the owner, signed in or not, it is the plain Next 404 page: no redirect to `/login`
+  and no sidebar link, so the page is not known to exist. `lib/watchtower.ts::fetchServices` turns the backend's 404 into
+  `null` (the page then calls `notFound()`) and rethrows every other failure, so an outage is never shown as a 404. The
+  owner reaches it by typing the address. Still to build: sync status, the charts, the logs filter. Details and checks:
+  `docs/observability.md`, "Part 5".
+
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
 redirect (307, in `next.config.ts`) to their renamed routes so existing links keep working.
 
@@ -269,6 +277,8 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-25 | `/watchtower` calls `notFound()` for a signed-out visitor too, with no redirect to `/login`, and has no sidebar link | Prompt 3: everyone but the owner gets a plain 404. A redirect to `/login` would tell a stranger the page exists. The backend already answers 404 for both cases, so the page passes that answer on and holds no owner logic of its own. The owner types the address; a link would show the page to everyone |
+| 2026-10-25 | `fetchServices` returns `null` on a 404 and rethrows anything else | A backend outage or a 500 shown as a 404 would hide a real fault from the one person who needs to see it. Two tests pin both halves: the 404 gives `null`, and a 500 or a network error is thrown |
 | 2026-10-21 | A signed-out visitor is redirected to `/login` from every personal page, instead of seeing the founder's data | Before per-user scoping, `/today` rendered the founder's own routine, goal names and hours for anyone. Reusing the redirect Granary and Profile already had (`requireSessionUserId`) keeps one rule for "this page is about a person" |
 | 2026-10-21 | `withUserId` is a small pure function with its own tests, and every personal call goes through it | There are over twenty personal calls across pages, a helper module and eight Server Actions; hand-building `?userId=` in each is how one gets forgotten, and a forgotten one silently shows the unowned legacy rows. The helper also replaces an existing `userId` rather than appending a second |
 | 2026-10-19 | The M-Pesa import form is a client-side `MpesaImportForm` component, not a server-rendered form always visible on the page | The real reason is `useActionState`'s need for a client component to show the import's own pending/error state (the password prompt, the "couldn't read this" message) — this is the one piece of Phase 11 that genuinely needs client-side state, unlike every other granary control, which stays server-rendered |
