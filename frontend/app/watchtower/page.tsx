@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { fetchServices, serviceTone, type Tone } from "@/lib/watchtower";
+import { measurementSourceLabel } from "@/lib/sourceLabels";
+import { fetchServices, fetchSync, formatUtc, serviceTone, syncTone, type Tone } from "@/lib/watchtower";
 
 // Owner-only (docs/observability.md, part 5). No redirect to /login and no link in the sidebar: to anyone but the
 // owner this page does not exist, so a signed-out visitor and a signed-in stranger both get the plain 404 page.
@@ -17,9 +18,14 @@ const TONE_WORD: Record<Tone, string> = {
   neutral: "Not configured",
 };
 
+// "Failures in a row" is null for a source that has not run since the backend started, which is not the same as zero.
+function failuresInARow(value: number | null): string {
+  return value === null ? "—" : String(value);
+}
+
 export default async function WatchtowerPage() {
-  const services = await fetchServices();
-  if (services === null) {
+  const [services, sync] = await Promise.all([fetchServices(), fetchSync()]);
+  if (services === null || sync === null) {
     notFound();
   }
 
@@ -48,6 +54,52 @@ export default async function WatchtowerPage() {
             );
           })}
         </div>
+      </section>
+
+      <section aria-labelledby="sync">
+        <h2 id="sync" className="mb-2.5 px-1 text-[17px] font-semibold">
+          Sync sources
+        </h2>
+        {!sync.available && (
+          <p className="mb-2.5 px-1 text-[14px] text-muted">
+            Prometheus is not answering, so whether each source is running is unknown. The switches and the newest data
+            below still come from the database.
+          </p>
+        )}
+        <div className="overflow-x-auto rounded-[14px] bg-surface">
+          <table className="w-full min-w-[720px] text-left text-[14px]">
+            <thead>
+              <tr className="text-[12px] font-medium text-muted" style={{ background: "#fafafc" }}>
+                <th className="h-[34px] px-4 font-medium">Source</th>
+                <th className="h-[34px] px-4 font-medium">Result</th>
+                <th className="h-[34px] px-4 font-medium">Failures in a row</th>
+                <th className="h-[34px] px-4 font-medium">Last success</th>
+                <th className="h-[34px] px-4 font-medium">Newest data</th>
+                <th className="h-[34px] px-4 font-medium">Last 24 hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sync.sources.map((source) => (
+                <tr key={source.source} className="border-t hairline">
+                  <td className="px-4 py-2">{measurementSourceLabel(source.source)}</td>
+                  <td className="px-4 py-2">
+                    <span className={`chip ${TONE_CLASS[syncTone(source.result)]}`}>{source.result}</span>
+                  </td>
+                  <td className="px-4 py-2">{failuresInARow(source.consecutiveFailures)}</td>
+                  <td className="px-4 py-2 text-muted">{formatUtc(source.lastSuccessAt)}</td>
+                  <td className="px-4 py-2 text-muted">{formatUtc(source.lastActivityAt)}</td>
+                  <td className="px-4 py-2 text-muted">
+                    {source.successes24h} ok, {source.failures24h} failed
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 px-1 text-[13px] text-muted">
+          Failures in a row start again at zero when the backend restarts. Last success and the 24-hour counts do not.
+          Newest data is when a source last wrote something, not when it last ran.
+        </p>
       </section>
     </div>
   );

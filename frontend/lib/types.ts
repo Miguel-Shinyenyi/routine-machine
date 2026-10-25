@@ -352,3 +352,21 @@ export interface WatchtowerService {
   name: string;
   status: string;
 }
+
+// One row of the owner's sync table. Result is off, push only, unknown, failing, ok or never succeeded. A source
+// that has not run has null failures in a row and no last success, which is not the same as zero failures.
+export interface WatchtowerSyncSource {
+  source: string;
+  enabled: boolean;
+  lastActivityAt: string | null;
+  result: string;
+  consecutiveFailures: number | null;
+  lastSuccessAt: string | null;
+  successes24h: number;
+  failures24h: number;
+}
+
+export interface WatchtowerSync {
+  available: boolean;
+  sources: WatchtowerSyncSource[];
+}

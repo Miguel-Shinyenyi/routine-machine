@@ -17,7 +17,7 @@ Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is m
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
 | 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
-| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 4 done: backend owner gate and service health; metrics for the charts; logs and trace links; sync status. Piece 5 started: the frontend page has its 404 gate and the service list.** Not built: the rest of the frontend page, the API-docs link (needs Prompt 4) |
+| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 4 done: backend owner gate and service health; metrics for the charts; logs and trace links; sync status. Piece 5 started: the frontend page has its 404 gate, the service list and the sync table.** Not built: the charts and the logs filter on the page, the API-docs link (needs Prompt 4) |
 
 ### Part 1: the backend
 
@@ -322,6 +322,23 @@ failure is thrown, not shown as a 404. There is no sidebar link, so the owner ty
   under piece 1.
 - **Not done in this slice**: sync status, the charts, the logs filter and the `truncated` flag on the charts; the page
   was not looked at in a browser, only fetched.
+
+**Piece 5, slice 2 of 4 (sync table on the page).** `/watchtower` now also reads `GET /api/watchtower/sync`
+(`fetchSync`, `syncTone`, `formatUtc` in `frontend/lib/watchtower.ts`) and shows one row per source: result chip (ok
+green, failing in the warning colour, everything else plain), failures in a row, last success, newest data and the last
+24 hours. Either call answering 404 gives the 404 page. If Prometheus is not answering, a line above the table says so.
+- **Checked**: 5 more Vitest tests written first (the sync fetch, its 404, the tone, the time format); two deliberate
+  breaks (404 rethrown, which failed the services and the sync test; `failing` shown as good) each failed the matching
+  test; `npm test` 38 pass, lint clean, build lists the route.
+- **Checked live** (rebuilt frontend, minted session cookies): signed out 404; another account 404; the owner 200 with the
+  six rows as the backend gave them (HUB failing with 3 in a row, WakaTime ok, ActivityWatch failing, GitHub failing,
+  RescueTime and Health off); the watering holes page still 200 for the owner.
+- **Seen**: starting the frontend with `docker compose up -d --build frontend` also recreated the backend, so for a
+  minute every page answered 500 (`ECONNREFUSED`) while the backend started. My first live run landed in that minute and
+  proved nothing; I redid it. After a backend restart, failures in a row also read from zero.
+- **Possible cause of the failing HUB and GITHUB, not confirmed**: the backend log shows `ConnectException` on every call
+  to GitHub (`github-sync: failed to fetch public events`, `hub-sync: failed to list ...`), so the backend container may
+  not be able to reach GitHub from this machine. I did not test the network from inside the container.
 
 ## What it records about people
 

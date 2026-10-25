@@ -19,3 +19,19 @@ export const SOURCE_LABELS: Record<RoutineItemSource, string> = {
 export function sourceLabel(source: RoutineItemSource | string): string {
   return SOURCE_LABELS[source as RoutineItemSource] ?? source;
 }
+
+// A watering hole's own MeasurementSource (the push/pull status cards, and the owner's sync table), a different
+// enum from RoutineItemSource above. The names mostly overlap, but "Health data" (a status card) and "Health
+// Connect" (a routine item's source chip) are deliberately different labels for the same integration.
+const MEASUREMENT_SOURCE_LABELS: Record<string, string> = {
+  HUB: "UMWAYI hub",
+  WAKATIME: "WakaTime",
+  ACTIVITYWATCH: "ActivityWatch",
+  GITHUB: "GitHub",
+  RESCUETIME: "RescueTime",
+  HEALTH: "Health data",
+};
+
+export function measurementSourceLabel(source: string): string {
+  return MEASUREMENT_SOURCE_LABELS[source] ?? source;
+}

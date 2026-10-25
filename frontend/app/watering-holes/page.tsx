@@ -1,21 +1,7 @@
 import { backendFetch } from "@/lib/api";
 import { requireSessionUserId } from "@/lib/auth/session";
-import { sourceLabel } from "@/lib/sourceLabels";
+import { measurementSourceLabel, sourceLabel } from "@/lib/sourceLabels";
 import type { RoutineItem, WateringHoleStatus } from "@/lib/types";
-
-// WateringHoleStatus.source is a MeasurementSource (push/pull sync status), a different enum
-// from RoutineItemSource ("How each activity is counted" below) — same names mostly overlap,
-// but "Health data" (a status card) and "Health Connect" (a source chip) are deliberately
-// different labels for the same underlying integration, so this stays its own small map
-// rather than reusing lib/sourceLabels's RoutineItemSource-keyed one.
-const SOURCE_LABELS: Record<string, string> = {
-  HUB: "UMWAYI hub",
-  WAKATIME: "WakaTime",
-  ACTIVITYWATCH: "ActivityWatch",
-  GITHUB: "GitHub",
-  RESCUETIME: "RescueTime",
-  HEALTH: "Health data",
-};
 
 // Matching docs-reference/pages/watering-holes.html's coloured source marks, not an arbitrary
 // new palette — each source keeps the same colour the reference assigns it.
@@ -57,7 +43,7 @@ const MEASUREMENT_TO_ROUTINE_SOURCE: Record<string, string> = {
 };
 
 function SourceCard({ status, feedsInto }: { status: WateringHoleStatus; feedsInto: string[] }) {
-  const label = SOURCE_LABELS[status.source] ?? status.source;
+  const label = measurementSourceLabel(status.source);
   return (
     <div className="card flex flex-col gap-2 p-4">
       <div className="flex items-center gap-2.5">
