@@ -51,6 +51,7 @@ logging:
 # Owner-only operations page (docs/observability.md): where it probes each service. Empty means not configured.
 # Set by the Compose file; these are addresses the backend calls, never ones a request can supply.
 watchtower:
+  prometheus-base-url: ${WATCHTOWER_PROMETHEUS_BASE_URL:}
   intelligence-url: ${WATCHTOWER_INTELLIGENCE_URL:}
   prometheus-url: ${WATCHTOWER_PROMETHEUS_URL:}
   alertmanager-url: ${WATCHTOWER_ALERTMANAGER_URL:}

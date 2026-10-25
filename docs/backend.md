@@ -1151,5 +1151,7 @@ page's first endpoint. Only the owner (`OwnerAccount`, from `OWNER_EMAIL`) gets 
 signed-out visitor, and everyone when no owner is set get a plain 404, never a 401. So `/api/watchtower/**` is on
 the optional-token chain in `SecurityConfig` (with `/api/hillside/**`) and is listed as open on purpose in
 `EveryRouteNeedsATokenTest`. Probe addresses are `watchtower.*-url` (env `WATCHTOWER_*_URL`), configuration only.
-Details and the checks that ran: `docs/observability.md`, "Part 5".
+`GET /api/watchtower/metrics?range=1h|6h|24h` (`WatchtowerMetricsService`) returns the page's charts from Prometheus
+(`WATCHTOWER_PROMETHEUS_BASE_URL`) using a fixed list of queries that a test keeps equal to the Grafana dashboard's;
+a caller picks only the range. Details and the checks that ran: `docs/observability.md`, "Part 5".
 

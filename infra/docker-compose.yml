@@ -35,6 +35,8 @@ services:
       # is not running (the observability ones, without the profile) shows as DOWN.
       WATCHTOWER_INTELLIGENCE_URL: http://intelligence-service:8000/health
       WATCHTOWER_PROMETHEUS_URL: http://prometheus:9090/-/ready
+      # Where the page reads its charts from (a fixed list of queries; see docs/observability.md).
+      WATCHTOWER_PROMETHEUS_BASE_URL: http://prometheus:9090
       WATCHTOWER_ALERTMANAGER_URL: http://alertmanager:9093/-/ready
       WATCHTOWER_LOKI_URL: http://loki:3100/ready
       WATCHTOWER_JAEGER_URL: http://jaeger:16686/

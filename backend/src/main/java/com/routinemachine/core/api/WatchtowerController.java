@@ -3,11 +3,13 @@ package com.routinemachine.core.api;
 import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.service.OwnerAccount;
 import com.routinemachine.core.service.ServiceHealthService;
+import com.routinemachine.core.service.WatchtowerMetricsService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -23,16 +25,28 @@ public class WatchtowerController {
 
     private final OwnerAccount ownerAccount;
     private final ServiceHealthService serviceHealthService;
+    private final WatchtowerMetricsService metricsService;
 
-    public WatchtowerController(OwnerAccount ownerAccount, ServiceHealthService serviceHealthService) {
+    public WatchtowerController(OwnerAccount ownerAccount, ServiceHealthService serviceHealthService,
+                                WatchtowerMetricsService metricsService) {
         this.ownerAccount = ownerAccount;
         this.serviceHealthService = serviceHealthService;
+        this.metricsService = metricsService;
     }
 
     @GetMapping("/services")
     public List<ServiceHealthService.ServiceStatus> services(@AuthenticationPrincipal Jwt jwt) {
         requireOwner(jwt);
         return serviceHealthService.statuses();
+    }
+
+    // The only thing a caller chooses is the time range (1h, 6h or 24h). The queries are a fixed list.
+    @GetMapping("/metrics")
+    public WatchtowerMetricsService.Metrics metrics(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = WatchtowerMetricsService.DEFAULT_RANGE) String range) {
+        requireOwner(jwt);
+        return metricsService.metrics(range);
     }
 
     private void requireOwner(Jwt jwt) {
