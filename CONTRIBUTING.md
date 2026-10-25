@@ -12,6 +12,8 @@ Read `PROJECT.md` first (stack, phases, rules), then `docs/DOCS_MAINTENANCE.md`,
 
 ## Run the checks
 
+CI runs the same three on every pull request (`.github/workflows/ci.yml`).
+
 | Part | Folder | Command |
 |---|---|---|
 | Backend | `backend/` | `./mvnw test` (needs Docker, for Testcontainers) |
