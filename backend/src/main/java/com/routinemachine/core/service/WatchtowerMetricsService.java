@@ -39,30 +39,6 @@ public class WatchtowerMetricsService {
     public record Metrics(boolean available, String range, List<Chart> charts) {
     }
 
-    // Window in seconds and the step between points, so every range is a few hundred points per series.
-    private enum Range {
-        ONE_HOUR("1h", 3_600, 30), SIX_HOURS("6h", 21_600, 60), ONE_DAY("24h", 86_400, 300);
-
-        final String label;
-        final long seconds;
-        final long step;
-
-        Range(String label, long seconds, long step) {
-            this.label = label;
-            this.seconds = seconds;
-            this.step = step;
-        }
-
-        static Range of(String label) {
-            for (Range range : values()) {
-                if (range.label.equals(label)) {
-                    return range;
-                }
-            }
-            throw new IllegalArgumentException("range must be one of 1h, 6h, 24h");
-        }
-    }
-
     public static final String DEFAULT_RANGE = "6h";
     // A chart never carries more series than this, so a metric that grows a label cannot flood the page.
     public static final int MAX_SERIES = 12;
@@ -106,7 +82,7 @@ public class WatchtowerMetricsService {
     }
 
     public Metrics metrics(String rangeLabel) {
-        Range range = Range.of(rangeLabel);
+        WatchtowerRange range = WatchtowerRange.of(rangeLabel);
         if (baseUrl.isEmpty()) {
             return new Metrics(false, range.label, List.of());
         }

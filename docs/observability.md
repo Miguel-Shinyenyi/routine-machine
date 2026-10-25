@@ -9,7 +9,7 @@ differs and why. Built in parts; this file describes only what exists.
 
 ## Current state
 
-Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is mostly done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard; metric exemplars).** Part 5, the owner-only page, is in progress: pieces 1 and 2 of 6 are done (the owner gate and service health; the charts' data, in the backend); the frontend page is not built.
+Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is mostly done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard; metric exemplars).** Part 5, the owner-only page, is in progress: pieces 1 to 3 of 6 are done (the owner gate and service health; the charts' data; the logs and trace links, in the backend); the frontend page is not built.
 
 | Part | What | State |
 |---|---|---|
@@ -17,7 +17,7 @@ Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is m
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
 | 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
-| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 and 2 done: backend owner gate and service health; metrics for the charts.** Not built: logs and trace links, sync status, the frontend page, the API-docs link (needs Prompt 4) |
+| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 3 done: backend owner gate and service health; metrics for the charts; logs and trace links.** Not built: sync status, the frontend page, the API-docs link (needs Prompt 4) |
 
 ### Part 1: the backend
 
@@ -257,6 +257,31 @@ and result; (5) the frontend page and its 404; (6) docs, with the API-docs link 
 - **A bug the tests found**: Java cannot parse Prometheus's `+Inf`, and the first version lost a whole chart to one such
   point. One unreadable point is now skipped.
 
+**Piece 3, done.** `GET /api/watchtower/logs?level=&requestId=&range=` (`WatchtowerLogsService`), same owner gate. The gate
+runs before any validation, so a non-owner gets 404 whatever they send.
+- **What reaches Loki.** Only two values from the request, both checked: `level`, which must be one of `INFO`, `WARN`,
+  `WARNING`, `ERROR`, `CRITICAL`, `DEBUG` (the Grafana dashboard's list, kept equal by a test), and `requestId`, which
+  must be 1 to 64 of letters, digits, dot, underscore, hyphen (the services' own request-id pattern; a trace id fits it
+  too). It is placed as a plain-text match (`|= "..."`), never a regex. Anything else is a 400 and Loki is not asked. The
+  services read are fixed (`backend|intelligence-service`); a `service` or `query` parameter in the request is ignored.
+  A blank `requestId` is refused too, so the page must leave the parameter out when its box is empty.
+- **The answer** is `{available, range, entries: [{time, service, level, message, requestId, traceId, traceUrl}]}`:
+  at most 100 entries (`MAX_ENTRIES`), merged from Loki's streams newest first, messages cut at 1,000 characters. Each line is
+  reduced to those fields, so a logger name, a thread name or any other field in the line is not passed on. A line that
+  is not JSON (for example a JVM start-up message) is returned as its text with no ids. `available` is false with a 200
+  when Loki is not configured or does not answer.
+- **Trace links.** `traceUrl` is `WATCHTOWER_JAEGER_UI_URL` + `/trace/` + the id, only when the line carries a real
+  32-character trace id and the address is set. That address is the one a browser opens (`http://localhost:16686` in
+  Compose), not the one the backend probes inside Docker. Lines carry a trace id only when `TRACING_ENABLED=true`.
+- **Addresses** are configuration: `WATCHTOWER_LOKI_BASE_URL` (`http://loki:3100`) and `WATCHTOWER_JAEGER_UI_URL`.
+- **Shared range.** `WatchtowerRange` (1h, 6h, 24h and each step) is now one enum used by the charts and the logs.
+- **Checked live** (tracing on): a request sent with a known id was found by that id and, after Alloy picked up the
+  recreated backend container, returned the 2 backend lines and the 1 intelligence line (matching the container log and
+  Loki directly), each with a trace link; `level=ERROR` 200; an injection attempt in the id and in the level 400; another
+  account 404; signed out 404.
+- **Seen**: right after the backend container was recreated, the endpoint returned only the intelligence service's line
+  for a few seconds, because Alloy had not yet attached to the new container. Logs from before a restart are still there.
+
 ## What it records about people
 
 - Logs: method, path, status, duration, request id, and the application's own messages. No query
@@ -264,8 +289,9 @@ and result; (5) the frontend page and its 404; (6) docs, with the API-docs link 
   row id (for example `/api/tasks/57`), which is not personal on its own.
 - Metrics: JVM and HTTP counters and timings, tagged by route template, never by user.
 - The owner claim and owner role log lines name tables and counts, never an address.
-- The operations page's data (`/api/watchtower`) is owner-only. So far it holds service names and statuses, and the
-  metrics the stack already records, with the same labels.
+- The operations page's data (`/api/watchtower`) is owner-only. So far it holds service names and statuses, the
+  metrics the stack already records (with the same labels), and recent log lines. Those lines are the scrubbed
+  ones already in Loki, reduced to time, service, level, message, request id and trace id.
 - The intelligence service follows the same rules; it receives note text only on `POST /reading-notes/assess`, whose body is never logged.
 - Later parts must keep to this list; each part's report states what it added.
 
@@ -298,6 +324,7 @@ and result; (5) the frontend page and its 404; (6) docs, with the API-docs link 
 | 2026-10-25 | Grafana's admin password is checked by the container's entrypoint, not by `${VAR:?}` in the compose file | `:?` is evaluated for every service, so it made every `docker compose` command fail without the variable. An empty value would otherwise fall back to Grafana's default `admin/admin` login |
 | 2026-10-25 | No Jaeger datasource in Grafana; the log-to-trace link is a plain URL to the Jaeger UI | Found by running `verify-grafana.sh`: the datasource's health check gets `404` because Jaeger 2.22 dropped the v1 listing and search endpoints that Grafana's plugin calls (`/api/v3/services` answers 200, `/api/services` answers 404; fetching one trace by id still works on v1). Keeps Jaeger 2.22 (decided earlier) instead of pinning an older v2 |
 | 2026-10-25 | The owner-only page reads Prometheus and Loki through the backend, instead of embedding Grafana | Resolves the open question. One place (the backend) holds the owner check and the 404 rule, with Java tests; the frontend only renders. Embedding Grafana would need its own login, a second access rule, and framing headers. Grafana stays for exploring. Pieces 2 and 3 build it; you can overrule before then |
+| 2026-10-25 | The logs endpoint builds LogQL from a fixed service list plus a checked level and a checked id, matched as plain text | The request id box is the one place free text reaches Loki. A character set with no quote, brace, backslash, space or pipe cannot change the query, and `|=` is a substring match, not a regex. Rejecting is safer than escaping |
 | 2026-10-25 | The page's queries are a fixed list in Java, mirrored from the Grafana dashboard, with a test that they match | A free-form query would let a caller run anything against Prometheus. Two copies of one expression drift, so `WatchtowerQueriesMatchDashboardTest` compares them. Cost: a query change is made in two files |
 | 2026-10-25 | `/api/watchtower` is on the optional-token chain and listed as open on purpose in the route sweep | Prompt 3 says non-owners get a plain 404, not a login prompt. On the token-required chain a signed-out visitor gets 401, which shows the page exists. The sweep lists it with that reason so the exception is visible |
 | 2026-10-25 | `opentelemetry-api` added to the backend, version managed by Spring Boot's BOM (1.49.0) | Exemplars need the current trace id inside the JVM. Spring Boot's own source for it needs Micrometer Tracing; this service is traced by the OpenTelemetry Java agent, which backs the OpenTelemetry API. The API alone is inert without the agent. Approved by Miguel |

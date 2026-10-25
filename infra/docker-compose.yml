@@ -37,6 +37,9 @@ services:
       WATCHTOWER_PROMETHEUS_URL: http://prometheus:9090/-/ready
       # Where the page reads its charts from (a fixed list of queries; see docs/observability.md).
       WATCHTOWER_PROMETHEUS_BASE_URL: http://prometheus:9090
+      # Where the page reads its logs from, and the address a BROWSER opens Jaeger at for the trace links.
+      WATCHTOWER_LOKI_BASE_URL: http://loki:3100
+      WATCHTOWER_JAEGER_UI_URL: http://localhost:16686
       WATCHTOWER_ALERTMANAGER_URL: http://alertmanager:9093/-/ready
       WATCHTOWER_LOKI_URL: http://loki:3100/ready
       WATCHTOWER_JAEGER_URL: http://jaeger:16686/

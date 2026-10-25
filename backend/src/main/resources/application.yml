@@ -52,6 +52,9 @@ logging:
 # Set by the Compose file; these are addresses the backend calls, never ones a request can supply.
 watchtower:
   prometheus-base-url: ${WATCHTOWER_PROMETHEUS_BASE_URL:}
+  loki-base-url: ${WATCHTOWER_LOKI_BASE_URL:}
+  # The address a BROWSER can open Jaeger at (not the one the backend probes inside Docker); empty means no trace links.
+  jaeger-ui-url: ${WATCHTOWER_JAEGER_UI_URL:}
   intelligence-url: ${WATCHTOWER_INTELLIGENCE_URL:}
   prometheus-url: ${WATCHTOWER_PROMETHEUS_URL:}
   alertmanager-url: ${WATCHTOWER_ALERTMANAGER_URL:}

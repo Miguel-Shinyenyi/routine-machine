@@ -2,6 +2,7 @@ package com.routinemachine.core.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.routinemachine.core.service.WatchtowerLogsService;
 import com.routinemachine.core.service.WatchtowerMetricsService;
 import org.junit.jupiter.api.Test;
 
@@ -31,5 +32,18 @@ class WatchtowerQueriesMatchDashboardTest {
         for (WatchtowerMetricsService.Query query : WatchtowerMetricsService.QUERIES) {
             assertThat(onDashboard).as("query %s", query.id()).contains(query.promql());
         }
+    }
+
+    @Test
+    void theLevelsTheLogsPageAcceptsAreTheOnesTheGrafanaDashboardOffers() throws Exception {
+        String offered = null;
+        for (JsonNode variable : new ObjectMapper().readTree(Files.readString(DASHBOARD)).path("templating").path("list")) {
+            if ("level".equals(variable.path("name").asText())) {
+                offered = variable.path("query").asText();
+            }
+        }
+
+        assertThat(offered).as("the dashboard's level variable").isNotNull();
+        assertThat(WatchtowerLogsService.LEVELS).containsExactlyInAnyOrder(offered.split(","));
     }
 }

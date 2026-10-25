@@ -3,6 +3,7 @@ package com.routinemachine.core.api;
 import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.service.OwnerAccount;
 import com.routinemachine.core.service.ServiceHealthService;
+import com.routinemachine.core.service.WatchtowerLogsService;
 import com.routinemachine.core.service.WatchtowerMetricsService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,12 +27,14 @@ public class WatchtowerController {
     private final OwnerAccount ownerAccount;
     private final ServiceHealthService serviceHealthService;
     private final WatchtowerMetricsService metricsService;
+    private final WatchtowerLogsService logsService;
 
     public WatchtowerController(OwnerAccount ownerAccount, ServiceHealthService serviceHealthService,
-                                WatchtowerMetricsService metricsService) {
+                                WatchtowerMetricsService metricsService, WatchtowerLogsService logsService) {
         this.ownerAccount = ownerAccount;
         this.serviceHealthService = serviceHealthService;
         this.metricsService = metricsService;
+        this.logsService = logsService;
     }
 
     @GetMapping("/services")
@@ -47,6 +50,19 @@ public class WatchtowerController {
             @RequestParam(defaultValue = WatchtowerMetricsService.DEFAULT_RANGE) String range) {
         requireOwner(jwt);
         return metricsService.metrics(range);
+    }
+
+    // Recent logs from Loki. The caller may filter by one level from a fixed list and by an id of plain characters (a
+    // request id or a trace id), and choose the range. The owner check comes first, so a non-owner never learns that a
+    // bad parameter would have been refused.
+    @GetMapping("/logs")
+    public WatchtowerLogsService.Logs logs(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String level,
+            @RequestParam(required = false) String requestId,
+            @RequestParam(defaultValue = WatchtowerLogsService.DEFAULT_RANGE) String range) {
+        requireOwner(jwt);
+        return logsService.logs(level, requestId, range);
     }
 
     private void requireOwner(Jwt jwt) {
