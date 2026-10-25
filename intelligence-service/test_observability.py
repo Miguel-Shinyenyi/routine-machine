@@ -228,3 +228,65 @@ def test_a_log_line_inside_a_trace_carries_the_trace_id_and_outside_one_does_not
 
     assert line["traceId"] == expected
     assert len(line["traceId"]) == 32
+
+
+# Metric exemplars (docs/observability.md): a latency observation made inside a trace carries that trace's id,
+# so a slow bucket on a chart leads to its trace. Prometheus sees exemplars only in the OpenMetrics format.
+
+def _run_request(route_path):
+    # Calls the middleware directly so the active span (if any) is certain: TestClient runs the app on another
+    # thread. A fake route object gives each test its own route label, so one test's exemplar cannot leak into
+    # another's series.
+    import asyncio
+    from types import SimpleNamespace
+
+    from observability import RequestObservabilityMiddleware
+
+    async def inner(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    async def send(message):
+        pass
+
+    async def receive():
+        return {"type": "http.request", "body": b""}
+
+    scope = {"type": "http", "method": "GET", "path": route_path, "headers": [],
+             "route": SimpleNamespace(path=route_path)}
+    asyncio.run(RequestObservabilityMiddleware(inner)(scope, receive, send))
+
+
+def _bucket_lines(route_path):
+    from prometheus_client.openmetrics.exposition import generate_latest as openmetrics_latest
+
+    return [
+        line for line in openmetrics_latest(REGISTRY).decode().splitlines()
+        if line.startswith("http_request_duration_seconds_bucket") and f'route="{route_path}"' in line
+    ]
+
+
+def test_a_latency_observation_inside_a_trace_carries_the_trace_id_as_an_exemplar():
+    from opentelemetry.sdk.trace import TracerProvider
+
+    tracer = TracerProvider().get_tracer("test")
+    with tracer.start_as_current_span("work") as span:
+        expected = format(span.get_span_context().trace_id, "032x")
+        _run_request("/inside-a-trace")
+
+    assert any(f'# {{trace_id="{expected}"}}' in line for line in _bucket_lines("/inside-a-trace"))
+
+
+def test_a_latency_observation_outside_a_trace_has_no_exemplar_and_still_counts():
+    _run_request("/outside-a-trace")
+
+    assert _sample("http_request_duration_seconds_count", method="GET", route="/outside-a-trace") == 1
+    assert _bucket_lines("/outside-a-trace")
+    assert not any("trace_id" in line for line in _bucket_lines("/outside-a-trace"))
+
+
+def test_the_plain_text_exposition_has_no_exemplars():
+    text = generate_latest().decode()
+
+    assert "http_request_duration_seconds_bucket" in text
+    assert "trace_id" not in text

@@ -152,10 +152,14 @@ does not start them). Files are in `infra/observability/`.
   put a note or an amount in one would put it in the trace; keep such values in bodies.
 - Cost, measured idle with tracing on: the backend about 445 MB against 327 MB off (about 120 MB more), the
   intelligence service about 55 MB against 42 MB, Jaeger about 20 MB; Jaeger's image 164 MB.
-- **Not done: the trace id on a metric.** The staged prompt asks to show the trace id in the metric, the log line
-  and the trace. Log line and trace are done. A metric carries it only as a Prometheus *exemplar*, which needs
-  Prometheus's exemplar storage and OpenMetrics scraping plus a tracer bridge in each service. That is a
-  separate step (see the report).
+- **The trace id on a metric (exemplars), in progress, step 1 of 4.** The staged prompt asks to show the trace id in
+  the metric, the log line and the trace. Log line and trace are done. A metric carries it as a Prometheus
+  *exemplar*, a trace id attached to one observation of a histogram bucket. Steps: (1) the intelligence service
+  attaches the id to `http_request_duration_seconds` observations made inside a trace (done, tested; the id shows
+  only in the OpenMetrics text, which `prometheus_client` serves when the scraper asks for it, and the plain text
+  is unchanged); (2) the backend does the same for `http_server_requests` (not done); (3) Prometheus stores and
+  scrapes exemplars (not done: needs `--enable-feature=exemplar-storage`); (4) Grafana shows them on the p95
+  panels and links to Jaeger (not done). Until step 3, nothing stores an exemplar, so nothing shows on a chart yet.
 
 ### Part 4c-ii: Grafana and the dashboard
 

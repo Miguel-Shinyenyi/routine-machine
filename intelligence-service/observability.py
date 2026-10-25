@@ -160,7 +160,11 @@ class RequestObservabilityMiddleware:
             # The route template, never the raw path: one series per route, not one per id.
             label = getattr(route, "path", None) or "unmatched"
             REQUESTS.labels(scope["method"], label, str(status["code"])).inc()
-            DURATION.labels(scope["method"], label).observe(elapsed)
+            # Inside a trace the observation carries its trace id as an exemplar (shown by Prometheus and Grafana
+            # only when scraped as OpenMetrics); outside one it is a plain observation.
+            trace_id = _current_trace_id()
+            DURATION.labels(scope["method"], label).observe(
+                elapsed, exemplar={"trace_id": trace_id} if trace_id else None)
             _request_log.info(
                 "request completed",
                 extra={"method": scope["method"], "path": scope["path"], "status": status["code"],
