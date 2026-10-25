@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clockLabel, formatValue, labelledEnds, nearestIndex, niceMax, parseRange, seriesExtent, splitAtGaps, stepOf } from "./chart";
+import { clockLabel, endLabel, formatValue, labelledEnds, nearestIndex, niceMax, parseRange, seriesExtent, splitAtGaps, stepOf } from "./chart";
 
 describe("niceMax", () => {
   it("rounds up to 1, 2 or 5 times a power of ten, and never to zero", () => {
@@ -97,5 +97,17 @@ describe("splitAtGaps", () => {
   it("keeps a lone point as a run of its own, and returns no runs for no points", () => {
     expect(splitAtGaps([[0, 1], [600, 3]], 60)).toEqual([[[0, 1]], [[600, 3]]]);
     expect(splitAtGaps([], 60)).toEqual([]);
+  });
+});
+
+describe("endLabel", () => {
+  it("names the series and gives its value when there are several series", () => {
+    expect(endLabel("/tally", 2.25, "s", false)).toBe("/tally · 2.25 s");
+  });
+  it("gives only the value when the chart has one series, because the title already names it", () => {
+    expect(endLabel("Estimated cost, last 24 h (USD; 0 until prices are set)", 0, "USD", true)).toBe("$0.00");
+  });
+  it("cuts a long series name", () => {
+    expect(endLabel("x".repeat(40), 1, "credits", false)).toBe(`${"x".repeat(23)}… · 1`);
   });
 });

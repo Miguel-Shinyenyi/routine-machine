@@ -2,6 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WatchtowerChart } from "@/components/charts/WatchtowerChart";
 import { parseRange, type Range } from "@/lib/chart";
+import {
+  fetchLogs,
+  formatUtcSeconds,
+  levelTone,
+  LOG_LEVELS,
+  pageHref,
+  parseLogFilters,
+  safeHref,
+  type LevelTone,
+} from "@/lib/logs";
 import { measurementSourceLabel } from "@/lib/sourceLabels";
 import { fetchMetrics, fetchServices, fetchSync, formatUtc, serviceTone, syncTone, type Tone } from "@/lib/watchtower";
 
@@ -26,6 +36,12 @@ function failuresInARow(value: number | null): string {
   return value === null ? "—" : String(value);
 }
 
+const LEVEL_CLASS: Record<LevelTone, string> = {
+  bad: "chip-tint",
+  warn: "chip-tint",
+  plain: "",
+};
+
 const RANGE_LABELS: Record<Range, string> = { "1h": "1 hour", "6h": "6 hours", "24h": "24 hours" };
 
 export default async function WatchtowerPage({
@@ -33,9 +49,17 @@ export default async function WatchtowerPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const range = parseRange((await searchParams).range);
-  const [services, sync, metrics] = await Promise.all([fetchServices(), fetchSync(), fetchMetrics(range)]);
-  if (services === null || sync === null || metrics === null) {
+  const params = await searchParams;
+  const range = parseRange(params.range);
+  const { level, requestId, badId } = parseLogFilters({ level: params.level, id: params.id });
+  const filters = { level, requestId };
+  const [services, sync, metrics, logs] = await Promise.all([
+    fetchServices(),
+    fetchSync(),
+    fetchMetrics(range),
+    fetchLogs(range, filters),
+  ]);
+  if (services === null || sync === null || metrics === null || logs === null) {
     notFound();
   }
 
@@ -75,7 +99,7 @@ export default async function WatchtowerPage({
             {(Object.keys(RANGE_LABELS) as Range[]).map((option) => (
               <Link
                 key={option}
-                href={`/watchtower?range=${option}`}
+                href={pageHref(option, filters)}
                 aria-pressed={option === range}
                 className={`chip ${option === range ? "chip-tended" : ""}`}
               >
@@ -89,7 +113,7 @@ export default async function WatchtowerPage({
             Prometheus is not answering, so there are no charts. The services and sync tables still load.
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
             {metrics.charts.map((chart) => (
               <WatchtowerChart key={chart.id} chart={chart} />
             ))}
@@ -140,6 +164,110 @@ export default async function WatchtowerPage({
         <p className="mt-2 px-1 text-[13px] text-muted">
           Failures in a row start again at zero when the backend restarts. Last success and the 24-hour counts do not.
           Newest data is when a source last wrote something, not when it last ran.
+        </p>
+      </section>
+
+      <section aria-labelledby="logs">
+        <h2 id="logs" className="mb-2.5 px-1 text-[17px] font-semibold">
+          Logs
+        </h2>
+        <form method="get" action="/watchtower" className="mb-3 flex flex-wrap items-end gap-3 px-1">
+          <input type="hidden" name="range" value={range} />
+          <label className="flex flex-col gap-1 text-[12px] text-muted">
+            Level
+            <select name="level" defaultValue={level ?? ""} className="rounded-[10px] border hairline bg-surface px-2 py-1 text-[14px] text-ink">
+              <option value="">Any</option>
+              {LOG_LEVELS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-[12px] text-muted">
+            Request id or trace id
+            <input
+              name="id"
+              defaultValue={requestId ?? ""}
+              maxLength={64}
+              autoComplete="off"
+              className="w-[300px] max-w-full rounded-[10px] border hairline bg-surface px-2 py-1 text-[14px] text-ink"
+            />
+          </label>
+          <button type="submit" className="btn-fill h-[34px] px-4 text-[14px]">
+            Filter
+          </button>
+          {(level !== null || requestId !== null) && (
+            <Link href={pageHref(range, { level: null, requestId: null })} className="text-[14px] text-tint-text">
+              Clear
+            </Link>
+          )}
+        </form>
+        {badId && (
+          <p className="mb-2 px-1 text-[14px] text-muted">
+            That id was not used: ids have 1 to 64 letters, digits, dots, underscores or hyphens.
+          </p>
+        )}
+        {!logs.available ? (
+          <p className="px-1 text-[14px] text-muted">
+            Loki is not answering, so there are no logs. The other tables still load.
+          </p>
+        ) : logs.entries.length === 0 ? (
+          <p className="px-1 text-[14px] text-muted">No log lines match in this range.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-[14px] bg-surface">
+            <table className="w-full min-w-[820px] text-left text-[13px]">
+              <thead>
+                <tr className="text-[12px] font-medium text-muted" style={{ background: "#fafafc" }}>
+                  <th className="h-[34px] px-3 font-medium">Time (UTC)</th>
+                  <th className="h-[34px] px-3 font-medium">Service</th>
+                  <th className="h-[34px] px-3 font-medium">Level</th>
+                  <th className="h-[34px] px-3 font-medium">Message</th>
+                  <th className="h-[34px] px-3 font-medium">Request</th>
+                  <th className="h-[34px] px-3 font-medium">Trace</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.entries.map((entry, index) => {
+                  const traceHref = safeHref(entry.traceUrl);
+                  return (
+                    <tr key={`${entry.time}-${index}`} className="border-t hairline align-top">
+                      <td className="whitespace-nowrap px-3 py-2 text-muted">{formatUtcSeconds(entry.time)}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{entry.service}</td>
+                      <td className="px-3 py-2">
+                        {entry.level !== null && (
+                          <span className={`chip ${LEVEL_CLASS[levelTone(entry.level)]}`}>{entry.level}</span>
+                        )}
+                      </td>
+                      <td className="break-words px-3 py-2">{entry.message}</td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        {entry.requestId !== null && (
+                          <Link
+                            href={pageHref(range, { level, requestId: entry.requestId })}
+                            title="Show only this request"
+                            className="text-tint-text"
+                          >
+                            {entry.requestId.slice(0, 8)}
+                          </Link>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        {traceHref !== null && (
+                          <a href={traceHref} target="_blank" rel="noopener noreferrer" className="text-tint-text">
+                            Open
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-2 px-1 text-[13px] text-muted">
+          The newest 100 lines of the backend and the intelligence service in the range above. Lines carry a trace link
+          only while tracing is on.
         </p>
       </section>
     </div>

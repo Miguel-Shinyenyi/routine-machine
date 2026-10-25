@@ -101,3 +101,12 @@ export function splitAtGaps(points: Point[], step: number): Point[][] {
   }
   return runs;
 }
+
+// The text at the end of a line. A chart with one series has no legend and its title already says what is plotted, so
+// the label is just the value; with several series it names the series first. A long name is cut.
+export function endLabel(label: string, value: number, unit: string, onlySeries: boolean): string {
+  const shown = formatValue(value, unit);
+  if (onlySeries) return shown;
+  const name = label.length > 24 ? `${label.slice(0, 23)}…` : label;
+  return `${name} · ${shown}`;
+}

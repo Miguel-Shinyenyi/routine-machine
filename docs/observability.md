@@ -17,7 +17,7 @@ Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is m
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
 | 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
-| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 4 done: backend owner gate and service health; metrics for the charts; logs and trace links; sync status. Piece 5 started: the frontend page has its 404 gate, the service list, the sync table and the charts.** Not built: the logs filter on the page, the API-docs link (needs Prompt 4) |
+| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 4 done: backend owner gate and service health; metrics for the charts; logs and trace links; sync status. Piece 5: the frontend page is built (404 gate, service list, sync table, charts, logs).** Not built: the API-docs link (needs Prompt 4) |
 
 ### Part 1: the backend
 
@@ -338,7 +338,8 @@ green, failing in the warning colour, everything else plain), failures in a row,
   proved nothing; I redid it. After a backend restart, failures in a row also read from zero.
 - **Possible cause of the failing HUB and GITHUB, not confirmed**: the backend log shows `ConnectException` on every call
   to GitHub (`github-sync: failed to fetch public events`, `hub-sync: failed to list ...`), so the backend container may
-  not be able to reach GitHub from this machine. I did not test the network from inside the container.
+  not be able to reach GitHub from this machine. I did not test the network from inside the container. Later the same
+  day HUB and GITHUB both read `ok` with a fresh last success, so the failures were not permanent.
 
 **Piece 5, slice 3 of 4 (charts on the page).** `/watchtower` shows the 12 charts from `GET /api/watchtower/metrics`
 (`WatchtowerChart`, `lib/chart.ts`), with one range row above them (1 hour, 6 hours, 24 hours, as links:
@@ -368,12 +369,38 @@ green, failing in the warning colour, everything else plain), failures in a row,
   for 6 hours, 1 hour and 24 hours, the pressed range right each time, and `range=9999d` falling back to 6 hours; the
   backend JSON showed `backend-p95-latency` with 8 of 25 series and `truncated` true, and every other chart with all
   its series. I also looked at the page in Chrome (a saved copy of the owner's page, dark theme).
-- **Hover**: the owner opened `/watchtower`, hovered a chart and reported that it works (25 Oct 2026). The arrow keys, the
-  light theme and the phone width have not been looked at. My own attempt to test the hover failed: the saved copy of the
-  page cannot run its scripts, and putting a session token into the browser was refused by the permission check.
+- **Hover and keys, checked in Chrome** (25 Oct 2026, after the owner signed in to the browser): the tooltip, the crosshair
+  and the arrow keys work, in the light theme; the owner had also tried the hover. The dark theme was looked at in a saved
+  copy only. The phone width has not been looked at. (My first attempt, putting a session token into the browser myself,
+  was refused by the permission check; signing in by hand was the way round it.)
 - **Seen, not changed**: with a series that ends early, its end label sits at the right edge while its dot is further
   left. The legend and the tooltip name it, so I left it.
 - **Not done in this slice**: the logs filter (slice 4).
+
+**Piece 5, slice 4 of 4 (logs on the page).** `/watchtower` ends with a Logs section from `GET /api/watchtower/logs`
+(`lib/logs.ts`): a level select (the backend's six levels), a box for a request id or trace id, a Filter button and a Clear
+link, over a table of the newest 100 lines (time to the second in UTC, service, level chip, message, request, trace).
+- **One range for the whole page**: the range row above the charts also sets the logs' range, so the numbers agree. The
+  form is a plain `GET` with the range in a hidden field; the level and the id live in the address (`?level=ERROR&id=...`)
+  and the range links keep them. A request id in a row is a link that filters to that request.
+- **What reaches the backend**: `parseLogFilters` drops a level that is not in the list and an id that is not 1 to 64 of
+  letters, digits, dot, underscore or hyphen, so the backend is not asked what it would refuse. When an id is dropped the
+  page says so. An empty box is no filter. `fetchLogs` leaves out unset filters.
+- **Trace links** are shown only if the backend sends one and it is an `http` or `https` address (`safeHref`); they open in
+  a new tab with `noopener noreferrer`. Message text is rendered as text by React, never as HTML.
+- **Checked**: 15 Vitest tests written first for the logs helpers (red before green), `pageHref` and `endLabel` each seen
+  red first; four deliberate breaks (a bad id accepted, `javascript:` links allowed, a blank filter sent, the single-series
+  label rule removed) each failed the matching test; `npm test` 69 pass, lint clean, build lists the route.
+- **Checked live**: signed out 404, another account 404; the owner got 100 lines with no filter, 3 `ERROR` lines with
+  `level=ERROR`, only `INFO` lines with `level=INFO`, exactly the 4 lines of one request with its id (the box holding the
+  id, a Clear link), the "id was not used" note for an id with a quote and a pipe, and a bad level ignored. In Chrome
+  (signed in): clicking a request id filtered to that one line; the level select and `level=WARNING` worked.
+- **Two flaws the first look found, fixed**: the level select clipped its text (the shared `.field` style has 12px of
+  padding), and a chart with one series printed its title as the end label, clipped at the edge (now just the value).
+  The empty chart cards also stretched to match their neighbours; the grid now aligns them to the top.
+- **Not checked**: a trace link, because tracing is off in this stack (no line carried a trace id), and the phone width.
+- **Seen, not looked into**: the intelligence service logs "Unsupported upgrade request." at WARNING every few minutes
+  (100 of the newest 100 `WARNING` lines). Something sends it a connection upgrade it does not support.
 
 ## What it records about people
 

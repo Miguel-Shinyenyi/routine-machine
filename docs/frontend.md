@@ -112,14 +112,15 @@ deliberate deviation rather than an oversight.
   `GET /api/organisations/cohorts/{id}/dashboard`, `GET .../dashboard/by-group`,
   `GET .../dashboard/weekly-check-ins`; writes `POST .../survey-response`.
 
-- **Watchtower** (`/watchtower`, observability part 5, owner only, slices 1 to 3 of 4): the owner's operations page. Built so far:
+- **Watchtower** (`/watchtower`, observability part 5, owner only, slices 1 to 4 of 4): the owner's operations page. Built so far:
   the route, the 404 gate, the service health list (`GET /api/watchtower/services`, one card per service: Up, Down or
   Not configured) and the sync table (`GET /api/watchtower/sync`: per source a result chip, failures in a row, last
   success, newest data and the last 24 hours; a note says when Prometheus is not answering). To everyone but the owner, signed in or not, it is the plain Next 404 page: no redirect to `/login`
   and no sidebar link, so the page is not known to exist. `lib/watchtower.ts::fetchServices` turns the backend's 404 into
   `null` (the page then calls `notFound()`) and rethrows every other failure, so an outage is never shown as a 404. The
   owner reaches it by typing the address. The charts (`components/charts/WatchtowerChart.tsx`, a client component for the hover) sit under a range row of three links
-  (`?range=1h|6h|24h`). Still to build: the logs filter. Details and checks:
+  (`?range=1h|6h|24h`). The logs section (`lib/logs.ts`) is a plain `GET` form (level, request id) over the newest 100 lines; the range
+  row sets the logs' range too, and a request id in a row filters to that request. The API-docs link is piece 6. Details and checks:
   `docs/observability.md`, "Part 5".
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
@@ -279,6 +280,9 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-25 | The logs filter is a plain `GET` form with the level and id in the address, and the page range scopes the logs as well as the charts | Same server-rendered, bookmarkable pattern as Tally's and Path's controls, with no client state. One range row above everything keeps the charts, the sync table and the logs on the same slice (the dataviz skill's filter rule) |
+| 2026-10-25 | `parseLogFilters` drops a bad level or id before the call, and the page says when an id was dropped | The backend refuses them with a 400, which would show as an error page for something the owner typed. Dropping it keeps the page up and the note says why the filter did not apply |
+| 2026-10-25 | Trace links render only for `http` and `https` addresses, open in a new tab with `noopener noreferrer` | The address comes from the backend's configuration, but a link built from data is checked before it is shown |
 | 2026-10-25 | The owner's charts are hand-rolled SVG in `WatchtowerChart`, with the geometry in `lib/chart.ts`, and use eight new `--series-1` to `--series-8` colours | Same reasoning as `GoalHoursChart` (no charting library for line charts). The eight colours are the dataviz skill's validated set for light and dark; the existing three `--goal-line` colours are reserved for the goal chart and are too few for up to eight routes |
 | 2026-10-25 | Chart lines break where more than two steps of time have no point | Prometheus omits a time with no value. A line across the hole draws values that were never measured, which I saw in the first render |
 | 2026-10-25 | A series' colour follows its name, not its rank | The 8 series kept are sorted by peak, so ranks change from one load to the next. A colour tied to rank would repaint a route each time |

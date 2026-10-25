@@ -2,12 +2,12 @@ import { ApiError, backendFetch } from "./api";
 import type { Range } from "./chart";
 import type { WatchtowerMetrics, WatchtowerService, WatchtowerSync } from "./types";
 
-type Fetcher = <T>(path: string) => Promise<T>;
+export type Fetcher = <T>(path: string) => Promise<T>;
 
 // The owner-only operations page (docs/observability.md, part 5). The backend answers 404 to everyone but the
 // owner, signed in or not, so the page is not known to exist. A 404 here is therefore "show the 404 page", not an
 // error. Any other failure (backend down, a 500) is a real error and is thrown, never turned into a 404.
-async function getOrNull<T>(fetcher: Fetcher, path: string): Promise<T | null> {
+export async function getOrNull<T>(fetcher: Fetcher, path: string): Promise<T | null> {
   try {
     return await fetcher<T>(path);
   } catch (error) {

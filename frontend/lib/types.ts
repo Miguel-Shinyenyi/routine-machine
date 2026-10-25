@@ -387,3 +387,21 @@ export interface WatchtowerMetrics {
   range: string;
   charts: WatchtowerChart[];
 }
+
+// The owner's logs: the newest 100 lines of the backend and the intelligence service, reduced to these fields.
+// traceUrl is set only when the line carries a trace id and the backend knows where traces are shown.
+export interface WatchtowerLogEntry {
+  time: string;
+  service: string;
+  level: string | null;
+  message: string;
+  requestId: string | null;
+  traceId: string | null;
+  traceUrl: string | null;
+}
+
+export interface WatchtowerLogs {
+  available: boolean;
+  range: string;
+  entries: WatchtowerLogEntry[];
+}

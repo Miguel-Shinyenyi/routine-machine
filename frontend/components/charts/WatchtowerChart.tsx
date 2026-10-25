@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   clockLabel,
+  endLabel,
   formatValue,
   labelledEnds,
   nearestIndex,
@@ -157,7 +158,7 @@ export function WatchtowerChart({ chart }: { chart: ChartData }) {
               if (!end || !labelled.has(i)) return null;
               return (
                 <text key={s.label} x={RIGHT + 12} y={yFor(end[1]) + 4}>
-                  {shorten(s.label)} &middot; {formatValue(end[1], unit)}
+                  {endLabel(s.label, end[1], unit, series.length === 1)}
                 </text>
               );
             })}
