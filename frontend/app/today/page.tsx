@@ -5,7 +5,8 @@ import { formatEyebrowDate } from "@/lib/formatDate";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
 import { getSessionToken, requireSessionUserId } from "@/lib/auth/session";
 import { decidePause, reflectPause } from "@/lib/actions";
-import type { AnalogyResponse, Goal, Patterns, PauseDecision, Profile, RoutineItem, Suggestion, Tally } from "@/lib/types";
+import type { AnalogyResponse, Goal, Patterns, PauseDecision, Profile, RoutineItem, ScheduleTemplate, Suggestion, Tally } from "@/lib/types";
+import { firstStep } from "@/lib/firstStep";
 import { TaskCard } from "@/components/TaskCard";
 
 // Inline placeholder, same role as docs/design-reference/README.md's "Not in the reference":
@@ -41,10 +42,11 @@ export default async function TodayPage(props: PageProps<"/today">) {
     ? await authenticatedBackendFetch<Profile>("/api/users/me/profile", sessionToken).catch(() => null)
     : null;
 
-  const [tasks, routineItems, goals, suggestion, tally, patterns, duePauses] = await Promise.all([
+  const [tasks, routineItems, goals, scheduleTemplates, suggestion, tally, patterns, duePauses] = await Promise.all([
     materializeDay(date),
     backendFetch<RoutineItem[]>("/api/routine-items"),
     backendFetch<Goal[]>("/api/goals"),
+    backendFetch<ScheduleTemplate[]>("/api/schedule-templates"),
     intelligenceFetch<Suggestion>("/suggestion").catch(() => null),
     intelligenceFetch<Tally>("/tally").catch(() => null),
     intelligenceFetch<Patterns>("/patterns").catch(() => null),
@@ -82,6 +84,7 @@ export default async function TodayPage(props: PageProps<"/today">) {
 
   const maxGoalHours = Math.max(1, ...Array.from(latestHoursByGoal.values()));
   const lastWandered = patterns?.skipHeavyDays.at(-1);
+  const nextStep = firstStep({ routineItemCount: routineItems.length, scheduleTemplateCount: scheduleTemplates.length });
 
   return (
     <div>
@@ -108,6 +111,23 @@ export default async function TodayPage(props: PageProps<"/today">) {
           </div>
         )}
       </div>
+
+      {nextStep && (
+        <div className="glass mb-6 flex items-start gap-3 rounded-[18px] p-4" role="status">
+          <ShepherdMascot />
+          <div className="min-w-0 flex-1">
+            <div className="flex gap-2 text-[12px] text-muted">
+              <strong className="font-semibold text-ink">Shepherd</strong>
+              <span>your first step</span>
+            </div>
+            <p className="mt-0.5 text-[17px] font-semibold leading-tight">{nextStep.title}</p>
+            <p className="mt-1 text-[15px] text-muted">{nextStep.body}</p>
+            <Link href={nextStep.href} className="btn-fill mt-3 inline-block px-4 py-2 text-[15px]">
+              {nextStep.cta}
+            </Link>
+          </div>
+        </div>
+      )}
 
       {duePauses.length > 0 && (
         <div className="mb-6 flex flex-col gap-3">
