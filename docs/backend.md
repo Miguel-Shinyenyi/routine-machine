@@ -1144,3 +1144,12 @@ on port 8081 only (`MANAGEMENT_PORT`), never on 8080 and not published by Compos
 recorded about people, and how to turn it off: `docs/observability.md`. The route sweep
 (`EveryRouteNeedsATokenTest`) covers only `/api/**`; the management port is a separate server.
 
+## Observability, part 5 (in progress)
+
+`GET /api/watchtower/services` (`WatchtowerController`, `ServiceHealthService`) is the owner-only operations
+page's first endpoint. Only the owner (`OwnerAccount`, from `OWNER_EMAIL`) gets data; a signed-in non-owner, a
+signed-out visitor, and everyone when no owner is set get a plain 404, never a 401. So `/api/watchtower/**` is on
+the optional-token chain in `SecurityConfig` (with `/api/hillside/**`) and is listed as open on purpose in
+`EveryRouteNeedsATokenTest`. Probe addresses are `watchtower.*-url` (env `WATCHTOWER_*_URL`), configuration only.
+Details and the checks that ran: `docs/observability.md`, "Part 5".
+

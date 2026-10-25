@@ -31,7 +31,9 @@ class EveryRouteNeedsATokenTest extends AbstractIntegrationTest {
     private static final Map<String, String> OPEN_ON_PURPOSE = Map.of(
             "/api/auth/", "sign-in and sign-up; github-login checks its own internal token",
             "/api/measurements", "health data push, protected by its own bearer token",
-            "/api/hillside", "the public ranking; a valid token only adds 'you' to it (see HillsideTokenApiIntegrationTest)");
+            "/api/hillside", "the public ranking; a valid token only adds 'you' to it (see HillsideTokenApiIntegrationTest)",
+            "/api/watchtower", "owner-only operations page: answers 404, never 401, to everyone but the owner, so the page "
+                    + "is not known to exist; WatchtowerControllerTest proves it gives nothing without the owner's token");
 
     @Autowired
     private MockMvc mockMvc;

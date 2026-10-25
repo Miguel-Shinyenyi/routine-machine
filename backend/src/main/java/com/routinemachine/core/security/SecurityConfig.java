@@ -65,11 +65,14 @@ public class SecurityConfig {
     // The hillside is a public ranking anyone may read. A valid token only adds "you" to it, and a
     // bad one is refused (401) rather than quietly treated as a visitor. Nothing here is user-scoped
     // without that token.
+    // The owner-only operations page (/api/watchtower) shares this chain on purpose: a signed-out visitor must
+    // reach the controller, which answers 404 to everyone but the owner. On the token-required chain they
+    // would get 401, which would tell them the page exists. A bad token is still refused (401), as above.
     @Bean
     @Order(2)
     public SecurityFilterChain optionalTokenChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/api/hillside/**")
+                .securityMatcher("/api/hillside/**", "/api/watchtower/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())

@@ -31,6 +31,14 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env (see .env.example)}
       AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
       OWNER_EMAIL: ${OWNER_EMAIL:-}
+      # Owner-only operations page (docs/observability.md): the addresses it probes for "is it up". A service that
+      # is not running (the observability ones, without the profile) shows as DOWN.
+      WATCHTOWER_INTELLIGENCE_URL: http://intelligence-service:8000/health
+      WATCHTOWER_PROMETHEUS_URL: http://prometheus:9090/-/ready
+      WATCHTOWER_ALERTMANAGER_URL: http://alertmanager:9093/-/ready
+      WATCHTOWER_LOKI_URL: http://loki:3100/ready
+      WATCHTOWER_JAEGER_URL: http://jaeger:16686/
+      WATCHTOWER_GRAFANA_URL: http://grafana:3000/api/health
       # Tracing (docs/observability.md): off unless TRACING_ENABLED=true. Traces only; metrics and logs have
       # their own pipelines, so those exporters are off.
       TRACING_ENABLED: ${TRACING_ENABLED:-false}

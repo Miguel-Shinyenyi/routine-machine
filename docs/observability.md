@@ -9,7 +9,7 @@ differs and why. Built in parts; this file describes only what exists.
 
 ## Current state
 
-Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is mostly done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard; metric exemplars).** The page is not built.
+Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is mostly done (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard; metric exemplars).** Part 5, the owner-only page, is in progress: piece 1 of 6 is done (the owner gate and service health, in the backend); the frontend page is not built.
 
 | Part | What | State |
 |---|---|---|
@@ -17,7 +17,7 @@ Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is m
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
 | 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
-| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | Not built |
+| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Piece 1 done: backend owner gate and service health.** Not built: metrics for the charts, logs and trace links, sync status, the frontend page, the API-docs link (needs Prompt 4) |
 
 ### Part 1: the backend
 
@@ -208,6 +208,32 @@ does not start them). Files are in `infra/observability/`.
   The backend p95 panel shows no data until the backend image is rebuilt, because the running image predates the
   latency-bucket setting.
 
+### Part 5: the owner-only operations page
+
+Six pieces: (1) the owner gate and service health in the backend; (2) metrics for the charts, read from Prometheus
+by the backend; (3) logs, read from Loki with allow-listed filters, and trace links; (4) each sync source's last run
+and result; (5) the frontend page and its 404; (6) docs, with the API-docs link waiting for Prompt 4.
+
+**Piece 1, done.** `GET /api/watchtower/services` (`WatchtowerController`, `ServiceHealthService`):
+- **Owner only.** The owner is the account named by `OWNER_EMAIL` (`OwnerAccount`). A signed-in person who is not the
+  owner, a signed-out visitor, and everyone when no owner is configured all get a plain **404**, never a 401 or a
+  login prompt, so the page is not known to exist. For that the path is on the optional-token security chain (the
+  hillside's), not the token-required one. A malformed token still gets 401, as on the hillside.
+- **What it returns**: a list of `{name, status}` with `UP`, `DOWN` or `NOT_CONFIGURED`. `backend` and `database`
+  come from the app's own health; the intelligence service, Prometheus, Alertmanager, Loki, Jaeger and Grafana are
+  probed (2 s timeout, in parallel) at addresses in `WATCHTOWER_*_URL`, set in `infra/docker-compose.yml`. The
+  addresses are configuration, never request input, so a request cannot make the backend fetch anything. The
+  answer holds no address and no error text. Without the `observability` profile the observability services show as
+  `DOWN`.
+- **Route sweep**: `EveryRouteNeedsATokenTest` lists `/api/watchtower` as open on purpose, with the reason. The
+  route's own tests (`WatchtowerControllerTest`, `WatchtowerWithNoOwnerTest`) prove it gives nothing without the
+  owner's token.
+- **Checked live**: owner 200 with all eight services `UP`; another account 404; signed out 404; a malformed token
+  401; stopping Loki made it `DOWN`.
+- **Seen once, not explained**: Loki's own `/ready` answered 503 twice for a short time, so the page showed Loki
+  `DOWN` although logs were flowing; it then answered 200 on every try. The probe does not retry, so a brief dip
+  shows as `DOWN` for that refresh.
+
 ## What it records about people
 
 - Logs: method, path, status, duration, request id, and the application's own messages. No query
@@ -215,6 +241,7 @@ does not start them). Files are in `infra/observability/`.
   row id (for example `/api/tasks/57`), which is not personal on its own.
 - Metrics: JVM and HTTP counters and timings, tagged by route template, never by user.
 - The owner claim and owner role log lines name tables and counts, never an address.
+- The operations page's data (`/api/watchtower`) is owner-only. Piece 1 holds service names and statuses only.
 - The intelligence service follows the same rules; it receives note text only on `POST /reading-notes/assess`, whose body is never logged.
 - Later parts must keep to this list; each part's report states what it added.
 
@@ -246,6 +273,8 @@ does not start them). Files are in `infra/observability/`.
 | 2026-10-21 | Prometheus and Alertmanager UIs bound to 127.0.0.1, behind a compose profile | Operations data is for the owner on this machine; a plain `docker compose up` stays light |
 | 2026-10-25 | Grafana's admin password is checked by the container's entrypoint, not by `${VAR:?}` in the compose file | `:?` is evaluated for every service, so it made every `docker compose` command fail without the variable. An empty value would otherwise fall back to Grafana's default `admin/admin` login |
 | 2026-10-25 | No Jaeger datasource in Grafana; the log-to-trace link is a plain URL to the Jaeger UI | Found by running `verify-grafana.sh`: the datasource's health check gets `404` because Jaeger 2.22 dropped the v1 listing and search endpoints that Grafana's plugin calls (`/api/v3/services` answers 200, `/api/services` answers 404; fetching one trace by id still works on v1). Keeps Jaeger 2.22 (decided earlier) instead of pinning an older v2 |
+| 2026-10-25 | The owner-only page reads Prometheus and Loki through the backend, instead of embedding Grafana | Resolves the open question. One place (the backend) holds the owner check and the 404 rule, with Java tests; the frontend only renders. Embedding Grafana would need its own login, a second access rule, and framing headers. Grafana stays for exploring. Pieces 2 and 3 build it; you can overrule before then |
+| 2026-10-25 | `/api/watchtower` is on the optional-token chain and listed as open on purpose in the route sweep | Prompt 3 says non-owners get a plain 404, not a login prompt. On the token-required chain a signed-out visitor gets 401, which shows the page exists. The sweep lists it with that reason so the exception is visible |
 | 2026-10-25 | `opentelemetry-api` added to the backend, version managed by Spring Boot's BOM (1.49.0) | Exemplars need the current trace id inside the JVM. Spring Boot's own source for it needs Micrometer Tracing; this service is traced by the OpenTelemetry Java agent, which backs the OpenTelemetry API. The API alone is inert without the agent. Approved by Miguel |
 | 2026-10-25 | Dashboard and datasources are provisioned from files and read-only in the UI | The dashboard is code: reviewed, versioned and restorable, and a click in the UI cannot change what the repo says |
 | 2026-10-21 | Only `health` and `prometheus` exposed | Everything else Actuator offers (env, beans, heap dump, loggers) can leak configuration or data |
@@ -257,7 +286,5 @@ does not start them). Files are in `infra/observability/`.
 
 ## Open questions
 
-- Whether the owner-only page should embed Grafana, or read Prometheus and Loki directly, is decided
-  in part 5.
 - Alert delivery: like the reference, no pager or email integration is planned for a personal tool;
   alerts will be visible in Alertmanager's own page. Say if you want one.

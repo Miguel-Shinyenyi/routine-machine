@@ -47,3 +47,13 @@ logging:
   structured:
     format:
       console: logstash
+
+# Owner-only operations page (docs/observability.md): where it probes each service. Empty means not configured.
+# Set by the Compose file; these are addresses the backend calls, never ones a request can supply.
+watchtower:
+  intelligence-url: ${WATCHTOWER_INTELLIGENCE_URL:}
+  prometheus-url: ${WATCHTOWER_PROMETHEUS_URL:}
+  alertmanager-url: ${WATCHTOWER_ALERTMANAGER_URL:}
+  loki-url: ${WATCHTOWER_LOKI_URL:}
+  jaeger-url: ${WATCHTOWER_JAEGER_URL:}
+  grafana-url: ${WATCHTOWER_GRAFANA_URL:}
