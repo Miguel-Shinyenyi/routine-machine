@@ -1,0 +1,28 @@
+name: Outcome-based task
+description: A change described by what should be true afterwards
+labels: ["task"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: One sentence, in the user's words. What can they do or see afterwards?
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: How we will check it
+      description: The test, command or visible result that shows it is done.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Out of scope
+      description: What this task does not include.
+  - type: input
+    id: phase
+    attributes:
+      label: Phase
+      description: The build phase in PROJECT.md this belongs to.
