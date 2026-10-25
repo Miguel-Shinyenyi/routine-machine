@@ -94,3 +94,23 @@ below for rotation and the key's blast radius.
   (`base64 -i <path>`, or `base64 <path>` on Linux). Replace the `UMWAYI_JOURNAL_KEY_B64`
   value in `infra/.env` or wherever the deployment injects it. Restart the backend. No code
   change: the reader reads the variable fresh on every call, nothing is cached.
+
+## GitHub's rate limit (found 25 Oct 2026)
+
+Hub sync and the GitHub watering hole both call GitHub's public API **without a token**. GitHub allows that **60 requests an
+hour per IP address**, shared by everything on that address, and answers `403` when it is used up. One sync run costs **4
+requests** (one GitHub events call and three hub directory listings), the sync runs **every 15 minutes** and **once at every
+backend start**. Steady state is therefore 16 requests an hour, a quarter of the quota; **every restart adds 4 more**, and
+anything else on the same address (a browser, a script, a test) draws on the same 60.
+- **How it showed up**: the owner page's sync table read `failing` for HUB and GITHUB for hours. On the day I looked the quota
+  was at 0 of 60 and resetting at 21:03 local. I had restarted the backend about 20 times and run about 25 requests of my own.
+- **What the log says now**: `hub-sync: listing journal/entries returned HTTP 403 (rate limited until 2026-10-25T18:03:23Z)`,
+  read from GitHub's `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers (`GitHubRateLimit`, 3 tests). Before, it said only
+  `returned HTTP 403` or `ConnectException`. Failed fetches also log their whole cause now (`FailureDescription`).
+- **Not solved**: an optional token would lift the limit to 5,000 an hour, and neither client can send one. That is a design
+  change that needs a GitHub token from Miguel (an environment variable, never a file), so I did not build it. Until then,
+  expect HUB and GITHUB to read `failing` for up to an hour after a burst of restarts, and for any machine whose address is
+  shared with other GitHub callers.
+- **Still unexplained**: earlier failures logged as `ConnectException` (for example at 16:53 UTC, five seconds after a start)
+  were not 403s, and I never saw their cause. Read the next one.
+

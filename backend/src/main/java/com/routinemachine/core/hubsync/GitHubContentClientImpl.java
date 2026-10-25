@@ -1,5 +1,7 @@
 package com.routinemachine.core.hubsync;
 
+import com.routinemachine.core.observability.FailureDescription;
+import com.routinemachine.core.observability.GitHubRateLimit;
 import com.routinemachine.core.observability.SyncMetrics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,7 +48,7 @@ public class GitHubContentClientImpl implements GitHubContentClient {
         try {
             HttpResponse<String> response = get("https://api.github.com/repos/" + repoSlug + "/contents/" + path);
             if (response.statusCode() != 200) {
-                log.info("hub-sync: listing {} returned HTTP {}", path, response.statusCode());
+                log.info("hub-sync: listing {} returned HTTP {}{}", path, response.statusCode(), limitNote(response));
                 SyncMetrics.failure("hub");
                 return List.of();
             }
@@ -65,7 +67,7 @@ public class GitHubContentClientImpl implements GitHubContentClient {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            log.info("hub-sync: failed to list {}: {}", path, e.getClass().getSimpleName());
+            log.info("hub-sync: failed to list {}: {}", path, FailureDescription.of(e));
             SyncMetrics.failure("hub");
             return List.of();
         }
@@ -77,7 +79,7 @@ public class GitHubContentClientImpl implements GitHubContentClient {
             HttpResponse<String> response = get(
                     "https://api.github.com/repos/" + repoSlug + "/commits?path=" + path + "&per_page=100");
             if (response.statusCode() != 200) {
-                log.info("hub-sync: commit history for {} returned HTTP {}", path, response.statusCode());
+                log.info("hub-sync: commit history for {} returned HTTP {}{}", path, response.statusCode(), limitNote(response));
                 return Optional.empty();
             }
             JsonNode commits = objectMapper.readTree(response.body());
@@ -98,7 +100,7 @@ public class GitHubContentClientImpl implements GitHubContentClient {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            log.info("hub-sync: failed to read commit history for {}: {}", path, e.getClass().getSimpleName());
+            log.info("hub-sync: failed to read commit history for {}: {}", path, FailureDescription.of(e));
             return Optional.empty();
         }
     }
@@ -111,5 +113,10 @@ public class GitHubContentClientImpl implements GitHubContentClient {
                 .GET()
                 .build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    // " (rate limited until ...)" when GitHub's headers say the quota is used up, else nothing.
+    private static String limitNote(HttpResponse<?> response) {
+        return GitHubRateLimit.describe(response.headers()).map(note -> " (" + note + ")").orElse("");
     }
 }

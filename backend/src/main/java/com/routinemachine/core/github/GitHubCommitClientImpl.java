@@ -1,5 +1,7 @@
 package com.routinemachine.core.github;
 
+import com.routinemachine.core.observability.FailureDescription;
+import com.routinemachine.core.observability.GitHubRateLimit;
 import com.routinemachine.core.observability.SyncMetrics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -63,7 +65,7 @@ public class GitHubCommitClientImpl implements GitHubCommitClient {
             HttpResponse<String> response = get(
                     "https://api.github.com/users/" + username + "/events/public?per_page=100");
             if (response.statusCode() != 200) {
-                log.info("github-sync: fetching public events returned HTTP {}", response.statusCode());
+                log.info("github-sync: fetching public events returned HTTP {}{}", response.statusCode(), limitNote(response));
                 SyncMetrics.failure("github");
                 return List.of();
             }
@@ -73,7 +75,7 @@ public class GitHubCommitClientImpl implements GitHubCommitClient {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            log.info("github-sync: failed to fetch public events: {}", e.getClass().getSimpleName());
+            log.info("github-sync: failed to fetch public events: {}", FailureDescription.of(e));
             SyncMetrics.failure("github");
             return List.of();
         }
@@ -109,5 +111,10 @@ public class GitHubCommitClientImpl implements GitHubCommitClient {
                 .GET()
                 .build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    // " (rate limited until ...)" when GitHub's headers say the quota is used up, else nothing.
+    private static String limitNote(HttpResponse<?> response) {
+        return GitHubRateLimit.describe(response.headers()).map(note -> " (" + note + ")").orElse("");
     }
 }
