@@ -85,8 +85,11 @@ export default function PrivacyPage() {
             </h2>
             <p className="text-[15px]">
               Your email address, your name, anything you write, any amount of money, or the text of a note. We do not record your screen, your
-              clicks or how far you scroll. We do not use cookies for this: the random device number is kept in your browser&rsquo;s local
-              storage, and you can clear it at any time.
+              clicks or how far you scroll. The random device number is kept in your browser&rsquo;s local storage,
+              not in a cookie, and you can clear it at any time. The one cookie involved is a short note called{" "}
+              <span className="font-mono text-[14px]">rm_events</span>: when something you do succeeds, the app leaves the name of the action
+              in it so that your browser can send it if you accepted. It holds no personal data, it expires in two minutes, and your browser
+              deletes it at once, whether or not you accepted.
             </p>
           </section>
 

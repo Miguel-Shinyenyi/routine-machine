@@ -10,6 +10,7 @@ const posthog = {
   opt_out_capturing: vi.fn(() => calls.push("opt_out_capturing")),
   opt_in_capturing: vi.fn(() => calls.push("opt_in_capturing")),
   identify: vi.fn((...args: unknown[]) => calls.push(`identify:${args.map(String).join(",")}`)),
+  capture: vi.fn((...args: unknown[]) => calls.push(`capture:${String(args[0])}:${JSON.stringify(args[1] ?? {})}`)),
 };
 vi.mock("posthog-js", () => ({ default: posthog }));
 
@@ -138,5 +139,39 @@ describe("identifyUser (staged Prompt 5, part 2)", () => {
     calls.length = 0;
     await identifyUser(34);
     expect(calls).toEqual(["identify:34"]);
+  });
+});
+
+describe("track (staged Prompt 5, part 3)", () => {
+  it("sends a named action once analytics is running", async () => {
+    const { startAnalytics, track } = await freshClient();
+    await startAnalytics("phc_key", "https://us.i.posthog.com");
+    calls.length = 0;
+    await track("hillside_joined");
+    await track("day_logged", { source: "manual" });
+    expect(calls).toEqual(["capture:hillside_joined:{}", 'capture:day_logged:{"source":"manual"}']);
+  });
+  it("does nothing, and loads nothing, before the visitor accepted", async () => {
+    const { track } = await freshClient();
+    await track("hillside_joined");
+    expect(calls).toEqual([]);
+  });
+  it("does nothing after the visitor withdrew", async () => {
+    const { startAnalytics, stopAnalytics, track } = await freshClient();
+    await startAnalytics("phc_key", "https://us.i.posthog.com");
+    await stopAnalytics();
+    calls.length = 0;
+    await track("hillside_joined");
+    expect(calls).toEqual([]);
+  });
+  it("refuses anything the schema does not allow, so a private value cannot be sent even by mistake", async () => {
+    const { startAnalytics, track } = await freshClient();
+    await startAnalytics("phc_key", "https://us.i.posthog.com");
+    calls.length = 0;
+    await track("pause_logged", { amount: 500 } as never);
+    await track("reading_note_submitted", { text: "x" } as never);
+    await track("$autocapture" as never);
+    await track("day_logged", { source: "free text" } as never);
+    expect(calls).toEqual([]);
   });
 });

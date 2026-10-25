@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { queueAnalyticsEvent } from "./analytics/queue";
 import { authenticatedBackendFetch, ApiError, backendFetch, backendFetchMultipart, intelligenceFetch } from "./api";
 import { getSessionToken, getSessionUserId, requireSessionUserId } from "./auth/session";
 import type { MpesaImportResponse, ReadingNoteAssessment } from "./types";
@@ -77,6 +78,8 @@ export async function updateTaskStatus(taskId: number, status: string): Promise<
     method: "PATCH",
     body: JSON.stringify({ status }),
   });
+  // Staged Prompt 5, part 3: ticking a task done is how a day is logged from the browser. Only the source, never which task.
+  if (status === "DONE") await queueAnalyticsEvent("day_logged", { source: "manual" });
 
   revalidatePath("/today");
   revalidatePath("/tally");
@@ -143,6 +146,9 @@ export async function submitReadingNote(formData: FormData): Promise<void> {
       questionBack: assessment?.questionBack ?? null,
     }),
   });
+  // Staged Prompt 5, part 3: only that a note was submitted. Never its text, its score or the book. Queued after the note was saved,
+  // whether or not the assessment worked.
+  await queueAnalyticsEvent("reading_note_submitted");
 
   revalidatePath("/reading");
   revalidatePath("/tally");
@@ -155,10 +161,13 @@ export async function setHillsideOptIn(formData: FormData): Promise<void> {
   const token = await getSessionToken();
   if (!token) return;
 
+  const optIn = formData.get("optIn") === "true";
   await authenticatedBackendFetch("/api/users/me/hillside-opt-in", token, {
     method: "PUT",
-    body: JSON.stringify({ optIn: formData.get("optIn") === "true" }),
+    body: JSON.stringify({ optIn }),
   });
+  // Staged Prompt 5, part 3: that someone joined or left, and nothing else.
+  await queueAnalyticsEvent(optIn ? "hillside_joined" : "hillside_left");
 
   revalidatePath("/hillside");
 }
@@ -169,6 +178,8 @@ export async function questionCredit(formData: FormData): Promise<void> {
   await requireSessionUserId();
   const eventId = formData.get("eventId");
   await backendFetch(`/api/evidence-events/${eventId}/question`, { method: "PATCH" });
+  // Staged Prompt 5, part 3: that a credit was questioned. Nothing about which credit, its goal or its evidence.
+  await queueAnalyticsEvent("credit_questioned");
   revalidatePath("/hillside");
 }
 
@@ -243,6 +254,8 @@ export async function createPause(formData: FormData): Promise<void> {
       heardFrom: formData.get("heardFrom") || null,
     }),
   });
+  // Staged Prompt 5, part 3: that a pause was logged. No amount and no item: nothing from the form above reaches this call.
+  await queueAnalyticsEvent("pause_logged");
   revalidatePath("/granary");
   revalidatePath("/today");
 }

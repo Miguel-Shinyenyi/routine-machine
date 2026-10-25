@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ALLOWED_EVENTS } from "./events";
-import { sanitizeEvent, stripUrl } from "./sanitize";
+import { sanitizeEvent, stripUrl, normalizeRoute } from "./sanitize";
 
 // Found by looking at what a real accepted visit sends (staged Prompt 5, part 1): a $pageleave event with scroll statistics that
 // nobody asked for, full URLs including query strings, and the page title. This runs on every event just before it leaves the
@@ -45,6 +45,35 @@ describe("stripUrl", () => {
   it("leaves PostHog's own markers alone", () => {
     expect(stripUrl("$direct")).toBe("$direct");
     expect(stripUrl("")).toBe("");
+  });
+});
+
+describe("normalizeRoute (found live, part 3)", () => {
+  it("hides which cohort, wherever a cohort's address appears, in a full address or a bare path", () => {
+    expect(normalizeRoute("http://localhost:3000/cohort/12")).toBe("http://localhost:3000/cohort/:id");
+    expect(normalizeRoute("/cohort/abc-9")).toBe("/cohort/:id");
+    expect(normalizeRoute("/cohort/12/")).toBe("/cohort/:id/");
+    expect(normalizeRoute("/cohort/12/members")).toBe("/cohort/:id/members");
+  });
+  it("leaves every other address alone", () => {
+    for (const value of ["/today", "http://localhost:3000/watchtower", "/cohorts/12", "/privacy", "$direct", "", "/mycohort/12"]) {
+      expect(normalizeRoute(value), value).toBe(value);
+    }
+  });
+});
+
+describe("sanitizeEvent: the cohort's id never leaves in an address (found live, part 3)", () => {
+  it("replaces the cohort id in every address and path property", () => {
+    const out = sanitizeEvent(event("$pageview", {
+      $current_url: "http://localhost:3000/cohort/12?probe=secret",
+      $pathname: "/cohort/12",
+      $referrer: "http://localhost:3000/cohort/7",
+      $prev_pageview_pathname: "/cohort/7",
+      $session_entry_url: "http://localhost:3000/cohort/12",
+      $session_entry_pathname: "/cohort/12",
+    }));
+    expect(JSON.stringify(out?.properties)).not.toMatch(/cohort\/\d/);
+    expect(out?.properties).toMatchObject({ $current_url: "http://localhost:3000/cohort/:id", $pathname: "/cohort/:id", $referrer: "http://localhost:3000/cohort/:id" });
   });
 });
 

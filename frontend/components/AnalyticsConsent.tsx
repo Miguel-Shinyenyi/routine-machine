@@ -1,17 +1,38 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
-import { identifyUser, startAnalytics, stopAnalytics } from "@/lib/analytics/client";
+import { identifyUser, startAnalytics, stopAnalytics, track } from "@/lib/analytics/client";
 import { choose, getDecisionKey, getServerDecisionKey, parseDecisionKey, subscribe } from "@/lib/analytics/consent-store";
+import { PENDING_COOKIE, type PendingEvent } from "@/lib/analytics/pending";
+import { planPending, shouldTrackPath } from "@/lib/analytics/plan";
 
 // Staged Prompt 5, part 1 (docs/frontend.md, "Analytics"). Asks once, remembers the answer, and starts the analytics library
 // only after "Accept". Rendered by the root layout only when the deployment has a PostHog key and host; with neither, nothing
 // here exists. The rules themselves are in lib/analytics/consent.ts, where they are tested.
 
+// Notes already sent, so a note is never sent twice (a page can render twice, and React runs effects twice in development), and the last
+// page seen, so the cohort dashboard is counted once per visit to it.
+const sentNoteIds = new Set<string>();
+let lastPathname: string | null = null;
+
 // userId is the signed-in person's INTERNAL id, or null when signed out. It is the only thing the analytics service is ever told about
 // who someone is (lib/analytics/identity.ts): never an email, never a name.
-export function AnalyticsConsent({ posthogKey, posthogHost, userId }: { posthogKey: string; posthogHost: string; userId: number | null }) {
+// pendingEvents are the notes the server left after a successful action (lib/analytics/queue.ts). They are sent only if the visitor accepted
+// and cleared in every case (lib/analytics/plan.ts).
+export function AnalyticsConsent({
+  posthogKey,
+  posthogHost,
+  userId,
+  pendingEvents,
+}: {
+  posthogKey: string;
+  posthogHost: string;
+  userId: number | null;
+  pendingEvents: PendingEvent[];
+}) {
+  const pathname = usePathname();
   const { state } = parseDecisionKey(useSyncExternalStore(subscribe, getDecisionKey, getServerDecisionKey));
 
   useEffect(() => {
@@ -29,6 +50,23 @@ export function AnalyticsConsent({ posthogKey, posthogHost, userId }: { posthogK
       void identifyUser(userId);
     }
   }, [state, userId]);
+
+  // The notes the server left: send them if the visitor accepted, and clear them whatever happened, so they cannot linger.
+  useEffect(() => {
+    const { send, clear } = planPending({ pending: pendingEvents, state, sentIds: sentNoteIds });
+    for (const note of send) {
+      sentNoteIds.add(note.id);
+      void track(note.name, note.properties);
+    }
+    if (clear) document.cookie = `${PENDING_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
+  }, [pendingEvents, state]);
+
+  // The one named action that is a page and not a form: seeing the cohort dashboard. Nothing about which cohort is sent.
+  useEffect(() => {
+    const event = shouldTrackPath({ state, pathname, lastPathname });
+    lastPathname = pathname;
+    if (event) void track(event);
+  }, [state, pathname]);
 
   if (state !== "ask") return null;
 

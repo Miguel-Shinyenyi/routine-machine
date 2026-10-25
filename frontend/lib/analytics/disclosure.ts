@@ -22,14 +22,14 @@ export const EVENT_DISCLOSURE: Record<string, EventDisclosure> = {
       "Your internal user number, which this app assigns and which is not your email address or your name, tied to the random device number above. Nothing else about you.",
     sentToday: true,
   },
-  goal_created: { when: "You create a goal.", carries: "Nothing about the goal: not its name and not its description.", sentToday: false },
-  day_logged: { when: "A day is logged.", carries: "Only where the log came from (for example you tapped it, or an automatic source). Nothing about what was logged.", sentToday: false },
-  credit_questioned: { when: "You question a credit.", carries: "Nothing about the credit, the goal or the evidence.", sentToday: false },
-  reading_note_submitted: { when: "You submit a reading note.", carries: "No text of the note, no score and no book.", sentToday: false },
-  pause_logged: { when: "You log a pause before a spending decision.", carries: "No amount and no item.", sentToday: false },
-  hillside_joined: { when: "You join the hillside.", carries: "Nothing else.", sentToday: false },
-  hillside_left: { when: "You leave the hillside.", carries: "Nothing else.", sentToday: false },
-  cohort_dashboard_viewed: { when: "You open a cohort dashboard.", carries: "Nothing about the cohort or its members.", sentToday: false },
+  goal_created: { when: "You create a goal.", carries: "Nothing about the goal: not its name and not its description. (Nothing in the app creates a goal yet, so this is never sent today.)", sentToday: false },
+  day_logged: { when: "A day is logged.", carries: "Only where the log came from (for example you tapped it, or an automatic source). Nothing about what was logged.", sentToday: true },
+  credit_questioned: { when: "You question a credit.", carries: "Nothing about the credit, the goal or the evidence.", sentToday: true },
+  reading_note_submitted: { when: "You submit a reading note.", carries: "No text of the note, no score and no book.", sentToday: true },
+  pause_logged: { when: "You log a pause before a spending decision.", carries: "No amount and no item.", sentToday: true },
+  hillside_joined: { when: "You join the hillside.", carries: "Nothing else.", sentToday: true },
+  hillside_left: { when: "You leave the hillside.", carries: "Nothing else.", sentToday: true },
+  cohort_dashboard_viewed: { when: "You open a cohort dashboard.", carries: "Nothing about the cohort or its members. Not even which cohort.", sentToday: true },
 };
 
 // Where PostHog keeps the data, from the host the deployment is configured with. Only its two hosted regions are named; any other host

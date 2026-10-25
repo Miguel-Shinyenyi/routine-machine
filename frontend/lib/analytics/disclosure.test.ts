@@ -14,9 +14,12 @@ describe("EVENT_DISCLOSURE", () => {
       expect(entry.carries.length, `${name} carries`).toBeGreaterThan(8);
     }
   });
-  it("marks as sent today only the two that the app sends today", () => {
+  it("marks as sent today only the events the app really sends: the two PostHog ones and the seven named actions that have a place in the app", () => {
     const sent = Object.entries(EVENT_DISCLOSURE).filter(([, entry]) => entry.sentToday).map(([name]) => name).sort();
-    expect(sent).toEqual(["$identify", "$pageview"]);
+    expect(sent).toEqual(["$identify", "$pageview", "cohort_dashboard_viewed", "credit_questioned", "day_logged", "hillside_joined", "hillside_left", "pause_logged", "reading_note_submitted"]);
+  });
+  it("says plainly that goal_created is not sent, because nothing in the app creates a goal yet", () => {
+    expect(EVENT_DISCLOSURE.goal_created.sentToday).toBe(false);
   });
   it("promises nothing private on the named actions", () => {
     for (const name of ["goal_created", "credit_questioned", "reading_note_submitted", "pause_logged", "hillside_joined", "hillside_left", "cohort_dashboard_viewed"]) {

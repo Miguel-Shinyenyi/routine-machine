@@ -1,3 +1,4 @@
+import { buildEvent } from "./events";
 import { distinctIdFor } from "./identity";
 import { posthogOptions } from "./options";
 
@@ -62,4 +63,15 @@ export async function identifyUser(userId: unknown): Promise<void> {
   if (id === null || id === identifiedAs) return;
   identifiedAs = id;
   posthog.identify(id);
+}
+
+// Staged Prompt 5, part 3. Send one of the eight named actions, with only the properties its schema allows (lib/analytics/events.ts).
+// Does nothing, and loads nothing, unless analytics is running: not before consent, and not after a visitor withdrew. An event that is not
+// exactly one of the allowed shapes is not sent, so a private value cannot go out even by mistake.
+export async function track(name: string, properties?: Record<string, unknown>): Promise<void> {
+  if (!started || stopped) return;
+  const event = buildEvent(name, properties);
+  if (!event) return;
+  const posthog = await started;
+  posthog.capture(event.name, event.properties);
 }

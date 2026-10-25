@@ -392,13 +392,12 @@ departure from precedent.
 | 2026-10-19 | A real bug found live-testing before reporting: an org admin who isn't also a cohort member crashed the page when submitting the survey | The backend correctly 403s a non-member's survey answer (it's a learner's question, not an admin's), but `submitCohortSurveyResponse` didn't catch it, so `ApiError` reached the Server Action unhandled. Fixed by catching and swallowing a `403` specifically (any other error still surfaces) — the admin's click has no visible effect instead of crashing, which is correct since the backend already decided they're not eligible to answer |
 | 2026-10-19 | A second real bug found the same session: the survey/seat-limit `POST`/`PUT` calls threw `"Unexpected end of JSON input"` even for an eligible learner | Both backend endpoints returned a plain `200` with an empty body (`void`-returning `@PostMapping`/`@PutMapping`), but `lib/api.ts`'s `request()` only skips `response.json()` on a `204`. Fixed on the backend (`@ResponseStatus(HttpStatus.NO_CONTENT)` on both `OrganisationController` methods) rather than loosening the frontend's parsing, since a write with no response body should honestly be a `204`, matching how the rest of this app already treats empty responses |
 
-## Analytics (staged Prompt 5, parts 1 and 2 of 6)
+## Analytics (staged Prompt 5, parts 1 to 3 of 6)
 
 Product analytics with PostHog, to learn how people move through the app **without collecting what the app promises to keep
 private**. Built in parts. **What exists**: a consent banner, a gate that keeps the library unloaded until a visitor accepts, a
 filter on everything that leaves the browser, identification by internal user id only, the session-replay decision (off), and a public
-privacy page where a visitor can change their choice. **Not built yet**: the eight custom events wired to the app, and the test
-that fails the build on a field named like `amount`, `text`, `note`, `email` or `name`. **Seen in PostHog's own Live events**: not by
+privacy page where a visitor can change their choice, and (part 3) seven of the eight named events wired to the app, with a test that fails the build on a private field name. **Not built:** `goal_created` has nothing to attach to (see below). **Seen in PostHog's own Live events**: not by
 me (I cannot open your PostHog); PostHog answered 200 to the two events my real browser sent, see "Checked against the real
 project" below.
 
@@ -433,8 +432,8 @@ project" below.
 - **The privacy page (part 2), `/privacy`.** Public, signed in or not. It says what is counted and when, what is never sent, why, who
   receives it (the deployment's own PostHog host, and the region for PostHog's two hosted ones, outside Kenya), and the rights under Kenya's
   Data Protection Act, 2019. It is built from `lib/analytics/disclosure.ts`, and **a test holds that list equal to the list of events the
-  app may send**, so an event cannot be allowed without being described to the people it is collected from; `sentToday` marks the two
-  events sent now, and the eight named actions are listed as "not sent yet" with what each will carry. A **"Your choice" box** shows the
+  app may send**, so an event cannot be allowed without being described to the people it is collected from; `sentToday` marks the events
+  sent now (all but `goal_created`, listed as "not sent yet"). A **"Your choice" box** shows the
   current choice in plain words and lets the visitor change it at any time (`components/AnalyticsChoice.tsx`, sharing one store with the
   banner, `lib/analytics/consent-store.ts`); when the browser itself sends Do Not Track or Global Privacy Control the buttons are off
   and the page says why. With analytics off the page says only that. Linked from the banner, the sidebar footer and the sign-in and
@@ -446,6 +445,23 @@ project" below.
   opts it out. **The order matters and I had it wrong at first**: the library's `reset()` also clears its consent setting back to
   "opted in", so opting out first and resetting after left a visitor who had just said no capturing again. Found by simulating GPC
   mid-visit; `lib/analytics/client.test.ts` now holds the order, and accepting again opts back in on the same instance.
+- **The eight named events (part 3).** The list is closed in `lib/analytics/events.ts` (`CUSTOM_EVENTS`, `EVENT_PROPERTIES`). Each event carries only what the table says. Anything else is refused by `buildEvent` and again by the `before_send` filter.
+
+  | Event | Sent when | Carries |
+  |---|---|---|
+  | `day_logged` | a task is marked done (`updateTaskStatus`) | `source: "manual"` |
+  | `credit_questioned` | a credit is questioned (`questionCredit`) | nothing |
+  | `reading_note_submitted` | a reading note is saved (`submitReadingNote`) | nothing: no text, no score |
+  | `pause_logged` | a pause is created (`createPause`) | nothing: no amount, no item |
+  | `hillside_joined` / `hillside_left` | the Hillside switch changes (`setHillsideOptIn`) | nothing |
+  | `cohort_dashboard_viewed` | the browser opens `/cohort/<id>` (`paths.ts`) | nothing |
+  | `goal_created` | **never yet**: the app has no goal screen | nothing |
+
+- **How a server action's event reaches PostHog.** The browser holds the library, the server action does not. The action calls `queueAnalyticsEvent` (`lib/analytics/queue.ts`), which writes a short-lived cookie `rm_events` (120 seconds, at most 10 entries, name only). The consent component reads it, sends the events **only if the visitor has accepted**, and clears it. Declined visitors get the cookie cleared and nothing sent. The cookie is revalidated on both sides with `buildEvent`, so a forged or expired entry is dropped (`pending.ts`, `plan.ts`). It holds event names, never values. The privacy page names it.
+- **The build-failing check.** `lib/analytics/named-events.test.ts` runs every event through `buildEvent` with the worst-case inputs and fails if any property key is a whole word `amount`, `text`, `note`, `email` or `name` (plural too, camelCase and snake_case split, `fields.ts`). `sanitize.ts` also deletes such keys at send time. `npm test` runs in the build, so the build fails.
+- **Cohort ids stay out of URLs.** Found live: a pageview for `/cohort/1` carried the id. `normalizeRoute` now sends `/cohort/:id` for `$current_url`, `$pathname` and the related fields.
+- **Known over-count.** `cohort_dashboard_viewed` is path-based, so it also fires when the page shows "Not your cohort" (403). Treat it as "opened a cohort page".
+- **Checked in part 3 (25 Oct 2026, Chrome, signed in as the owner, real project)**: declined, the four actions I triggered sent 0 requests to PostHog and the actions still worked, with the `rm_events` cookie cleared; accepted, four requests (`$pageview`, `$identify`, `hillside_left`, `hillside_joined`), none with a non-standard property; a pushed `/cohort/12?probe=secret` sent `cohort_dashboard_viewed` and a `$pageview` at `/cohort/:id`, with no cohort number and no "secret" anywhere. **Unit tests only** for `day_logged`, `credit_questioned`, `reading_note_submitted` and `pause_logged`: I did not run those actions on your real data. **I did not look at your Live events.**
 - **A setting you must change in PostHog**: the library's `ip` option is documented as having no effect. Discarding visitors' IP
   addresses is the project setting **"Discard client IP data"** in PostHog's project settings. Switch it on; I cannot.
 - **Checked** (25 Oct 2026, Chrome, against a stand-in PostHog on `localhost:9099` and a placeholder key, never the real service):

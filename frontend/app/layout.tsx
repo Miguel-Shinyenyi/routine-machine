@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AnalyticsConsent } from "@/components/AnalyticsConsent";
 import { Shell } from "@/components/Shell";
 import { analyticsConfigured } from "@/lib/analytics/consent";
+import { readPendingEvents } from "@/lib/analytics/queue";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
 import { todayIsoDate } from "@/lib/schedule";
 import { getSessionToken, getSessionUserId } from "@/lib/auth/session";
@@ -81,6 +82,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
 
   // The signed-in person's internal id, for the analytics service to identify them by (and by nothing else). Null when signed out.
   const analyticsUserId = await getSessionUserId();
+  // Notes a Server Action left after it succeeded (lib/analytics/queue.ts), read again and checked here, then handed to the browser, which
+  // sends them only if the visitor accepted. None unless analytics is configured.
+  const analyticsOn = analyticsConfigured(process.env.POSTHOG_KEY, process.env.POSTHOG_HOST);
+  const pendingEvents = await readPendingEvents();
   return (
     <html lang="en" className="h-full antialiased">
       <head>
@@ -89,11 +94,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full bg-canvas text-ink">
         <Shell {...shellContext}>{children}</Shell>
         {/* Analytics (staged Prompt 5): only when the deployment has a key and a host, and only after the visitor accepts. */}
-        {analyticsConfigured(process.env.POSTHOG_KEY, process.env.POSTHOG_HOST) && (
+        {analyticsOn && (
           <AnalyticsConsent
             posthogKey={process.env.POSTHOG_KEY as string}
             posthogHost={process.env.POSTHOG_HOST as string}
             userId={analyticsUserId}
+            pendingEvents={pendingEvents}
           />
         )}
       </body>
