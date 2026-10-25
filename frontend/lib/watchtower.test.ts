@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "./api";
-import { fetchServices, fetchSync, formatUtc, serviceTone, syncTone } from "./watchtower";
+import { fetchMetrics, fetchServices, fetchSync, formatUtc, serviceTone, syncTone } from "./watchtower";
 
 describe("fetchServices", () => {
   it("returns the services the backend lists", async () => {
@@ -83,5 +83,31 @@ describe("formatUtc", () => {
     expect(formatUtc("2026-10-25T11:00:59Z")).toBe("2026-10-25 11:00 UTC");
     expect(formatUtc("2026-10-25T11:00:59.123456+00:00")).toBe("2026-10-25 11:00 UTC");
     expect(formatUtc(null)).toBe("Never");
+  });
+});
+
+describe("fetchMetrics", () => {
+  it("asks for the chosen range and returns the answer", async () => {
+    let asked = "";
+    const answer = { available: true, range: "24h", charts: [] };
+    const result = await fetchMetrics("24h", async (path) => {
+      asked = path;
+      return answer as never;
+    });
+    expect(asked).toBe("/api/watchtower/metrics?range=24h");
+    expect(result).toEqual(answer);
+  });
+
+  it("returns null on a 404 and rethrows every other failure", async () => {
+    expect(
+      await fetchMetrics("6h", async () => {
+        throw new ApiError(404, "");
+      }),
+    ).toBeNull();
+    await expect(
+      fetchMetrics("6h", async () => {
+        throw new ApiError(500, "boom");
+      }),
+    ).rejects.toThrow("boom");
   });
 });

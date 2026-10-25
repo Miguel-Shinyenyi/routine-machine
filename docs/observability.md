@@ -17,7 +17,7 @@ Staged Prompt 3 is built in five parts. **Parts 1 to 3 are done, and part 4 is m
 | 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
 | 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
 | 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
-| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 4 done: backend owner gate and service health; metrics for the charts; logs and trace links; sync status. Piece 5 started: the frontend page has its 404 gate, the service list and the sync table.** Not built: the charts and the logs filter on the page, the API-docs link (needs Prompt 4) |
+| 5 | Owner-only operations page in the frontend (working name `/watchtower`) | In progress, 6 pieces. **Pieces 1 to 4 done: backend owner gate and service health; metrics for the charts; logs and trace links; sync status. Piece 5 started: the frontend page has its 404 gate, the service list, the sync table and the charts.** Not built: the logs filter on the page, the API-docs link (needs Prompt 4) |
 
 ### Part 1: the backend
 
@@ -244,16 +244,16 @@ and result; (5) the frontend page and its 404; (6) docs, with the API-docs link 
 - **The answer** is `{available, range, charts: [{id, title, unit, series: [{label, points: [[seconds, value]]}]}]}`.
   `available` is false, with no charts and a 200, when Prometheus is not configured or answers none of the queries
   (the stack is not running). One failing query empties only its own chart. `NaN`, `+Inf` and `-Inf` points are
-  dropped, so a chart shows a gap. A chart carries at most 12 series (`MAX_SERIES`); the extra are cut, in
-  Prometheus's order.
+  dropped, so a chart shows a gap. A chart carries at most 8 series (`MAX_SERIES`, was 12 until slice 3 of
+  piece 5): the 8 with the largest peaks, and the answer carries `totalSeries` and `truncated` so the page can say it cut.
 - **Prometheus address**: `WATCHTOWER_PROMETHEUS_BASE_URL` (`http://prometheus:9090` in Compose); configuration, never
   request input. Labels in the answer are route templates, sync sources, outcomes, statuses and rule versions: the
   tags the metrics already carry, never a user, goal, book or note.
 - **Checked live** (owner token, real Prometheus): 200 with 12 charts and real points for the latency and sync charts;
   `range=24h` 200; `range=9999d` 400; another account 404; signed out 404. The credit, assessment and questioned-credit
   charts were empty because this stack has recorded none of those events yet.
-- **Seen, not changed**: the backend latency chart reached the 12-series cap, so some routes are cut from the page
-  (Grafana shows all). A series whose points were all `NaN` is returned with an empty `points` list.
+- **Seen**: the backend latency chart reached the cap, so some routes are cut from the page (Grafana shows all). Fixed
+  in piece 5, slice 3: the cap is now 8, the kept series are the largest peaks, and the answer says it cut. A series whose points were all `NaN` is returned with an empty `points` list.
 - **A bug the tests found**: Java cannot parse Prometheus's `+Inf`, and the first version lost a whole chart to one such
   point. One unreadable point is now skipped.
 
@@ -339,6 +339,41 @@ green, failing in the warning colour, everything else plain), failures in a row,
 - **Possible cause of the failing HUB and GITHUB, not confirmed**: the backend log shows `ConnectException` on every call
   to GitHub (`github-sync: failed to fetch public events`, `hub-sync: failed to list ...`), so the backend container may
   not be able to reach GitHub from this machine. I did not test the network from inside the container.
+
+**Piece 5, slice 3 of 4 (charts on the page).** `/watchtower` shows the 12 charts from `GET /api/watchtower/metrics`
+(`WatchtowerChart`, `lib/chart.ts`), with one range row above them (1 hour, 6 hours, 24 hours, as links:
+`/watchtower?range=1h`; anything else in the address falls back to 6 hours before it reaches the backend).
+- **Backend change**: `MAX_SERIES` 12 to 8, because the page has eight colours that stay apart for colour-blind
+  readers and the dataviz rule is to fold or facet rather than invent a ninth. The 8 kept are the largest peaks (the
+  slowest routes, the busiest sources), sorted before the cut; each chart now carries `totalSeries` and `truncated`, and the
+  page prints "Showing 8 of 25 series, the ones with the largest peaks." A colour belongs to a series name, so a series
+  that moves up or down the ranking keeps its colour.
+- **What a chart has**: a 2px line per series; a legend for two or more series; end dots with a surface ring; direct
+  end labels only when there are four series or fewer and they are 14px apart; a crosshair and one tooltip listing every
+  series (pointer, or the arrow keys when the chart has focus); a table of latest and peak under each chart. A chart
+  with no points says "No data in this range." and draws no axes.
+- **Lines break at gaps**: Prometheus leaves out a time it has no value for, and a line across the hole would show values
+  that were never measured. A run of points more than two steps from the next ends there; a lone point is a dot. I saw
+  the bridged lines in the first render, so this is a bug the first look found, and it has tests.
+- **Colours**: `--series-1` to `--series-8` in `globals.css` for light, dark by system and dark by the toggle. The dataviz
+  validator passed both sets against the page's surfaces (light: worst adjacent colour-blind distance 9.1, normal vision
+  19.6; dark: 8.4 and 19.3). Light mode warns that slots 3, 4 and 5 are below 3:1 contrast against white, which the skill
+  answers with visible labels and a table view; both exist.
+- **Checked**: backend, 3 tests written first (sort, `totalSeries` and `truncated`, the cap); three deliberate breaks
+  (no sort, `truncated` never set, `totalSeries` counting only the kept) each failed the matching test; 428 backend tests
+  pass on a clean build. Frontend, 17 more Vitest tests (the helpers and `fetchMetrics`); five deliberate breaks (range
+  ignored, any range accepted, tie going to the later point, runs never split, a ten-step gap) each failed the matching
+  test; `npm test` 55 pass, lint clean, build lists the route.
+- **Checked live** (rebuilt containers, minted cookies): signed out 404; another account 404; the owner 200 with 20 `svg`s
+  for 6 hours, 1 hour and 24 hours, the pressed range right each time, and `range=9999d` falling back to 6 hours; the
+  backend JSON showed `backend-p95-latency` with 8 of 25 series and `truncated` true, and every other chart with all
+  its series. I also looked at the page in Chrome (a saved copy of the owner's page, dark theme).
+- **Hover**: the owner opened `/watchtower`, hovered a chart and reported that it works (25 Oct 2026). The arrow keys, the
+  light theme and the phone width have not been looked at. My own attempt to test the hover failed: the saved copy of the
+  page cannot run its scripts, and putting a session token into the browser was refused by the permission check.
+- **Seen, not changed**: with a series that ends early, its end label sits at the right edge while its dot is further
+  left. The legend and the tooltip name it, so I left it.
+- **Not done in this slice**: the logs filter (slice 4).
 
 ## What it records about people
 

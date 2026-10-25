@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,15 +34,21 @@ public class WatchtowerMetricsService {
     public record Series(String label, List<List<Number>> points) {
     }
 
-    public record Chart(String id, String title, String unit, List<Series> series) {
+    // totalSeries is how many series Prometheus returned; truncated is true when only the largest were kept.
+    public record Chart(String id, String title, String unit, List<Series> series, int totalSeries, boolean truncated) {
+    }
+
+    private record Found(List<Series> series, int total) {
     }
 
     public record Metrics(boolean available, String range, List<Chart> charts) {
     }
 
     public static final String DEFAULT_RANGE = "6h";
-    // A chart never carries more series than this, so a metric that grows a label cannot flood the page.
-    public static final int MAX_SERIES = 12;
+    // A chart never carries more series than this, so a metric that grows a label cannot flood the page. It is eight
+    // because the page's palette has eight colours that stay apart for colour-blind readers; a ninth would need a
+    // colour that is not distinct. The series kept are the eight with the largest peaks, and the answer says if it cut.
+    public static final int MAX_SERIES = 8;
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     public static final List<Query> QUERIES = List.of(
@@ -89,22 +96,24 @@ public class WatchtowerMetricsService {
         long end = Instant.now().getEpochSecond();
         long start = end - range.seconds;
         // Queried in parallel, so a slow Prometheus costs one timeout and not one per chart.
-        List<CompletableFuture<Optional<List<Series>>>> pending = QUERIES.stream()
+        List<CompletableFuture<Optional<Found>>> pending = QUERIES.stream()
                 .map(query -> CompletableFuture.supplyAsync(() -> fetch(query, start, end, range.step)))
                 .toList();
         List<Chart> charts = new ArrayList<>();
         boolean answered = false;
         for (int i = 0; i < QUERIES.size(); i++) {
-            Optional<List<Series>> result = pending.get(i).join();
+            Optional<Found> result = pending.get(i).join();
             answered |= result.isPresent();
             Query query = QUERIES.get(i);
-            charts.add(new Chart(query.id(), query.title(), query.unit(), result.orElse(List.of())));
+            Found found = result.orElse(new Found(List.of(), 0));
+            charts.add(new Chart(query.id(), query.title(), query.unit(), found.series(), found.total(),
+                    found.total() > found.series().size()));
         }
         return answered ? new Metrics(true, range.label, charts) : new Metrics(false, range.label, List.of());
     }
 
-    // Empty means Prometheus did not answer at all. A present, empty list means it answered with an error or no data.
-    private Optional<List<Series>> fetch(Query query, long start, long end, long step) {
+    // Empty means Prometheus did not answer at all. A Found with no series means it answered with an error or no data.
+    private Optional<Found> fetch(Query query, long start, long end, long step) {
         try {
             URI uri = URI.create(baseUrl + "/api/v1/query_range?query=" + URLEncoder.encode(query.promql(), StandardCharsets.UTF_8)
                     + "&start=" + start + "&end=" + end + "&step=" + step);
@@ -112,22 +121,28 @@ public class WatchtowerMetricsService {
                     HttpRequest.newBuilder(uri).timeout(TIMEOUT).GET().build(), HttpResponse.BodyHandlers.ofString());
             JsonNode body = mapper.readTree(response.body());
             if (!"success".equals(body.path("status").asText())) {
-                return Optional.of(List.of());
+                return Optional.of(new Found(List.of(), 0));
             }
             List<Series> series = new ArrayList<>();
             for (JsonNode result : body.path("data").path("result")) {
-                if (series.size() == MAX_SERIES) {
-                    break;
-                }
                 series.add(new Series(label(query, result.path("metric")), points(result.path("values"))));
             }
-            return Optional.of(series);
+            // Largest peak first, so a cut keeps the series that matter (the slowest routes, the busiest sources).
+            // The sort is stable, so equal peaks keep Prometheus's order.
+            List<Series> kept = series.stream()
+                    .sorted(Comparator.comparingDouble(WatchtowerMetricsService::peak).reversed())
+                    .limit(MAX_SERIES).toList();
+            return Optional.of(new Found(kept, series.size()));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return Optional.empty();
         } catch (Exception e) {
             return Optional.empty();
         }
+    }
+
+    private static double peak(Series series) {
+        return series.points().stream().mapToDouble(point -> point.get(1).doubleValue()).max().orElse(Double.NEGATIVE_INFINITY);
     }
 
     private static String label(Query query, JsonNode metric) {

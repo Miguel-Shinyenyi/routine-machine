@@ -112,13 +112,14 @@ deliberate deviation rather than an oversight.
   `GET /api/organisations/cohorts/{id}/dashboard`, `GET .../dashboard/by-group`,
   `GET .../dashboard/weekly-check-ins`; writes `POST .../survey-response`.
 
-- **Watchtower** (`/watchtower`, observability part 5, owner only, slices 1 and 2 of 4): the owner's operations page. Built so far:
+- **Watchtower** (`/watchtower`, observability part 5, owner only, slices 1 to 3 of 4): the owner's operations page. Built so far:
   the route, the 404 gate, the service health list (`GET /api/watchtower/services`, one card per service: Up, Down or
   Not configured) and the sync table (`GET /api/watchtower/sync`: per source a result chip, failures in a row, last
   success, newest data and the last 24 hours; a note says when Prometheus is not answering). To everyone but the owner, signed in or not, it is the plain Next 404 page: no redirect to `/login`
   and no sidebar link, so the page is not known to exist. `lib/watchtower.ts::fetchServices` turns the backend's 404 into
   `null` (the page then calls `notFound()`) and rethrows every other failure, so an outage is never shown as a 404. The
-  owner reaches it by typing the address. Still to build: the charts and the logs filter. Details and checks:
+  owner reaches it by typing the address. The charts (`components/charts/WatchtowerChart.tsx`, a client component for the hover) sit under a range row of three links
+  (`?range=1h|6h|24h`). Still to build: the logs filter. Details and checks:
   `docs/observability.md`, "Part 5".
 
 `/` redirects to `/today`. The four old paths (`/board`, `/roadmap`, `/backlog`, `/reports`)
@@ -278,6 +279,9 @@ departure from precedent.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-25 | The owner's charts are hand-rolled SVG in `WatchtowerChart`, with the geometry in `lib/chart.ts`, and use eight new `--series-1` to `--series-8` colours | Same reasoning as `GoalHoursChart` (no charting library for line charts). The eight colours are the dataviz skill's validated set for light and dark; the existing three `--goal-line` colours are reserved for the goal chart and are too few for up to eight routes |
+| 2026-10-25 | Chart lines break where more than two steps of time have no point | Prometheus omits a time with no value. A line across the hole draws values that were never measured, which I saw in the first render |
+| 2026-10-25 | A series' colour follows its name, not its rank | The 8 series kept are sorted by peak, so ranks change from one load to the next. A colour tied to rank would repaint a route each time |
 | 2026-10-25 | The sync table shows "—" for failures in a row when the backend has no value, never 0, and "Never" for a missing time | A source that has not run since the backend started is not a source with no failures. Showing 0 would read as healthy. The page also prints a note that failures in a row restart with the backend while last success and the 24-hour counts do not |
 | 2026-10-25 | The watering holes page's map of source labels moved to `lib/sourceLabels.ts` (`measurementSourceLabel`) and the sync table reads it too | The table needs the same six names ("UMWAYI hub", "Health data", and so on). A second copy would let the two pages drift. The page behaves as before |
 | 2026-10-25 | `/watchtower` calls `notFound()` for a signed-out visitor too, with no redirect to `/login`, and has no sidebar link | Prompt 3: everyone but the owner gets a plain 404. A redirect to `/login` would tell a stranger the page exists. The backend already answers 404 for both cases, so the page passes that answer on and holds no owner logic of its own. The owner types the address; a link would show the page to everyone |

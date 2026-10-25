@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { WatchtowerChart } from "@/components/charts/WatchtowerChart";
+import { parseRange, type Range } from "@/lib/chart";
 import { measurementSourceLabel } from "@/lib/sourceLabels";
-import { fetchServices, fetchSync, formatUtc, serviceTone, syncTone, type Tone } from "@/lib/watchtower";
+import { fetchMetrics, fetchServices, fetchSync, formatUtc, serviceTone, syncTone, type Tone } from "@/lib/watchtower";
 
 // Owner-only (docs/observability.md, part 5). No redirect to /login and no link in the sidebar: to anyone but the
 // owner this page does not exist, so a signed-out visitor and a signed-in stranger both get the plain 404 page.
@@ -23,9 +26,16 @@ function failuresInARow(value: number | null): string {
   return value === null ? "—" : String(value);
 }
 
-export default async function WatchtowerPage() {
-  const [services, sync] = await Promise.all([fetchServices(), fetchSync()]);
-  if (services === null || sync === null) {
+const RANGE_LABELS: Record<Range, string> = { "1h": "1 hour", "6h": "6 hours", "24h": "24 hours" };
+
+export default async function WatchtowerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const range = parseRange((await searchParams).range);
+  const [services, sync, metrics] = await Promise.all([fetchServices(), fetchSync(), fetchMetrics(range)]);
+  if (services === null || sync === null || metrics === null) {
     notFound();
   }
 
@@ -35,7 +45,7 @@ export default async function WatchtowerPage() {
         <p className="text-[15px] font-semibold text-tint-text">Watchtower</p>
         <h1 className="page-title">Is everything running.</h1>
         <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
-          Only you can see this page. Health, metrics, logs and sync status will sit here.
+          Only you can see this page.
         </p>
       </div>
 
@@ -54,6 +64,37 @@ export default async function WatchtowerPage() {
             );
           })}
         </div>
+      </section>
+
+      <section aria-labelledby="charts">
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 px-1">
+          <h2 id="charts" className="text-[17px] font-semibold">
+            Charts
+          </h2>
+          <div role="group" aria-label="Time range" className="flex gap-1.5">
+            {(Object.keys(RANGE_LABELS) as Range[]).map((option) => (
+              <Link
+                key={option}
+                href={`/watchtower?range=${option}`}
+                aria-pressed={option === range}
+                className={`chip ${option === range ? "chip-tended" : ""}`}
+              >
+                {RANGE_LABELS[option]}
+              </Link>
+            ))}
+          </div>
+        </div>
+        {!metrics.available ? (
+          <p className="px-1 text-[14px] text-muted">
+            Prometheus is not answering, so there are no charts. The services and sync tables still load.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {metrics.charts.map((chart) => (
+              <WatchtowerChart key={chart.id} chart={chart} />
+            ))}
+          </div>
+        )}
       </section>
 
       <section aria-labelledby="sync">

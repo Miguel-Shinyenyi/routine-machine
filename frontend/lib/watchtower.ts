@@ -1,5 +1,6 @@
 import { ApiError, backendFetch } from "./api";
-import type { WatchtowerService, WatchtowerSync } from "./types";
+import type { Range } from "./chart";
+import type { WatchtowerMetrics, WatchtowerService, WatchtowerSync } from "./types";
 
 type Fetcher = <T>(path: string) => Promise<T>;
 
@@ -23,6 +24,10 @@ export function fetchServices(fetcher: Fetcher = backendFetch): Promise<Watchtow
 
 export function fetchSync(fetcher: Fetcher = backendFetch): Promise<WatchtowerSync | null> {
   return getOrNull<WatchtowerSync>(fetcher, "/api/watchtower/sync");
+}
+
+export function fetchMetrics(range: Range, fetcher: Fetcher = backendFetch): Promise<WatchtowerMetrics | null> {
+  return getOrNull<WatchtowerMetrics>(fetcher, `/api/watchtower/metrics?range=${range}`);
 }
 
 export type Tone = "good" | "bad" | "neutral";

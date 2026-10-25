@@ -24,6 +24,17 @@
   --goal-line-1: #c27a12;
   --goal-line-2: #0066cc;
   --goal-line-3: #1b7332;
+  /* The owner's charts (components/charts/WatchtowerChart.tsx): eight categorical colours in a fixed order, checked
+     with the dataviz validator against --surface in each mode (all checks pass; the light set warns on contrast for
+     slots 3, 4 and 5, which is why every chart also has a legend and a table). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,6 +59,14 @@
     --goal-line-1: #d99232;
     --goal-line-2: #4d9bf0;
     --goal-line-3: #30d158;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
   }
 }
 
@@ -73,6 +92,14 @@
   --goal-line-1: #d99232;
   --goal-line-2: #4d9bf0;
   --goal-line-3: #30d158;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
 }
 
 @theme inline {

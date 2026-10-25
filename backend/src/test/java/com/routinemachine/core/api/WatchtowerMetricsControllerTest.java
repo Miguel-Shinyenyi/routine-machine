@@ -60,6 +60,11 @@ class WatchtowerMetricsControllerTest extends AbstractIntegrationTest {
                     body = matrix("{\"direction\":\"input\"}", "[1792916600,\"NaN\"],[1792916660,\"12.5\"],[1792916720,\"+Inf\"]");
                 } else if (query.contains("credits_events_total") && !query.contains("rule_version")) {
                     body = matrix("{\"status\":\"accepted\"}", "[1792916600,\"3\"],[1792916660,\"4\"]");
+                } else if (query.contains("credits_events_total") && query.contains("rule_version")) {
+                    body = "{\"status\":\"success\",\"data\":{\"resultType\":\"matrix\",\"result\":["
+                            + "{\"metric\":{\"rule_version\":\"v-low\"},\"values\":[[1792916600,\"1\"],[1792916660,\"2\"]]},"
+                            + "{\"metric\":{\"rule_version\":\"v-high\"},\"values\":[[1792916600,\"3\"],[1792916660,\"9\"]]},"
+                            + "{\"metric\":{\"rule_version\":\"v-mid\"},\"values\":[[1792916600,\"5\"],[1792916660,\"4\"]]}]}}";
                 } else if (query.contains("sync_runs_total")) {
                     String many = Stream.iterate(0, i -> i + 1).limit(40)
                             .map(i -> "{\"metric\":{\"source\":\"s" + i + "\",\"outcome\":\"success\"},\"values\":[[1792916600,\"1\"]]}")
@@ -174,5 +179,26 @@ class WatchtowerMetricsControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.charts[?(@.id=='assessment-tokens')].series[0].points[*]").value(hasSize(1)))
                 .andExpect(jsonPath("$.charts[?(@.id=='assessment-tokens')].series[0].points[0][1]").value(12.5))
                 .andExpect(jsonPath("$.charts[?(@.id=='sync-runs')].series[*].label").value(hasSize(WatchtowerMetricsService.MAX_SERIES)));
+    }
+
+    @Test
+    void aChartKeepsTheSeriesWithTheLargestPeaksFirst() throws Exception {
+        mockMvc.perform(get("/api/watchtower/metrics").with(asUser(owner.getId())))
+                .andExpect(jsonPath("$.charts[?(@.id=='credits-by-rule-version')].series[*].label")
+                        .value(org.hamcrest.Matchers.contains("v-high", "v-mid", "v-low")));
+    }
+
+    @Test
+    void aChartSaysHowManySeriesThereWereAndWhetherSomeWereLeftOut() throws Exception {
+        mockMvc.perform(get("/api/watchtower/metrics").with(asUser(owner.getId())))
+                .andExpect(jsonPath("$.charts[?(@.id=='sync-runs')].totalSeries").value(40))
+                .andExpect(jsonPath("$.charts[?(@.id=='sync-runs')].truncated").value(true))
+                .andExpect(jsonPath("$.charts[?(@.id=='credits-by-rule-version')].totalSeries").value(3))
+                .andExpect(jsonPath("$.charts[?(@.id=='credits-by-rule-version')].truncated").value(false));
+    }
+
+    @Test
+    void noChartCarriesMoreSeriesThanThePaletteHasColours() {
+        assertThat(WatchtowerMetricsService.MAX_SERIES).isEqualTo(8);
     }
 }

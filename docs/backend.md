@@ -1153,7 +1153,8 @@ the optional-token chain in `SecurityConfig` (with `/api/hillside/**`) and is li
 `EveryRouteNeedsATokenTest`. Probe addresses are `watchtower.*-url` (env `WATCHTOWER_*_URL`), configuration only.
 `GET /api/watchtower/metrics?range=1h|6h|24h` (`WatchtowerMetricsService`) returns the page's charts from Prometheus
 (`WATCHTOWER_PROMETHEUS_BASE_URL`) using a fixed list of queries that a test keeps equal to the Grafana dashboard's;
-a caller picks only the range. `GET /api/watchtower/logs` (`WatchtowerLogsService`) reads Loki
+a caller picks only the range. A chart carries at most 8 series, the ones with the largest peaks, with `totalSeries` and
+`truncated` so the page can say it cut. `GET /api/watchtower/logs` (`WatchtowerLogsService`) reads Loki
 (`WATCHTOWER_LOKI_BASE_URL`) with a fixed service list and two checked values, a level from a fixed list and an id of plain
 characters; anything else is a 400. `GET /api/watchtower/sync` (`WatchtowerSyncService`) joins each source's switch and
 newest data (`WateringHoleStatusService`, extracted from `WateringHoleStatusController`, which still masks it for

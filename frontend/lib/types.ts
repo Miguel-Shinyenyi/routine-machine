@@ -370,3 +370,20 @@ export interface WatchtowerSync {
   available: boolean;
   sources: WatchtowerSyncSource[];
 }
+
+// The owner's charts. A chart carries at most 8 series, the ones with the largest peaks; totalSeries is how many
+// there were and truncated says some were left out. A point is [seconds since 1970, value].
+export interface WatchtowerChart {
+  id: string;
+  title: string;
+  unit: string;
+  series: { label: string; points: [number, number][] }[];
+  totalSeries: number;
+  truncated: boolean;
+}
+
+export interface WatchtowerMetrics {
+  available: boolean;
+  range: string;
+  charts: WatchtowerChart[];
+}
