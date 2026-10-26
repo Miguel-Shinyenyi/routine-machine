@@ -1223,3 +1223,11 @@ The weekly prompt "Which failure mode did you meet this week?" (`docs/understand
 
 **The day the weekly question starts** (staged Prompt 7, part 6): `users.failure_mode_prompt_day` (migration V32, a `DayOfWeek` name, `MONDAY` until the person chooses). It is part of the Profile: `GET` and `PUT /api/users/me/profile` carry `failureModePromptDay`; a PUT that omits it leaves it alone, and a value that is not a day name (including lower case) is a 400 that changes nothing (`User.changeFailureModePromptDay`). Two tests in `UserControllerApiIntegrationTest`. The backend only stores it; the frontend decides when to show the question (`docs/frontend.md`).
 
+## The author's own day for reading notes (Backlog P, part 3)
+
+A reading note assessed at 70 percent own words or more marks the day's reading routine done (`ReadingNoteService.markReadingDoneToday`). It used `LocalDate.now()`, the server's date, so a note written between midnight and 3 a.m. in Nairobi was logged on the previous day. It now logs the day **in the author's saved time zone** (`User.timeZone`); a book with no owner has no zone and uses UTC.
+
+- **The clock is a parameter.** `ReadingNoteService` takes a `Clock`; `ClockConfig` provides `Clock.systemUTC()` for the application, and a test passes a fixed one. The old tests compared with `LocalDate.now()` and so could fail depending on the hour they ran (the trap noted in the decisions log); they now use a fixed moment.
+- **Tests** (4 new, 9 in `ReadingNoteServiceTest`): a note at 22:30 UTC on Sunday counts for Monday in Nairobi, and for Sunday for a UTC author and a Los Angeles author; an unowned book uses the UTC day; two notes in one personal day, two UTC hours apart across the UTC midnight, make one log. Two deliberate breaks (always UTC; the real clock) failed 1 and 4.
+- **Not changed**: the five sync services still use `LocalDate.now()`; they are owner-only (Backlog P (c)).
+

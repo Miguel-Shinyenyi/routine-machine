@@ -14,7 +14,9 @@ import com.routinemachine.core.repository.RoutineItemRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 // Coordinates ReadingNoteRepository and DailyLogRepository the same way TaskService
@@ -32,16 +34,19 @@ public class ReadingNoteService {
     private final BookRepository bookRepository;
     private final RoutineItemRepository routineItemRepository;
     private final DailyLogRepository dailyLogRepository;
+    private final Clock clock;
 
     public ReadingNoteService(
             ReadingNoteRepository readingNoteRepository,
             BookRepository bookRepository,
             RoutineItemRepository routineItemRepository,
-            DailyLogRepository dailyLogRepository) {
+            DailyLogRepository dailyLogRepository,
+            Clock clock) {
         this.readingNoteRepository = readingNoteRepository;
         this.bookRepository = bookRepository;
         this.routineItemRepository = routineItemRepository;
         this.dailyLogRepository = dailyLogRepository;
+        this.clock = clock;
     }
 
     @Transactional
@@ -74,8 +79,11 @@ public class ReadingNoteService {
 
     // Only the author's own reading routine counts as done, and the day is logged for the author:
     // this used to mark every account's reader-notes routine item.
+    // "Today" is the author's day, in the author's saved time zone, so a note written at 01:00 in Nairobi counts for that day and not for
+    // the server's still-yesterday UTC date (Backlog P). A book with no owner has no zone to ask and uses UTC.
     private void markReadingDoneToday(Long userId, User author) {
-        LocalDate today = LocalDate.now();
+        ZoneId zone = author == null ? ZoneId.of("UTC") : ZoneId.of(author.getTimeZone());
+        LocalDate today = clock.instant().atZone(zone).toLocalDate();
         for (RoutineItem routineItem : routineItemRepository.findBySource(RoutineItemSource.READER_NOTES)) {
             if (!Ownership.ownedBy(routineItem.getUser(), userId)) {
                 continue;
