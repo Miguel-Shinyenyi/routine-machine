@@ -466,6 +466,10 @@ Prompt 6 acceptance check 3: the Prompt 1 walk-through repeated, with screenshot
 - **Tests**: 8 in `lib/userToday.test.ts`. A deliberate break (ignore the zone) failed 3.
 - **Checked** (26 Oct 2026, 05:36 UTC, throwaway account): on `America/Los_Angeles`, Today showed Sunday 25 October and the Path 19 to 25 October; on `Africa/Nairobi`, Monday 26 October. **Not checked**: the Tally's notch and the sidebar count by eye, phone width.
 
+## The Path's week label (Backlog V)
+
+`formatWeekRange(monday)` in `lib/formatDate.ts` gives the label under the Path's heading: "19 to 25 October" inside one month, "26 October to 1 November" when the week crosses a month, and "28 December 2026 to 3 January 2027" when it crosses new year. It used to use only Monday's month for both ends ("26 to 1 October"). It is UTC-based like `formatEyebrowDate`. 5 tests in `lib/formatDate.test.ts`; checked live for the three cases.
+
 ## Analytics (staged Prompt 5, parts 1 to 3 of 6)
 
 Product analytics with PostHog, to learn how people move through the app **without collecting what the app promises to keep
