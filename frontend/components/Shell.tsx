@@ -67,6 +67,15 @@ function NavIcon({ href }: { href: string }) {
   );
 }
 
+// Shown on every page while signed in as the demo account, so nobody mistakes the sample data for a real person's.
+function DemoBanner() {
+  return (
+    <p role="status" className="mb-4 rounded-[12px] px-3 py-2 text-[13px] font-semibold" style={{ background: "rgba(233,162,59,.2)" }}>
+      Sample data. This is a demo account with made-up information. Nothing here is a real person&rsquo;s.
+    </p>
+  );
+}
+
 export function Shell({
   children,
   doneCount,
@@ -75,6 +84,7 @@ export function Shell({
   routineCount,
   connectedCount,
   userEmail,
+  demo,
 }: {
   children: React.ReactNode;
   doneCount: number | null;
@@ -83,6 +93,7 @@ export function Shell({
   routineCount: number | null;
   connectedCount: number | null;
   userEmail: string | null;
+  demo: boolean;
 }) {
   const pathname = usePathname();
   const watchedFor =
@@ -160,7 +171,7 @@ export function Shell({
           </div>
         </aside>
 
-        <main className="mx-auto w-full max-w-[1100px] flex-1 px-5 pb-10 pt-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1100px] flex-1 px-5 pb-10 pt-6">{demo && <DemoBanner />}{children}</main>
       </div>
     );
   }
@@ -240,6 +251,7 @@ export function Shell({
       </aside>
 
       <main className="mx-auto w-full max-w-[1100px] flex-1 px-5 pb-28 pt-6 md:pb-10">
+        {demo && <DemoBanner />}
         {children}
       </main>
 

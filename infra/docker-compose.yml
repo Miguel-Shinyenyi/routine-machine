@@ -96,6 +96,10 @@ services:
       BACKEND_URL: http://backend:8080
       INTELLIGENCE_SERVICE_URL: http://intelligence-service:8000
       # Product analytics (staged Prompt 5, docs/frontend.md "Analytics"). Both empty means analytics is off and no banner shows.
+      # Staged Prompt 6: the opt-in demo profile (docs/frontend.md). Off unless DEMO_PROFILE_ENABLED is true; AUTH_INTERNAL_TOKEN is how
+      # the frontend's server proves to the backend that it may open the demo account.
+      DEMO_PROFILE_ENABLED: ${DEMO_PROFILE_ENABLED:-false}
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN:-}
       POSTHOG_KEY: ${POSTHOG_KEY:-}
       POSTHOG_HOST: ${POSTHOG_HOST:-}
       # Who a visitor should contact about their data, shown on the public privacy page (/privacy). Optional.

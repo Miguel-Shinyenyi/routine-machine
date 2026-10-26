@@ -39,6 +39,7 @@ async function fetchShellContext(): Promise<{
   routineCount: number | null;
   connectedCount: number | null;
   userEmail: string | null;
+  demo: boolean;
 }> {
   const sessionToken = await getSessionToken();
   const userId = await getSessionUserId();
@@ -59,7 +60,7 @@ async function fetchShellContext(): Promise<{
       ? backendFetch<WateringHoleStatus[]>("/api/watering-holes").catch(() => null)
       : Promise.resolve(null),
     sessionToken
-      ? authenticatedBackendFetch<{ email: string }>("/api/users/me", sessionToken).catch(() => null)
+      ? authenticatedBackendFetch<{ email: string; demo?: boolean }>("/api/users/me", sessionToken).catch(() => null)
       : Promise.resolve(null),
   ]);
   return {
@@ -74,6 +75,8 @@ async function fetchShellContext(): Promise<{
     // null when logged out, or when the cookie's token has expired/been tampered with — the
     // sidebar treats both exactly like "not signed in", same as getSessionUserId elsewhere.
     userEmail: me ? me.email : null,
+    // The one flagged sample account (staged Prompt 6): every page says so.
+    demo: me ? me.demo === true : false,
   };
 }
 
@@ -81,7 +84,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const shellContext = await fetchShellContext();
 
   // The signed-in person's internal id, for the analytics service to identify them by (and by nothing else). Null when signed out.
-  const analyticsUserId = await getSessionUserId();
+  // The demo account is never identified: a demonstration is not a person to count.
+  const analyticsUserId = shellContext.demo ? null : await getSessionUserId();
   // Notes a Server Action left after it succeeded (lib/analytics/queue.ts), read again and checked here, then handed to the browser, which
   // sends them only if the visitor accepted. None unless analytics is configured.
   const analyticsOn = analyticsConfigured(process.env.POSTHOG_KEY, process.env.POSTHOG_HOST);

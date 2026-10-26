@@ -205,6 +205,7 @@ export interface CurrentUser {
   email: string;
   displayName: string | null;
   hillsideOptIn: boolean;
+  demo: boolean;
 }
 
 // Phase 9: the credit-based hillside.

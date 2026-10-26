@@ -321,7 +321,7 @@ How the owner-page and API-docs tests are written, so the next one follows the s
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every pull request and every push to `master`: the backend tests (`./mvnw -B test`, Java 21, Testcontainers on the runner's Docker), `pytest` in `intelligence-service/` (Python 3.13) and, in `frontend/`, `npm ci`, `npm run lint`, `npm test` and `npm run build` (Node 20, the image's version). The three jobs run side by side. The same commands were run from a clean state on 25 Oct 2026 (480, 87 and 186 tests passing); **the workflow itself has not run on GitHub yet** (Backlog M in `PROJECT.md`).
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`: the backend tests (`./mvnw -B test`, Java 21, Testcontainers on the runner's Docker), `pytest` in `intelligence-service/` (Python 3.13) and, in `frontend/`, `npm ci`, `npm run lint`, `npm test` and `npm run build` (Node 20, the image's version). The three jobs run side by side. The same commands were run from a clean state on 25 Oct 2026 (480, 87 and 186 tests passing); **the workflow itself has not run on GitHub yet** (Backlog M in `PROJECT.md`).
 
 ## Decisions log
 

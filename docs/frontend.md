@@ -414,6 +414,16 @@ departure from precedent.
 - **Known rough edge**: typing a bad zone on Profile now shows the app's error page ("This page couldn't load") instead of a message. Nothing is saved and the Granary still loads. A friendly message is not built (Backlog L).
 - **Checked** (25 Oct 2026, Chrome, throwaway account): Path empty banner; typing an existing goal name shows the message and disables Add; adding a new goal lists it and clears the box; a bad zone on Profile gave the error page and the Granary still loaded. **Not checked**: Flock's other empty texts and Tally's in a browser (strings only, built and linted), phone width.
 
+## Demo profile, frontend (staged Prompt 6, part 10)
+
+The backend half is in `docs/backend.md`, "Demo profile". **Off by default**: the frontend reads `DEMO_PROFILE_ENABLED` (exactly `true` turns it on, `lib/demo.ts`) and needs `AUTH_INTERNAL_TOKEN` to ask the backend.
+
+- **The button.** With the flag on, `/login` shows a "Try the demo" box ("Open a demo with made-up sample data. Nothing in it is real"). It submits `demoLoginAction` (`lib/auth/actions.ts`), which asks the backend to open the account with the internal token, then starts an ordinary session. `openDemo` (`lib/demo.ts`, 6 tests) returns null, and the person goes back to `/login?demo=unavailable` with a note, when the demo is off, the token is missing, the backend fails, **or the account is not flagged `demo`**. That last check means this route can never sign a real person in.
+- **The label.** While signed in as the demo account, every page shows "Sample data. This is a demo account with made-up information. Nothing here is a real person's." (`DemoBanner` in `components/Shell.tsx`, fed by `demo` from `/api/users/me`).
+- **Analytics skip it.** The demo account is never identified (`app/layout.tsx` passes no user id), so a demonstration is not counted as a person. A demo visitor still gets the same consent banner as anyone.
+- **Checked** (26 Oct 2026, Chrome on `127.0.0.1`, flag on for one run then restored): with the flag off `/login` had no demo button and `demo-login` answered 404; with it on the button showed, clicking it landed on `/today` with the sample routines and the banner text above, and signing out worked. 209 frontend tests pass, tsc and lint clean. **Not checked**: phone width, the light theme, the banner on pages other than Today, the "unavailable" note (unit-tested path, not clicked), the demo with analytics accepted.
+- **Not built**: a way to delete the demo account, and to reset its data to a clean state.
+
 ## Analytics (staged Prompt 5, parts 1 to 3 of 6)
 
 Product analytics with PostHog, to learn how people move through the app **without collecting what the app promises to keep
