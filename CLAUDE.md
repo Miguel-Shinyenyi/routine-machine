@@ -4,7 +4,7 @@ Claude Code reads this file at the start of every task. Practices that apply to 
 
 ## Read in this order
 
-1. `PROJECT.md`. Stack, phases, status log, and the rules for working here.
+1. `PROJECT.md`. Stack, phases and the rules for working here. The status log is in `docs/status-log.md`; read it only when a task needs history.
 2. `docs/DOCS_MAINTENANCE.md`. How every doc gets written and updated.
 3. Only the doc for the component you are touching.
 
