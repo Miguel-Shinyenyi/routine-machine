@@ -7,6 +7,8 @@ import { getSessionToken, requireSessionUserId } from "@/lib/auth/session";
 import { decidePause, reflectPause } from "@/lib/actions";
 import type { AnalogyResponse, Goal, Patterns, PauseDecision, Profile, RoutineItem, ScheduleTemplate, Suggestion, Tally } from "@/lib/types";
 import { firstStep } from "@/lib/firstStep";
+import { reminderFor } from "@/lib/reminders";
+import { loadReminders } from "@/lib/remindersFile";
 import { TaskCard } from "@/components/TaskCard";
 
 // Inline placeholder, same role as docs/design-reference/README.md's "Not in the reference":
@@ -84,6 +86,7 @@ export default async function TodayPage(props: PageProps<"/today">) {
 
   const maxGoalHours = Math.max(1, ...Array.from(latestHoursByGoal.values()));
   const lastWandered = patterns?.skipHeavyDays.at(-1);
+  const reminder = reminderFor(await loadReminders(), date);
   const nextStep = firstStep({ routineItemCount: routineItems.length, scheduleTemplateCount: scheduleTemplates.length });
 
   return (
@@ -92,6 +95,11 @@ export default async function TodayPage(props: PageProps<"/today">) {
         <div className="min-w-0 flex-1 basis-[420px]">
           <p className="text-[15px] font-semibold text-tint-text">{formatEyebrowDate(date)}</p>
           <h1 className="page-title">Today&rsquo;s pasture.</h1>
+          {reminder && (
+            <p className="mt-2 max-w-[62ch] text-[15px] italic text-tint-text" data-testid="daily-reminder">
+              {reminder}
+            </p>
+          )}
           <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
             {tasks.length === 0
               ? "Nothing scheduled yet. The tally keeps every one you tend."

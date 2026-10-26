@@ -13,6 +13,8 @@ WORKDIR /app
 COPY --from=build --chown=app:app /build/.next/standalone ./
 COPY --from=build --chown=app:app /build/.next/static ./.next/static
 COPY --from=build --chown=app:app /build/public ./public
+# The editable daily reminders (lib/remindersFile.ts reads it at run time).
+COPY --from=build --chown=app:app /build/content ./content
 USER app
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0

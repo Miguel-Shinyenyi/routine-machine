@@ -438,6 +438,14 @@ Prompt 6 acceptance check 3: the Prompt 1 walk-through repeated, with screenshot
 
 **What this does not prove**: the "before" ran on made-up rows, not the real data; items c, d and e have no before image; the "after" screenshots are from this session's code (`4d24402` and later).
 
+## The daily reminder on Today (staged Prompt 7, part 2)
+
+- **One reminder a day, rotated by date.** `lib/reminders.ts` (11 tests): `reminderFor(list, "YYYY-MM-DD")` returns the same reminder all day, the next one tomorrow, and wraps after the last. The day number comes from UTC, so a time zone or daylight saving can never skip or repeat a day; a date that is not real gives no reminder. The reminder follows the date Today is showing, so "Previous day" and "Next day" show that day's reminder.
+- **The text is a file you edit.** `frontend/content/reminders.txt`: one reminder per line, blank lines and lines starting with `#` ignored. It ships with the ten reminders from the staged prompt, in order. A test pins those ten and refuses an empty, over-long (more than 200 characters) or em-dash reminder. To change it: edit the file, then `docker compose build frontend` and `up -d frontend`. No code changes. The image copies the file beside the server (`frontend/Dockerfile`) and `lib/remindersFile.ts` reads it on each request; a missing file means no reminder, never a broken page.
+- **Where it shows.** An italic line under the page title on `/today` (`data-testid="daily-reminder"`).
+- **Checked** (26 Oct 2026, Chrome, throwaway account on `127.0.0.1`): Today showed the third reminder; `?date=2026-10-27` showed the fourth and `?date=2026-10-25` the second, so the order moves one a day. Screenshot: `docs/screenshots/today-reminder.jpg`. A deliberate break (always the first reminder) failed 3 tests. 220 frontend tests, tsc and lint pass. **Not checked**: phone width, the light theme, a missing or empty file in the running image, editing the file in a live container.
+- **"By date and necessity"**: the request said the rotation should follow date "and necessity". I built date only (the prompt's own rule) and have not guessed what "necessity" would add.
+
 ## Analytics (staged Prompt 5, parts 1 to 3 of 6)
 
 Product analytics with PostHog, to learn how people move through the app **without collecting what the app promises to keep
