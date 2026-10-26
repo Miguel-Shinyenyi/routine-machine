@@ -424,6 +424,20 @@ The backend half is in `docs/backend.md`, "Demo profile". **Off by default**: th
 - **Checked** (26 Oct 2026, Chrome on `127.0.0.1`, flag on for one run then restored): with the flag off `/login` had no demo button and `demo-login` answered 404; with it on the button showed, clicking it landed on `/today` with the sample routines and the banner text above, and signing out worked. 209 frontend tests pass, tsc and lint clean. **Not checked**: phone width, the light theme, the banner on pages other than Today, the "unavailable" note (unit-tested path, not clicked), the demo with analytics accepted.
 - **Not built**: a way to delete the demo account, and to reset its data to a clean state.
 
+## The walk-through, before and after (staged Prompt 6, part 11)
+
+Prompt 6 acceptance check 3: the Prompt 1 walk-through repeated, with screenshots before and after. **How the "before" was made**: I exported the commit just before per-user scoping began (`a75a1c5^`, the code the walk-through ran on), built it as a separate Docker project on other ports, and gave it three sample routines on today's schedule through its open API. **The sample rows are mine, not the founder's real data.** The old stack and its volume were removed afterwards.
+
+| Item | Before (`docs/screenshots/`) | After |
+|---|---|---|
+| a. Signed-out visitor | `before-signed-out-today.jpg`: `/today` answers 200 and shows the schedule ("item 1, 2, 3") to anyone; the old API also returned the routines to a request with no token | `after-signed-out-today.jpg`: `/today` redirects to `/login`; the API answers 401 |
+| b. A brand-new account | `before-new-account-today.jpg` and `before-new-account-flock.jpg`: a just-registered account sees the three routines, "3 routines, 3 goals", and no first step | `today-first-step.jpg`: an empty Today with "Add your first routine" and a button; `today.jpg` is the same account after a few routines |
+| c. No goal creation in the UI | not shown (nothing to screenshot) | Flock has a Goals section (part 4); checked live |
+| d. Tapping a task changes it for everyone | not re-reproduced | not re-tapped; covered by the access-control tests |
+| e. Time zone defaults to UTC | not shown | a new account starts on the browser's zone (part 3); checked live |
+
+**What this does not prove**: the "before" ran on made-up rows, not the real data; items c, d and e have no before image; the "after" screenshots are from this session's code (`4d24402` and later).
+
 ## Analytics (staged Prompt 5, parts 1 to 3 of 6)
 
 Product analytics with PostHog, to learn how people move through the app **without collecting what the app promises to keep
