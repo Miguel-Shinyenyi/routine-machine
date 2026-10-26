@@ -208,7 +208,10 @@ def test_no_metric_or_log_line_carries_the_note_text(monkeypatch, caplog):
         client.post("/reading-notes/assess", json=_NOTE)
 
     exposed = generate_latest().decode() + " ".join(str(r.__dict__) + r.getMessage() for r in caplog.records)
-    assert "mum" not in exposed and "5000 shillings" not in exposed and "Some Book" not in exposed
+    # Whole phrases, not the bare word "mum": a Linux host adds process metrics whose help text says "Maximum", which holds
+    # "mum" and made this fail on GitHub's runner while passing on a Mac.
+    for private in ("private thought", "my mum", "5000 shillings", "Some Book"):
+        assert private not in exposed, private
 
 
 # --- Observability, part 4c: when tracing is on, the trace id is on every log line of the traced request, so a
