@@ -123,6 +123,30 @@ Evidence of activity is not evidence of quality, understanding or outcome.
 
 The product says this plainly wherever it shows a number.
 
+## Toward producing work (proposed, not decided)
+
+**Today the product tracks and guides. It does not produce work.** It records what a person did, counts it honestly, explains it, and suggests a next step. Nothing in it helps a person make a thing, and nothing checks that a thing is good. This section is a proposal for what could come next. Nothing here is built, and none of it is decided.
+
+**Why consider it.** The principle above says activity is not quality. A learner who logs thirty days of reading has a streak of evidence, not a piece of work they can show. For developers and bootcamp learners, the missing piece is a thing made, with a record of how it was checked.
+
+**The proposal, in four parts.**
+
+1. **Outcome goals with deliverables and acceptance criteria.** A goal says what will exist, not only how often the person works on it. For example: "A small API that returns the week's tally." Each deliverable lists how anyone can tell it is done: a test that passes, a page that loads, a reviewer's yes. The person writes the criteria before the work starts.
+2. **An artifact record.** When something is made, the person records it: what it is, where it lives (a repository link, a file), which checks were run and their real output, and who approved it. The record keeps the checks, not only the claim. An approval names a person or a rule. It is never implied.
+3. **One workflow for developers and bootcamp learners.** The same four steps for both: state the outcome and its criteria, make the thing, run the checks, record the artifact. A training programme sees only counts of artifacts approved, never the artifacts or what is in them, in line with how the cohort dashboard already works.
+4. **An explain-back note before any artifact counts.** The person writes, in their own words, what the thing does and why it works, and what they would change. This reuses the reader's-notes idea: an assessment against stated criteria, not a proof of understanding. An artifact the person cannot explain does not count toward a goal. This keeps the product from rewarding work an assistant wrote and the person never understood.
+
+**What this would not do.** It would not generate the work. It would not score quality with a single number. It would not feed the hillside by default: whether artifacts earn hillside credit is an open decision, and the default is no.
+
+**Open questions for the founder.**
+
+| Question | Starting position |
+|---|---|
+| Is "producing work" in scope for the first training-programme pilot, or after it? | After the pilot's four measures have real data |
+| Who approves an artifact when the person works alone? | The person, labelled "self-approved", and never counted as approved by a reviewer |
+| Does the explain-back note use the existing model assessment, or a person? | The existing assessment, shown as an assessment, with the person able to question it |
+| Where do artifacts live? | Links only at first. The app stores no code or files (file storage is a later item) |
+
 ## Open decisions
 
 | Question | Starting position |

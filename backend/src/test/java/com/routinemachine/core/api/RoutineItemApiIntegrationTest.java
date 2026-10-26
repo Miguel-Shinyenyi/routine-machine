@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -23,6 +24,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
+    private com.routinemachine.core.repository.UserRepository userRepository;
+
+    private com.routinemachine.core.domain.User me;
+
+    @org.junit.jupiter.api.BeforeEach
+    void signInAsANewUser() {
+        me = userRepository.save(new com.routinemachine.core.domain.User(
+                "RoutineItemApiIntegrationTest-" + System.nanoTime() + "@example.com", "irrelevant-hash", null, null));
+    }
+
+    // A goal this test's user owns. The seeded goals belong to nobody and the API never shows those.
+    private com.routinemachine.core.domain.Goal myGoal(String name) {
+        return goalRepository.save(new com.routinemachine.core.domain.Goal(name, null, me));
+    }
+
+    private com.routinemachine.core.domain.RoutineItem myItem(String name) {
+        com.routinemachine.core.domain.RoutineItem item = new com.routinemachine.core.domain.RoutineItem(name, null);
+        item.assignUser(me);
+        return routineItemRepository.save(item);
+    }
+
+    @Autowired
     private MockMvc mockMvc;
 
     @Autowired
@@ -33,7 +56,7 @@ class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void createsARoutineItemAndReturnsIt() throws Exception {
-        mockMvc.perform(post("/api/routine-items")
+        mockMvc.perform(post("/api/routine-items").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "journaling", "description": "Daily journal entry"}
@@ -49,9 +72,9 @@ class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void createsAFullyCategorisedRoutineItemLinkedToAGoal() throws Exception {
-        var goal = goalRepository.findFirstByName("ai-engineer-evidence").orElseThrow();
+        var goal = myGoal("ai-engineer-evidence");
 
-        mockMvc.perform(post("/api/routine-items")
+        mockMvc.perform(post("/api/routine-items").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "deep work", "category": "WORK", "countRule": "30 active minutes",
@@ -70,7 +93,7 @@ class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void rejectsARoutineItemWithAnUnknownGoalId() throws Exception {
-        mockMvc.perform(post("/api/routine-items")
+        mockMvc.perform(post("/api/routine-items").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "deep work", "goalId": 999999}
@@ -80,7 +103,7 @@ class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void rejectsARoutineItemWithNoName() throws Exception {
-        mockMvc.perform(post("/api/routine-items")
+        mockMvc.perform(post("/api/routine-items").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"description": "missing a name"}
@@ -90,9 +113,9 @@ class RoutineItemApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void listsAllRoutineItems() throws Exception {
-        routineItemRepository.save(new RoutineItem("exercise", null));
+        myItem("exercise");
 
-        mockMvc.perform(get("/api/routine-items"))
+        mockMvc.perform(get("/api/routine-items").with(asUser(me.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].name", hasItem("exercise")))
                 .andExpect(jsonPath("$[0].createdAt").exists());

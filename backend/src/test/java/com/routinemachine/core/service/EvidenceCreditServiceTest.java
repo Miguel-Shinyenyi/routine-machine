@@ -197,6 +197,32 @@ class EvidenceCreditServiceTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void lateStudyBeforeTheConfiguredDayEndHourStillCountsForThePreviousDay() {
+        User user = saveUserInZone("late-study@example.com", "Africa/Nairobi");
+        user.updateProfile(null, null, null, null, 3, null, null);
+        Goal goal = saveGoal("late-study-goal");
+        // 00:30 EAT on the 17th, before the 3am day-end hour: still counts as the 16th.
+        Instant occurredAt = Instant.parse("2026-10-16T21:30:00Z");
+
+        EvidenceEvent event = service().ingest(user, goal, DailyLogSource.MANUAL, "late-study-1", occurredAt, null);
+
+        assertThat(event.getLocalDate()).isEqualTo(LocalDate.of(2026, 10, 16));
+    }
+
+    @Test
+    void studyAtOrAfterTheConfiguredDayEndHourCountsForTheNewDay() {
+        User user = saveUserInZone("after-day-end@example.com", "Africa/Nairobi");
+        user.updateProfile(null, null, null, null, 3, null, null);
+        Goal goal = saveGoal("after-day-end-goal");
+        // 03:30 EAT on the 17th, at/after the 3am day-end hour: counts as the 17th.
+        Instant occurredAt = Instant.parse("2026-10-17T00:30:00Z");
+
+        EvidenceEvent event = service().ingest(user, goal, DailyLogSource.MANUAL, "after-day-end-1", occurredAt, null);
+
+        assertThat(event.getLocalDate()).isEqualTo(LocalDate.of(2026, 10, 17));
+    }
+
+    @Test
     void evidenceBelowTheMinuteThresholdIsRejectedAndEarnsNoCredit() {
         User user = saveUser("rejected@example.com");
         Goal goal = saveGoal("rejected-goal");

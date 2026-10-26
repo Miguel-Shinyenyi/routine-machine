@@ -1,14 +1,25 @@
 import os
-from datetime import date
+import time
+from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse
+from observability import (
+    ASSESSMENT_DURATION, ASSESSMENT_REQUESTS, HEADER as REQUEST_ID_HEADER, RequestObservabilityMiddleware,
+    configure_logging, record_assessment_usage, request_id_var, start_metrics_server,
+)
 from pydantic import BaseModel
 
+from api_docs import start_docs_server_from_env
+from analogy import Analogy, AnalogyParseError, ANALOGY_SYSTEM_PROMPT
+from analogy import build_user_message as build_analogy_user_message
+from analogy import parse_analogy_response
 from assess_note import AssessmentParseError, build_user_message, parse_assessment_response, ASSESSMENT_SYSTEM_PROMPT
 from patterns import compute_patterns
 from suggestion import NoTopicsAvailableError, choose_suggestion
 from tally import compute_tally
+from user_today import user_today
 
 BACKEND_BASE_URL = os.environ.get("BACKEND_BASE_URL", "http://localhost:8080")
 ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
@@ -16,7 +27,22 @@ ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic
 # rather than a code change if that stops being true.
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-5-5")
 
-app = FastAPI(title="Routine Machine Intelligence Service")
+configure_logging()
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    start_metrics_server()
+    start_docs_server_from_env(_app)
+    yield
+
+
+# FastAPI's own documentation is off on this (published) port; api_docs.py serves the spec on an internal one.
+app = FastAPI(
+    title="Routine Machine Intelligence Service", lifespan=lifespan,
+    docs_url=None, redoc_url=None, openapi_url=None,
+)
+app.add_middleware(RequestObservabilityMiddleware)
 
 
 class GoalView(BaseModel):
@@ -112,26 +138,58 @@ class ReadingNoteAssessmentResponse(BaseModel):
     questionBack: str
 
 
-@app.get("/health")
+class AnalogyRequest(BaseModel):
+    topic: str
+    interest: str
+
+
+class AnalogyResponse(BaseModel):
+    topic: str
+    interest: str
+    analogy: str
+    definition: str
+    label: str = "analogy"
+
+
+# Phase 10: cached per (topic, interest) so the same pairing is never billed or waited on
+# twice — see docs/product-direction.md's Profile section. Process-lifetime only, no backend
+# storage: an analogy is reproducible from its inputs alone, so nothing is lost on restart.
+_ANALOGY_CACHE: dict[tuple[str, str], Analogy] = {}
+
+
+@app.get("/health", summary="Check that the service is running")
 def health():
     return {"status": "ok"}
 
 
-def _unowned(records: list[dict]) -> list[dict]:
-    # This service has no concept of "current user" (see docs/intelligence-service.md): it
-    # computes suggestions/patterns/tally for the one legacy, single-user world, the same
-    # unowned (userId None) data Flock and Watering holes already restrict themselves to.
-    # Without this filter, Phase 8's hillside demo users' routine items/daily logs would get
-    # mixed into every computation here too.
-    return [r for r in records if r.get("userId") is None]
+@app.exception_handler(httpx.HTTPStatusError)
+def _backend_refused(request, exc: httpx.HTTPStatusError):
+    # The backend said no to the token (or to its absence). Say the same, not "server error".
+    if exc.response.status_code in (401, 403):
+        return JSONResponse(status_code=exc.response.status_code, content={"detail": "Not signed in"})
+    return JSONResponse(status_code=502, content={"detail": "The backend answered with an error"})
 
 
-@app.get("/suggestion", response_model=SuggestionResponse)
-def suggestion():
-    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
-        goals = _unowned(client.get("/api/goals").raise_for_status().json())
+def _backend_headers(authorization: str | None) -> dict:
+    # Access control, part 2 (docs/intelligence-service.md): the backend learns who is asking from
+    # the caller's signed token, so this service passes on the one it was given and never makes one.
+    headers = {}
+    request_id = request_id_var.get()
+    if request_id:
+        # So one request can be followed from here into the backend's logs.
+        headers[REQUEST_ID_HEADER] = request_id
+    if authorization:
+        headers["Authorization"] = authorization
+    return headers
+
+
+@app.get("/suggestion", response_model=SuggestionResponse, summary="Suggest the next learning topic and why")
+def suggestion(authorization: str | None = Header(default=None)):
+    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
+        goals = client.get("/api/goals").raise_for_status().json()
+        # A topic belongs to whoever owns its goal; the backend scopes it, the rows carry no userId.
         topics = client.get("/api/learning-topics").raise_for_status().json()
-        logs = _unowned(client.get("/api/daily-logs").raise_for_status().json())
+        logs = client.get("/api/daily-logs").raise_for_status().json()
 
     try:
         result = choose_suggestion(goals, topics, logs)
@@ -146,13 +204,14 @@ def suggestion():
     )
 
 
-@app.get("/patterns", response_model=PatternsResponse)
-def patterns():
-    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
-        routine_items = _unowned(client.get("/api/routine-items").raise_for_status().json())
-        logs = _unowned(client.get("/api/daily-logs").raise_for_status().json())
+@app.get("/patterns", response_model=PatternsResponse, summary="Find completion rates, streaks and skip-heavy days")
+def patterns(authorization: str | None = Header(default=None)):
+    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
+        routine_items = client.get("/api/routine-items").raise_for_status().json()
+        logs = client.get("/api/daily-logs").raise_for_status().json()
+        today = user_today(client, authorization)
 
-    result = compute_patterns(routine_items, logs, today=date.today())
+    result = compute_patterns(routine_items, logs, today=today)
 
     return PatternsResponse(
         completionRates=[
@@ -185,15 +244,19 @@ def patterns():
     )
 
 
-@app.get("/tally", response_model=TallyResponse)
-def tally(windowDays: int = 28, sinceStart: bool = False):
-    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0) as client:
-        routine_items = _unowned(client.get("/api/routine-items").raise_for_status().json())
+@app.get("/tally", response_model=TallyResponse, summary="Build the tally stick, hours per goal and routine meters")
+def tally(
+    windowDays: int = 28, sinceStart: bool = False,
+    authorization: str | None = Header(default=None),
+):
+    with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
+        routine_items = client.get("/api/routine-items").raise_for_status().json()
         learning_topics = client.get("/api/learning-topics").raise_for_status().json()
-        logs = _unowned(client.get("/api/daily-logs").raise_for_status().json())
+        logs = client.get("/api/daily-logs").raise_for_status().json()
+        today = user_today(client, authorization)
 
     result = compute_tally(
-        routine_items, learning_topics, logs, today=date.today(), window_days=windowDays,
+        routine_items, learning_topics, logs, today=today, window_days=windowDays,
         since_start=sinceStart)
 
     return TallyResponse(
@@ -213,14 +276,78 @@ def tally(windowDays: int = 28, sinceStart: bool = False):
     )
 
 
-@app.post("/reading-notes/assess", response_model=ReadingNoteAssessmentResponse)
+@app.post("/reading-notes/assess", response_model=ReadingNoteAssessmentResponse, summary="Assess a reading note against the book with the model")
 def assess_reading_note(request: ReadingNoteAssessmentRequest):
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
+        ASSESSMENT_REQUESTS.labels("unavailable").inc()
         raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not set, reading note assessment is unavailable")
 
     user_message = build_user_message(
         request.noteText, request.bookTitle, request.currentChapter, request.totalChapters)
+
+    outcome = "upstream_error"
+    started = time.perf_counter()
+    try:
+        with httpx.Client(base_url=ANTHROPIC_BASE_URL, timeout=30.0) as client:
+            response = client.post(
+                "/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": ANTHROPIC_MODEL,
+                    "max_tokens": 1024,
+                    "system": ASSESSMENT_SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": user_message}],
+                },
+            )
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=502, detail=f"Anthropic API request failed: {response.status_code} {response.text}",
+            ) from exc
+        body = response.json()
+        record_assessment_usage(body.get("usage"))
+        raw_text = "".join(block["text"] for block in body["content"] if block["type"] == "text")
+
+        outcome = "unparseable"
+        try:
+            result = parse_assessment_response(raw_text)
+        except AssessmentParseError as exc:
+            raise HTTPException(status_code=502, detail=f"could not parse the assessment: {exc}") from exc
+        outcome = "success"
+    finally:
+        ASSESSMENT_REQUESTS.labels(outcome).inc()
+        ASSESSMENT_DURATION.observe(time.perf_counter() - started)
+
+    return ReadingNoteAssessmentResponse(
+        chapterPlaced=result.chapter_placed,
+        ownWordsPercentage=result.own_words_percentage,
+        ideasConnected=result.ideas_connected,
+        quotedPhrases=result.quoted_phrases,
+        questionBack=result.question_back,
+    )
+
+
+@app.post("/analogy", response_model=AnalogyResponse, summary="Explain a learning topic through one of the person's interests")
+def explain_with_analogy(request: AnalogyRequest):
+    cache_key = (request.topic.strip().lower(), request.interest.strip().lower())
+    cached = _ANALOGY_CACHE.get(cache_key)
+    if cached is not None:
+        return AnalogyResponse(
+            topic=request.topic, interest=request.interest,
+            analogy=cached.analogy, definition=cached.definition,
+        )
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY is not set, analogies are unavailable")
+
+    user_message = build_analogy_user_message(request.topic, request.interest)
 
     with httpx.Client(base_url=ANTHROPIC_BASE_URL, timeout=30.0) as client:
         response = client.post(
@@ -232,8 +359,8 @@ def assess_reading_note(request: ReadingNoteAssessmentRequest):
             },
             json={
                 "model": ANTHROPIC_MODEL,
-                "max_tokens": 1024,
-                "system": ASSESSMENT_SYSTEM_PROMPT,
+                "max_tokens": 512,
+                "system": ANALOGY_SYSTEM_PROMPT,
                 "messages": [{"role": "user", "content": user_message}],
             },
         )
@@ -246,14 +373,13 @@ def assess_reading_note(request: ReadingNoteAssessmentRequest):
     raw_text = "".join(block["text"] for block in response.json()["content"] if block["type"] == "text")
 
     try:
-        result = parse_assessment_response(raw_text)
-    except AssessmentParseError as exc:
-        raise HTTPException(status_code=502, detail=f"could not parse the assessment: {exc}") from exc
+        result = parse_analogy_response(raw_text)
+    except AnalogyParseError as exc:
+        raise HTTPException(status_code=502, detail=f"could not parse the analogy: {exc}") from exc
 
-    return ReadingNoteAssessmentResponse(
-        chapterPlaced=result.chapter_placed,
-        ownWordsPercentage=result.own_words_percentage,
-        ideasConnected=result.ideas_connected,
-        quotedPhrases=result.quoted_phrases,
-        questionBack=result.question_back,
+    _ANALOGY_CACHE[cache_key] = result
+
+    return AnalogyResponse(
+        topic=request.topic, interest=request.interest,
+        analogy=result.analogy, definition=result.definition,
     )

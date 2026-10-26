@@ -9,6 +9,8 @@ import com.routinemachine.core.domain.RoutineItemSource;
 import com.routinemachine.core.repository.DailyLogRepository;
 import com.routinemachine.core.repository.MeasurementRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
+import com.routinemachine.core.repository.UserRepository;
+import com.routinemachine.core.service.OwnerAccount;
 import com.routinemachine.core.service.MeasurementService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,10 +32,12 @@ class GitHubSyncServiceTest extends AbstractIntegrationTest {
 
     @Autowired
     private MeasurementRepository measurementRepository;
+    @Autowired
+    private UserRepository userRepository;
 
     private GitHubSyncService service(GitHubCommitClient client) {
         return new GitHubSyncService(
-                client, routineItemRepository, dailyLogRepository, new MeasurementService(measurementRepository));
+                client, routineItemRepository, dailyLogRepository, new MeasurementService(measurementRepository), new OwnerAccount(userRepository, ""));
     }
 
     private static class FakeGitHubCommitClient implements GitHubCommitClient {

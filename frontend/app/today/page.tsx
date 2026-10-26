@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { materializeDay } from "@/lib/materialize";
-import { todayIsoDate } from "@/lib/schedule";
+import { getUserToday } from "@/lib/auth/userToday";
 import { formatEyebrowDate } from "@/lib/formatDate";
-import { backendFetch, intelligenceFetch } from "@/lib/api";
-import type { Goal, Patterns, RoutineItem, Suggestion, Tally } from "@/lib/types";
+import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
+import { getSessionToken, requireSessionUserId } from "@/lib/auth/session";
+import { decidePause, reflectPause } from "@/lib/actions";
+import type { AnalogyResponse, Goal, Patterns, PauseDecision, Profile, RoutineItem, ScheduleTemplate, Suggestion, Tally } from "@/lib/types";
+import { firstStep } from "@/lib/firstStep";
+import { chooseReminder, missedRecently } from "@/lib/reminders";
+import { loadReminders } from "@/lib/remindersFile";
+import { WeeklyFailureModeCard } from "@/components/WeeklyFailureModeCard";
+import type { FailureModeCurrent } from "@/lib/failureModes";
 import { TaskCard } from "@/components/TaskCard";
 
 // Inline placeholder, same role as docs/design-reference/README.md's "Not in the reference":
@@ -30,17 +37,38 @@ function adjacentDate(isoDate: string, deltaDays: number): string {
 
 export default async function TodayPage(props: PageProps<"/today">) {
   const searchParams = await props.searchParams;
+  await requireSessionUserId();
   const rawDate = searchParams.date;
-  const date = typeof rawDate === "string" ? rawDate : todayIsoDate();
+  const date = typeof rawDate === "string" ? rawDate : await getUserToday();
 
-  const [tasks, routineItems, goals, suggestion, tally, patterns] = await Promise.all([
+  const sessionToken = await getSessionToken();
+  const profile = sessionToken
+    ? await authenticatedBackendFetch<Profile>("/api/users/me/profile", sessionToken).catch(() => null)
+    : null;
+
+  const [tasks, routineItems, goals, scheduleTemplates, suggestion, tally, patterns, duePauses, failureMode] = await Promise.all([
     materializeDay(date),
     backendFetch<RoutineItem[]>("/api/routine-items"),
     backendFetch<Goal[]>("/api/goals"),
+    backendFetch<ScheduleTemplate[]>("/api/schedule-templates"),
     intelligenceFetch<Suggestion>("/suggestion").catch(() => null),
     intelligenceFetch<Tally>("/tally").catch(() => null),
     intelligenceFetch<Patterns>("/patterns").catch(() => null),
+    backendFetch<PauseDecision[]>("/api/granary/pauses/due").catch(() => []),
+    backendFetch<FailureModeCurrent>("/api/failure-modes/current").catch(() => null),
   ]);
+
+  // Phase 10: explained through the first interest the user picked on their Profile page,
+  // only when they've left the switch on and a topic actually exists to explain — see
+  // docs/product-direction.md's Profile section.
+  const analogyInterest = profile?.analogiesEnabled ? profile.interests?.[0] : undefined;
+  const analogy =
+    analogyInterest && suggestion
+      ? await intelligenceFetch<AnalogyResponse>("/analogy", {
+          method: "POST",
+          body: JSON.stringify({ topic: suggestion.topic.name, interest: analogyInterest }),
+        }).catch(() => null)
+      : null;
 
   const routineItemById = new Map(routineItems.map((item) => [item.id, item]));
   const doneCount = tasks.filter((t) => t.status === "DONE").length;
@@ -61,6 +89,13 @@ export default async function TodayPage(props: PageProps<"/today">) {
 
   const maxGoalHours = Math.max(1, ...Array.from(latestHoursByGoal.values()));
   const lastWandered = patterns?.skipHeavyDays.at(-1);
+  const reminders = await loadReminders();
+  const reminder = chooseReminder({
+    ...reminders,
+    isoDate: date,
+    missed: tally ? missedRecently(tally.daysShownUp, date) : false,
+  });
+  const nextStep = firstStep({ routineItemCount: routineItems.length, scheduleTemplateCount: scheduleTemplates.length });
 
   return (
     <div>
@@ -68,6 +103,11 @@ export default async function TodayPage(props: PageProps<"/today">) {
         <div className="min-w-0 flex-1 basis-[420px]">
           <p className="text-[15px] font-semibold text-tint-text">{formatEyebrowDate(date)}</p>
           <h1 className="page-title">Today&rsquo;s pasture.</h1>
+          {reminder && (
+            <p className="mt-2 max-w-[62ch] text-[15px] italic text-tint-text" data-testid="daily-reminder">
+              {reminder}
+            </p>
+          )}
           <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
             {tasks.length === 0
               ? "Nothing scheduled yet. The tally keeps every one you tend."
@@ -87,6 +127,77 @@ export default async function TodayPage(props: PageProps<"/today">) {
           </div>
         )}
       </div>
+
+      {nextStep && (
+        <div className="glass mb-6 flex items-start gap-3 rounded-[18px] p-4" role="status">
+          <ShepherdMascot />
+          <div className="min-w-0 flex-1">
+            <div className="flex gap-2 text-[12px] text-muted">
+              <strong className="font-semibold text-ink">Shepherd</strong>
+              <span>your first step</span>
+            </div>
+            <p className="mt-0.5 text-[17px] font-semibold leading-tight">{nextStep.title}</p>
+            <p className="mt-1 text-[15px] text-muted">{nextStep.body}</p>
+            <Link href={nextStep.href} className="btn-fill mt-3 inline-block px-4 py-2 text-[15px]">
+              {nextStep.cta}
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <WeeklyFailureModeCard current={failureMode} promptDay={profile?.failureModePromptDay} isoDate={date} />
+
+      {duePauses.length > 0 && (
+        <div className="mb-6 flex flex-col gap-3">
+          {duePauses.map((pause) => (
+            <div key={pause.id} className="glass flex items-start gap-3 rounded-[18px] p-4">
+              <ShepherdMascot />
+              <div className="min-w-0 flex-1">
+                <div className="flex gap-2 text-[12px] text-muted">
+                  <strong className="font-semibold text-ink">Shepherd</strong>
+                  <span>about {pause.what}</span>
+                </div>
+                {pause.dueForTwentyFourHourFollowUp ? (
+                  <>
+                    <p className="mt-0.5 text-[15px] leading-tight">
+                      You wrote this down yesterday. Have you decided?
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <form action={decidePause}>
+                        <input type="hidden" name="pauseId" value={pause.id} />
+                        <input type="hidden" name="outcome" value="DECLINED" />
+                        <button type="submit" className="rounded-full px-3.5 py-1.5 text-[13px] font-semibold" style={{ background: "var(--tended-fill)", color: "var(--tended-ink)" }}>
+                          Declined
+                        </button>
+                      </form>
+                      <form action={decidePause}>
+                        <input type="hidden" name="pauseId" value={pause.id} />
+                        <input type="hidden" name="outcome" value="PROCEEDED" />
+                        <button type="submit" className="rounded-full px-3.5 py-1.5 text-[13px] font-semibold" style={{ background: "var(--fill)" }}>
+                          Proceeded
+                        </button>
+                      </form>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-0.5 text-[15px] leading-tight">
+                      Thirty days on — looking back, how do you feel about it?
+                    </p>
+                    <form action={reflectPause} className="mt-2 flex flex-wrap gap-2">
+                      <input type="hidden" name="pauseId" value={pause.id} />
+                      <input name="reflection" required placeholder="A short note…" className="field w-[220px]" />
+                      <button type="submit" className="rounded-full px-3.5 py-1.5 text-[13px] font-semibold btn-fill">
+                        Save
+                      </button>
+                    </form>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mb-6 flex items-center justify-between text-[13px]">
         <Link href={`/today?date=${adjacentDate(date, -1)}`} className="text-tint-text hover:underline">
@@ -166,6 +277,21 @@ export default async function TodayPage(props: PageProps<"/today">) {
                 <span className="chip chip-tint self-start">The staff</span>
                 <h2 className="text-[17px] font-semibold">{suggestion.topic.name}</h2>
                 <p className="text-[14px] text-muted">{suggestion.reason}</p>
+                {analogy && (
+                  <div className="rounded-[14px] p-3 text-[14px] leading-relaxed" style={{ background: "var(--fill)" }}>
+                    <p className="m-0">
+                      <strong className="font-semibold">{analogy.analogy}</strong>
+                    </p>
+                    <p className="mt-1.5 text-[13px] text-muted">{analogy.definition}</p>
+                    <p className="mt-1.5 text-[11px] text-muted">
+                      An analogy through {analogy.interest}, not the full truth — see{" "}
+                      <Link href="/profile" className="text-tint-text hover:underline">
+                        Profile
+                      </Link>{" "}
+                      to turn it off.
+                    </p>
+                  </div>
+                )}
                 <div className="mt-1 flex flex-wrap gap-2">
                   {/* Matches the reference's own pair of buttons, which it never wires to a
                       click handler either (app.js only handles Today's checks and Hillside's

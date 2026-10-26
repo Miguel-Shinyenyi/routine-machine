@@ -1,0 +1,117 @@
+# promtool unit tests for alerts.yml. Run: infra/observability/check.sh
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # --- the backend is down for a minute, then it is not
+  - interval: 1m
+    input_series:
+      - series: 'up{job="backend", instance="backend:8081"}'
+        values: '1 1 0 0 0 0 1 1'
+    alert_rule_test:
+      - eval_time: 2m30s   # down for under a minute: pending, so not listed as firing
+        alertname: BackendDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: BackendDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: backend
+              instance: "backend:8081"
+            exp_annotations:
+              summary: "The backend is down"
+              description: "Prometheus has not been able to scrape backend:8081 for over a minute."
+      - eval_time: 7m      # back up: cleared
+        alertname: BackendDown
+        exp_alerts: []
+
+  # --- the intelligence service goes down
+  - interval: 1m
+    input_series:
+      - series: 'up{job="intelligence-service", instance="intelligence-service:9000"}'
+        values: '1 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 1m30s
+        alertname: IntelligenceServiceDown
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: IntelligenceServiceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: intelligence-service
+              instance: "intelligence-service:9000"
+            exp_annotations:
+              summary: "The intelligence service is down"
+              description: "Prometheus has not been able to scrape intelligence-service:9000 for over a minute."
+
+  # --- a sync source fails three fetches in a row (hub makes three listing calls per run, so nine)
+  - interval: 1m
+    input_series:
+      - series: 'sync_consecutive_failures{source="wakatime"}'
+        values: '0 1 2 3 3 3 0'
+      - series: 'sync_consecutive_failures{source="hub"}'
+        values: '0 3 6 6 9 9 9'
+      - series: 'sync_consecutive_failures{source="activitywatch"}'
+        values: '5 5 5 5 5 5 5'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SyncSourceFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              source: wakatime
+            exp_annotations:
+              summary: "wakatime has failed 3 fetches in a row"
+              description: "The wakatime integration has failed every fetch since its last success. Check its credentials and the source's availability."
+          - exp_labels:
+              severity: warning
+              source: hub
+            exp_annotations:
+              summary: "hub has failed 9 fetches in a row"
+              description: "The hub integration has failed every fetch since its last success. Check its credentials and the source's availability."
+      - eval_time: 3m      # hub at 6 (two runs) and wakatime at 3 for under a minute: nothing yet
+        alertname: SyncSourceFailing
+        exp_alerts: []
+      - eval_time: 7m      # wakatime recovered; hub still failing; activitywatch (local-only) never alerts
+        alertname: SyncSourceFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              source: hub
+            exp_annotations:
+              summary: "hub has failed 9 fetches in a row"
+              description: "The hub integration has failed every fetch since its last success. Check its credentials and the source's availability."
+
+  # --- the reading-note assessment fails more than half the time for 15 minutes
+  - interval: 1m
+    input_series:
+      - series: 'assessment_requests_total{outcome="success"}'
+        values: '0+1x30'
+      - series: 'assessment_requests_total{outcome="upstream_error"}'
+        values: '0+3x30'
+    alert_rule_test:
+      - eval_time: 10m   # over half are failing but not for 15 minutes yet
+        alertname: AssessmentFailureRateHigh
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: AssessmentFailureRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Over half of reading-note assessments are failing"
+              description: "More than 50% of assessments ended in an upstream error or an unparseable answer over the last 15 minutes."
+
+  # --- no assessments at all is not an alert
+  - interval: 1m
+    input_series:
+      - series: 'assessment_requests_total{outcome="success"}'
+        values: '4x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: AssessmentFailureRateHigh
+        exp_alerts: []

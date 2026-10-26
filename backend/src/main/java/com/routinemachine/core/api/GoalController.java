@@ -1,5 +1,10 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.Goal;
 import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.GoalRepository;
@@ -29,21 +34,23 @@ public class GoalController {
         this.userRepository = userRepository;
     }
 
-    // userId is optional and additive (Phase 8 groundwork, see docs/backend.md): omitted,
-    // this returns every goal exactly as before this phase. Passed, it scopes to that one
-    // user's own goals, matching RoutineItemController/DailyLogController's pattern.
+    // The signed-in person's own goals. Who that is comes from the token, never from a parameter
+    // (docs/backend.md, access control).
+    @Operation(summary = "List goals")
     @GetMapping
-    public List<GoalResponse> list(@RequestParam Optional<Long> userId) {
-        List<Goal> goals = userId.map(goalRepository::findByUserId).orElseGet(goalRepository::findAll);
-        return goals.stream().map(GoalResponse::from).toList();
+    public List<GoalResponse> list(@AuthenticationPrincipal Jwt jwt) {
+        return goalRepository.findByUserId(TokenUser.idOf(jwt)).stream().map(GoalResponse::from).toList();
     }
 
+    @Operation(summary = "Create a goal")
+    @ApiResponse(responseCode = "400", description = "A goal with that name already exists. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public GoalResponse create(@Valid @RequestBody GoalRequest request) {
-        User user = request.userId() == null ? null : userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
-        if (goalRepository.existsByUserIdAndName(request.userId(), request.name())) {
+    public GoalResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody GoalRequest request) {
+        Long userId = TokenUser.idOf(jwt);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
+        if (goalRepository.existsByUserIdAndName(userId, request.name())) {
             throw new IllegalArgumentException(
                     "A goal named '" + request.name() + "' already exists for this user");
         }

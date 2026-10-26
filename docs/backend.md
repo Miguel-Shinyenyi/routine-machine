@@ -16,9 +16,11 @@ Phase 1 and 2 built: Spring Boot 3.5, Java 21, PostgreSQL via Flyway migrations.
 endpoints, matching the four Phase 1 entities in `database.md`:
 
 - `GET /api/goals?userId=`, `POST /api/goals`, list and create goals. The three seeded goals
-  (Phase 1) have no `user_id` and remain visible to everyone, unchanged. Phase 8 added the
-  `userId`-scoped creation path: `userId` is optional on both the query (filters the list,
-  omitted returns every goal exactly as Phase 1 did) and the create body (400 on an unknown
+  (Phase 1) have no `user_id`; until the owner claim hands them to the owner account they are
+  the "unowned" goals, which a request with no `userId` still lists (since per-user scoping
+  part 2c, *only* those, not every account's goal as it did through Phase 8). Phase 8 added the
+  `userId`-scoped creation path: `userId` is optional on both the query (filters the list;
+  omitted returns only the unowned goals) and the create body (400 on an unknown
   `userId`, matching every other foreign-key validation in this API). Goal names are unique
   per user (`UNIQUE(user_id, name)`, not a global `UNIQUE(name)` as before Phase 8); creating
   a second goal with the same name for the same `userId` is a 400.
@@ -349,8 +351,8 @@ tables that actually drive "days shown up" — the one signal needed to demo mul
 having genuinely different data, without first inventing a goals-creation API or touching
 every table in the schema. This is additive scoping, not enforced auth: `userId` is an
 optional query param on `GET /api/routine-items`/`GET /api/daily-logs` and an optional field
-on their `POST` bodies. Omitted, both behave exactly as before this change (every legacy,
-unowned row, `NULL` `user_id`) — the existing frontend and every Phase 6 sync service
+on their `POST` bodies. Omitted, both list only the legacy, unowned rows (`NULL` `user_id`;
+through Phase 8 they listed every account's) — the existing frontend and every Phase 6 sync service
 (`WakaTimeSyncService`, `HubSyncService`, etc.) are untouched and keep working against that
 same unscoped data, since none of them pass `userId`. Passed, the response is scoped to that
 one user's own rows instead. `RoutineItem.assignUser`/`DailyLog.assignUser` are plain setters
@@ -438,10 +440,556 @@ lists every event in the window whatever its status, newest first, for the "How 
 were counted" table. "Question a credit" just stamps `questioned_at`, matching the explicit
 "simple form that records the request" scope — no review workflow yet.
 
+**Phase 10: profile data built.** `users` gains (migration V21) `interests`/`thinkers`/
+`learning_preferences` (JSON arrays in a TEXT column via `StringListConverter`, same pattern
+`reading_notes` already uses), `currency` (varchar(8)), `day_end_hour` (0-23, DB check
+constraint, default 0), and `analogies_enabled` (default true). `User.updateProfile(...)` is a
+single partial-update method — each parameter only changes the field if non-null, so
+`PUT /api/users/me/profile` can update just one field without the caller resending everything.
+New endpoints `GET`/`PUT /api/users/me/profile`, JWT-protected via the same `/api/users/**`
+chain `GET /api/users/me` already uses, deliberately **not** folded into `UserResponse`/
+`GET /api/users/me` itself — see the decisions log on why this is its own response type.
+
+`day_end_hour` now feeds `EvidenceCreditService`'s local-date rule directly: an evidence event
+whose local hour (in the user's `time_zone`) is before `dayEndHour` is credited to the
+*previous* calendar day, not the day it was actually logged on — so a 1am study session with a
+3am day-end hour still counts as "today." Defaults to 0 (midnight), which is mathematically a
+no-op (`hour < 0` is never true), so every existing Phase 9 test and every user who hasn't set
+this is completely unaffected.
+
+Privacy is enforced structurally, not just by convention: `HillsideV2Response`/
+`EvidenceEventResponse`/`NeighborCreditRowResponse` have no path to a `User`'s profile fields
+at all — they're built from `HillsideV2Result`/`NeighborCreditRow`/`EvidenceEvent`, none of
+which carry profile data. `HillsideV2ApiIntegrationTest.profileDataNeverAppearsInTheHillsideResponse`
+proves this against the real serialized JSON, not just by reasoning about the types, per
+`docs/product-direction.md`'s explicit "write a test that proves it" instruction.
+
+**Phase 11: the granary built.** `GranaryService` + two new tables (migration V22,
+`savings`/`pause_decisions`) and `users.saving_target_amount`. Never holds or moves money —
+every write only records that a saving or a decision happened.
+
+- **Savings**: `storeSaving(user, today)` is idempotent via `savings`' own
+  `UNIQUE(user_id, local_date)` plus a find-first check — tapping twice the same day is one
+  saving, not two. `monthSummary(user, month, today)` computes `storedThisMonth`,
+  `targetThisMonth` (the daily amount times days *elapsed* so far this month, not the whole
+  month — a target on day 3 of October isn't already "31 days behind"), `daysStored`, the
+  per-day `jar` array (one boolean per elapsed day), and `totalStoredEver` (every saving,
+  any month).
+- **The pause**: `PauseDecision` sets both `followUp24hAt` and `followUp30dAt` at creation
+  (`now + 24h`, `now + 30d`). `outcome` stays null until `decidePause` is called — from the
+  24-hour follow-up or immediately ("I've already decided"); `isDueForTwentyFourHourFollowUp`
+  only fires while `outcome` is still null. `reflectionThirtyDay` is separate and independent:
+  `isDueForThirtyDayFollowUp` fires regardless of what `outcome` ended up being, since the
+  30-day look-back is about how the decision feels in hindsight, not a second chance to
+  change it.
+- **New endpoints**: `POST /api/granary/savings`, `PUT /api/granary/saving-target-amount`,
+  `GET /api/granary/summary`, `POST /api/granary/pauses`, `GET /api/granary/pauses`,
+  `GET /api/granary/pauses/due` (what Today prompts about), `PATCH .../decide`,
+  `PATCH .../reflect`. None are JWT-protected (same `permitAll` pattern `/api/evidence-events`
+  already uses) — the frontend resolves `userId` from the verified session itself before
+  calling any of them, never from client-submitted form data.
+- **Privacy**: same structural guarantee as Phase 10's profile data — no hillside/credit
+  response type has a path to `savings`/`pause_decisions` at all.
+  `HillsideV2ApiIntegrationTest.granaryDataNeverAppearsInTheHillsideResponse` proves it against
+  the real serialized JSON, the explicit "test it" requirement.
+- **A new `IllegalStateException` → 400 handler** was added to `GlobalExceptionHandler`:
+  `storeSaving` throws it when no `savingTargetAmount` is set yet, a real client-fixable
+  precondition failure ("set an amount first"), not a server bug that should 500.
+
+**M-Pesa statement import built.** Proposed to the user before building (password-protected
+PDFs, a statement format that can change without notice) and confirmed before any of this was
+written.
+
+- **The file is never persisted.** `GranaryController.importMpesaStatement` reads the
+  uploaded `MultipartFile`'s bytes straight into memory (`file.getBytes()`) and passes them to
+  `GranaryService.importMpesaStatement`, which only ever holds them in a local `byte[]`
+  variable scoped to that one call. Nothing writes them to disk, a temp directory, or any
+  table — "delete the file after parsing" is true by construction, since the file is never
+  saved in the first place, not a delete step that could be skipped or fail.
+- **Password-protected PDFs**: `MpesaPdfReader.extractText(bytes, password)` tries the given
+  password (or none) via PDFBox's own decryption (`Loader.loadPDF(bytes, password)`). A wrong
+  or missing password on an encrypted PDF throws `MpesaStatementPasswordRequiredException`,
+  mapped to its own `400` with `"type": "PASSWORD_REQUIRED"` — distinct from a generic parse
+  failure, so the frontend can prompt for a password specifically rather than showing
+  "couldn't read this statement."
+- **Format changes, fail loudly**: `MpesaStatementParser.parse` matches each transaction row
+  against a single regex (receipt id, completion date/time, free-text details, a status word,
+  three decimal amounts) and categorises each one by keyword-matching the details text against
+  a fixed map (`MpesaCategory`: FOOD, TRANSPORT, FAMILY_SUPPORT, DATA_AND_AIRTIME, LEARNING,
+  BETTING, OVERDRAFT_FEES, OTHER — matching the design reference's own category list, with
+  OTHER as the honest catch-all for anything unmatched). If the text has *zero* recognisable
+  transaction rows at all, parsing throws `MpesaStatementParseException` ("the statement's
+  format may have changed") rather than returning empty or silently wrong totals — the real
+  M-Pesa statement text layout hasn't been verified against a real statement (see the open
+  questions), so a confident wrong answer would be worse than a clear failure.
+- **Only Withdrawn amounts count.** Paid In amounts (money arriving) are read but never
+  summed into a category total — these totals answer "where did spending go," matching the
+  design reference's "Where it went" framing, not "where did money come from."
+- **New table** (migration V23): `mpesa_category_totals(user_id, statement_month, category,
+  amount)`, unique on `(user_id, statement_month, category)`. Re-importing the same month's
+  statement replaces that month's totals via a native `ON CONFLICT ... DO UPDATE` upsert, not
+  a second set of rows — "only category totals are kept," and a corrected or re-uploaded
+  statement should overwrite, not accumulate alongside the old one.
+- **New endpoints**: `POST /api/granary/mpesa-statement` (multipart: `userId`, `file`,
+  optional `password`), `GET /api/granary/mpesa-categories` (defaults to last month).
+- **Tested against a synthetic fixture only**, per the task's explicit instruction, never a
+  real statement: `MpesaStatementParserTest` covers the parser as a pure function against
+  plain text in the documented row shape (summing by category, Paid In never counting, OTHER
+  as the fallback, each named category's keywords, the "no rows at all" failure case).
+  `MpesaPdfReaderTest` builds real PDF fixtures with PDFBox itself (unprotected, and
+  password-protected with a known password) to prove the actual text-extraction and
+  decryption path, not just the parser's string handling. `GranaryServiceTest` and
+  `GranaryApiIntegrationTest` cover the full pipeline end to end, including re-import
+  replacing totals and the password-required path.
+
+**Phase 12 part 1: organisations and cohorts, data model.** `OrganisationService` +
+three new tables (migration V24: `organisations`, `organisation_admins`, `cohorts`,
+`cohort_memberships`).
+
+- **Admin is organisation-scoped, not cohort-scoped.** `organisation_admins` is a separate
+  table from `cohort_memberships` on purpose: the design reference's admin view oversees
+  multiple cohorts ("Cohort 14", "Cohort 13") under one organisation header, while a learner's
+  `cohort_memberships` row is a seat in exactly one cohort. There's no "cohort admin" role —
+  only an organisation admin, checked against every cohort under that organisation.
+- **Authorization is a service-layer check, not a JWT-protected endpoint.** `/api/organisations/**`
+  stays `permitAll`, same pattern as `/api/granary/**` — every write takes a
+  `requestingUserId` and `OrganisationService` throws `NotAnOrganisationAdminException`
+  (→ `403`, a new `GlobalExceptionHandler` entry) if that user isn't an admin of the relevant
+  organisation. `createCohort`/`addCohortMember`/`listCohortMembers` all check this before
+  doing anything else.
+- **Adding the same learner to a cohort twice is a no-op, not a duplicate.**
+  `addCohortMember` checks `findByCohortIdAndUserId` first — same idempotent-write shape as
+  `GranaryService.storeSaving` for a day that's already been logged.
+- **New endpoints**: `POST /api/organisations` (creates an org and makes the given user its
+  founding admin in one call), `POST /api/organisations/{id}/cohorts`,
+  `POST /api/organisations/cohorts/{id}/members`, `GET /api/organisations/cohorts/{id}/members`.
+- Tested with `OrganisationServiceTest` (service-layer admin checks, idempotent membership)
+  and `OrganisationApiIntegrationTest` (the full create-org → create-cohort → add-member →
+  list-members flow end to end, plus the 403 path).
+
+**Phase 12 part 2: bulk CSV invites.** Proposed to the user before building (there's no
+outbound email infrastructure in this app, and the spec doesn't say what a "seat" caps or
+what happens for an email with no account yet) and confirmed before any of this was written.
+Migration V25: `organisations.seat_limit` (nullable — null means unlimited) and a new
+`cohort_invites` table.
+
+- **"Invite" means reserving a seat, not sending mail.** `OrganisationService.bulkInviteByCsv`
+  parses the CSV (one email per line, or email-first-column; a literal `email` header line
+  and blank lines are skipped) and, per row: an email with an existing `User` is added to the
+  cohort immediately (`ADDED_IMMEDIATELY`); an unknown email gets a `CohortInvite` reservation
+  (`INVITE_RESERVED`). No actual email is sent to anyone — notifying the invitee is a future
+  integration, not built now.
+- **Invites are fulfilled on registration, not polled for.** `AuthController.register` and
+  `.githubLogin` both call `OrganisationService.fulfillInvitesForNewUser(user)` right after
+  the account is created — every pending `CohortInvite` matching that email (case-insensitive,
+  same as `UserRepository.findByEmailIgnoreCase`) becomes a real `CohortMembership` and the
+  invite row is deleted. Called unconditionally on both paths since it's a safe no-op for a
+  user with no pending invites, rather than threading a "was this a brand-new account" flag
+  through `AuthService`.
+- **Every CSV row gets a reported outcome — `ADDED_IMMEDIATELY`, `INVITE_RESERVED`,
+  `ALREADY_A_MEMBER`, `ALREADY_INVITED`, `SEAT_LIMIT_REACHED`, or `INVALID_EMAIL`.** Nothing
+  is silently dropped from the response, same "fail loudly, never silently wrong" instinct as
+  the M-Pesa statement parser — an admin pasting in a messy list can see exactly what happened
+  to every row, not just a count.
+- **Seats are counted across the whole organisation, not per cohort**, and a batch stops
+  admitting new people once the limit is hit mid-batch (rows after the limit report
+  `SEAT_LIMIT_REACHED`) rather than failing the whole CSV or silently over-admitting.
+- **A real `IllegalStateException`-shaped bug caught by the full test suite, not the new
+  tests themselves**: the first version of `setSeatLimit` mutated the `Organisation` entity
+  without an explicit `organisationRepository.save(organisation)` call. It passed in
+  `OrganisationServiceTest` (a `@DataJpaTest`'s single shared persistence context returns the
+  same mutated in-memory object on a re-fetch) but failed in
+  `OrganisationApiIntegrationTest` (each `MockMvc` request is its own transaction, so the
+  mutation was silently lost) — caught by running the full suite before reporting, same
+  "verify with a real build/system, not memory of one" rule that found Phase 2's lazy-loading
+  bug. Fixed by adding the explicit `save`, matching `GranaryController.setSavingTargetAmount`'s
+  existing precedent for the same shape of write.
+- **New endpoints**: `PUT /api/organisations/{id}/seat-limit`,
+  `POST /api/organisations/cohorts/{id}/bulk-invite` (JSON body with the raw CSV text, not a
+  multipart file upload — a CSV of emails is small enough that the frontend can just read the
+  file client-side and send its text).
+- Tested with `OrganisationServiceTest` (every outcome, the seat-limit-mid-batch case, the
+  non-admin rejection, invite-then-register-fulfills-it) and `OrganisationApiIntegrationTest`
+  (the full bulk-invite → register → membership-appears flow end to end, and the seat-limit
+  cap enforced over a real HTTP request).
+
+**Phase 12 part 3: the cohort dashboard's four pilot measures.** Flagged to the user before
+building — `docs/product-direction.md` references "the operating plan" for exact definitions
+of these measures, but no such document exists in this repo, and the supportive/pressuring
+survey had no capture mechanism at all — and the user chose concrete definitions before any
+of this was written. New `CohortDashboardService`, migration V26 (`cohort_survey_responses`).
+
+- **"Checked in" is any `DailyLog`, the same thing Today already tracks for every user — not
+  the hillside's `daily_credits`.** The user's explicit choice: cohort participation
+  shouldn't require opting into the hillside, which is a separate, unrelated concern (see
+  `docs/database.md`'s decisions log on these two modules staying uncoupled).
+- **Activation** = a member who created ≥1 `Goal` and logged ≥1 `DailyLog`, both dated within
+  7 days of `cohort_memberships.joined_at` — matches the design reference's "set a goal and
+  checked in once." Doesn't require the full 7-day window to have elapsed; a member who does
+  both on day one is activated immediately.
+- **Weekly participation** ("checked in this week") is computed out of activated members only,
+  not the whole cohort, matching the design reference's own "of 34 activated" denominator —
+  the current week is derived from `cohort.startsOn`, not a calendar week.
+- **"Returned after a missed day"** is a first-cut definition, not the same algorithm as
+  `HillsideV2Service.countReturns` (which counts every return across a season from the
+  hillside credit pipeline): per activated member, only the *first* gap in their logged dates
+  since joining is examined — did a full un-logged day occur, and did their next log come
+  within 7 days of it. The denominator is members who had at least one such gap, not the
+  whole cohort — matches the design reference's "11 of 14."
+- **The survey** (`CohortSurveyResponse`, unique per `(cohort_id, user_id)`) lets any cohort
+  member submit one of `SUPPORTIVE`/`NEUTRAL`/`PRESSURING`; resubmitting replaces the answer
+  rather than adding a second row. The denominator for "felt supportive" is total responses
+  received, not total members — matches the design reference's "19 of 23" with the
+  neutral/pressuring counts shown separately, not folded into one percentage.
+- **Viewing the dashboard requires being either an organisation admin or a member of that
+  specific cohort** — "admins see aggregates only, learners can read the same page"
+  (docs/product-direction.md) means learners get read access too, not just admins. A new
+  `NotACohortParticipantException` (→ `403`) is distinct from `NotAnOrganisationAdminException`
+  since the rule here is "admin OR member," not "admin only."
+- **Every measure is a `{count, denominator}` pair, never a bare number or percentage** —
+  "each figure with its denominator" is explicit in `docs/product-direction.md`.
+- Tested with `CohortDashboardServiceTest` (every measure's numerator/denominator, the
+  resubmit-replaces-the-answer case, both access-control branches) and
+  `OrganisationApiIntegrationTest` (the full survey-submit → dashboard-reflects-it flow for a
+  learner, and the 403 for a non-participant).
+
+**Phase 12 part 4: study groups, the "by study group" breakdown, and small-groups-hidden.**
+Migration V27: `cohort_memberships.study_group` and `cohort_invites.study_group`, both
+nullable — a member with no group just doesn't appear in the breakdown.
+
+- **A group is set via the CSV's optional second column** (`email,group`), not a separate
+  endpoint — matches the design reference, where groups are a property of how someone was
+  invited ("Morning group", "Evening group"). `CohortInvite` carries the group through to the
+  `CohortMembership` it eventually becomes, whether the person was added immediately
+  (existing account) or fulfilled later on registration.
+- **`CohortDashboardService.summarizeByGroup`'s denominators are every member of the group,
+  not just activated ones** — deliberately different from the cohort-wide measures above,
+  which denominate by activated members only. This matches the design reference's own
+  "12 of 14" where 14 is the group's whole headcount, not an activated subset.
+- **"Small groups stay hidden"**: a group under 5 members returns its member count but
+  `checkedInThisWeek`/`returnedAfterAMissedDay` are both `null` and `hidden` is `true` — the
+  count itself is shown (so an admin can see the group exists and how big it is) but no rate
+  is computed, so no individual in a near-1:1 denominator can be picked out.
+- **New endpoint**: `GET /api/organisations/cohorts/{id}/dashboard/by-group`.
+- Tested with `OrganisationServiceTest` (the group carried through both the immediate-add and
+  invite-then-register paths), `CohortDashboardServiceTest` (a 5+ group's real rates, a
+  under-5 group hidden but still counted, members with no group excluded entirely), and
+  `OrganisationApiIntegrationTest` (the hidden-group response over a real HTTP request).
+
+**Phase 12 part 5: the weekly check-in chart.** `CohortDashboardService.weeklyCheckIns`, one
+bar per week of `Cohort.weeks` (the pilot's stated length), matching
+`docs/design-reference/pages/cohort.html`'s "Weekly check-ins, eight-week pilot."
+
+- **A single shared denominator across every bar** — `activatedDenominator`, the cohort's
+  current activated-member count — not a denominator recomputed per week, matching the design
+  reference's one caption ("of 34 activated") under the whole chart rather than per bar.
+- **A week that hasn't started yet reports `null`, not `0`.** `checkedIn` only has a real
+  count once the week has actually begun; a future week is a blank/dashed bar in the
+  reference, not a bar claiming zero people checked in during a week that hasn't happened.
+- **The current week is flagged (`isCurrentWeek`) separately from being future or past.**
+  Matches the reference's highlighted "now" bar, distinct styling from both completed weeks
+  and the dashed weeks ahead.
+- **A real test-fragility bug found while writing this, fixed properly on 2026-10-21**:
+  `CohortMembership.joinedAt` and `Goal.createdAt` are DB-generated at insert time (`now()`),
+  not settable through the entities, but activation is measured against them. The first fix
+  (anchor test dates to the real "today") only moved the problem: Stage 1's read-only pass
+  found `checkedInThisWeekIsOutOfActivatedMembersOnly` failing two days after it was written.
+  The tests now pin both timestamps to the date they are about with a native `UPDATE`
+  (`pinTimestamp` in `CohortDashboardServiceTest`), and `activationDoesNotDependOnTheRealDate`
+  runs the same scenario for cohorts dated 2031 and 2019.
+- **New endpoint**: `GET /api/organisations/cohorts/{id}/dashboard/weekly-check-ins`.
+- Tested with `CohortDashboardServiceTest` (the elapsed-weeks' real counts, future weeks
+  reporting `null`, the current-week flag, the access-control check) and
+  `OrganisationApiIntegrationTest` (the chart's shape over a real HTTP request).
+- **With this, every backend piece of Phase 12's cohort dashboard is built. Only the frontend
+  remains.**
+
+**Frontend built, two real bugs found and fixed live before reporting.** `/cohort/[cohortId]`
+(see `docs/frontend.md`) exercised two endpoints that had never been called by any frontend
+code before:
+
+- `setSeatLimit` and `submitSurveyResponse` both returned a plain `200` with an empty body
+  (ordinary `void`-returning `@PutMapping`/`@PostMapping` methods) instead of `204`. Nothing
+  caught this until the frontend's `request()` helper tried `response.json()` on an empty body
+  and threw `"Unexpected end of JSON input"` — not just the survey form's write, any future
+  caller of either endpoint would have hit the same thing. Fixed with
+  `@ResponseStatus(HttpStatus.NO_CONTENT)` on both `OrganisationController` methods, matching
+  how `request()` already special-cases `204`, rather than loosening the frontend's parsing.
+  `OrganisationApiIntegrationTest`'s assertions updated from `isOk()` to `isNoContent()`.
+
+**Per-user scoping, part 1: ownership data and the owner claim.** The app began as one
+person's tool, so most personal data was stored with no owner (`user_id IS NULL`), and every
+page showed it to every visitor, including a brand-new account. The fix is built in parts (the
+rule: more than three parts, one at a time); this is the first and changes no behaviour a user
+can see.
+
+- **What it adds**: migration V28 (a nullable `user_id` on `schedule_templates`, `tasks`,
+  `books`, `current_reading_log`; see `database.md`), the matching `user` field and `assignUser`
+  on those four entities, and `OwnerClaimService` + `OwnerClaimRunner`.
+- **The owner claim**: when the environment variable `OWNER_EMAIL` is set, the backend gives
+  every row with a NULL `user_id` in `goals`, `routine_items`, `daily_logs`, `schedule_templates`,
+  `tasks`, `books` and `current_reading_log` to that account at startup. The owner's address is
+  never in code or config files (only the variable's name, in `application.yml` and
+  `infra/docker-compose.yml`), and the log line reports counts per table, not the address.
+- **Safe by construction**: only NULL rows move, so anything already owned stays put and a
+  second run claims nothing. It is one transaction, all tables or none. An unknown email changes
+  nothing and is logged as an error, not a crash, so the app still starts. With the variable
+  unset the runner does nothing at all.
+- **A known sharp edge**: `goals` is unique on `(user_id, name)`. If the owner already has a goal
+  with the same name as an unowned one, that update fails and the whole claim rolls back (and is
+  logged). It has not happened with the data seen so far; it would need a rename, not a silent
+  merge.
+- **Integration data is owner-only, by decision**: `measurements` (WakaTime, ActivityWatch,
+  GitHub, RescueTime, health) and `hub_sync_processed_files` get no `user_id`. They come from
+  credentials set for the whole deployment, so they belong to the deployment's owner; a second
+  user has no integration of their own to read. Later parts make the Watering holes page and the
+  intelligence service respect this.
+- **Not done yet** (parts 2 to 6): no query filters on the new columns, so every page still
+  shows the same data to everyone. Backend scoping, the frontend empty start, the intelligence
+  service, owner-only integrations and cross-user tests follow. The backend still trusts a user
+  id sent in the request on several routes; closing that is the access-control stage.
+- Tested with `OwnerClaimServiceTest` (every table claimed, someone else's rows untouched, second
+  run a no-op, email match ignoring case, unknown email changes nothing) and
+  `OwnerClaimRunnerTest` (nothing without the variable, the configured address, a wrong address
+  not fatal). Checked that the tests can fail by dropping a table from the claim list: two failed.
+
+**Per-user scoping, part 2: the backend answers for exactly one user.** Built in three slices
+(2a tasks and schedule templates, 2b reading and learning topics, 2c goals, routine items and
+daily logs). The rule on every personal endpoint:
+
+- **`userId` given**: exactly that user's rows. Creates are owned by that user.
+- **`userId` omitted**: only *unowned* (pre-account) rows, never a real user's. This tightens the
+  Phase 8 behaviour, where omitted meant "everything", so the userId-less view can no longer
+  leak another account. It stays only so the app works until part 3 moves every page onto the
+  session user; the access-control stage then removes it.
+- **A row can only link to rows with the same owner.** A task, template or topic that points at
+  someone else's routine item, template or goal is rejected with the same 400 an unknown id
+  gets, so a foreign id reveals nothing.
+- **Changing a row you do not own answers 404**, exactly like one that does not exist.
+- **Shared helper**: `service/Ownership` (`idOf`, `ownedBy`, `sameOwner`). `idOf` reads the id off
+  a lazy proxy without loading it, which matters because `open-in-view` is off.
+- **2a (done)**: `GET /api/tasks`, `GET /api/schedule-templates` take `userId`; `POST` on both
+  takes `userId` in the body; `PATCH /api/tasks/{id}` takes `userId` as a query parameter.
+  `TaskResponse` and `ScheduleTemplateResponse` now carry `userId`. Marking a task done creates a
+  daily log owned by the task's user (it used to create an unowned one, which would have put a
+  new user's day into nobody's, then the owner's, history). New derived queries use
+  `@EntityGraph` for the same lazy-loading reason as the older fetch-join queries, which stay
+  because repository tests and hub-sync use them.
+  Tested by `ScopedTasksAndTemplatesApiIntegrationTest` (10 tests), checked by mutation:
+  removing the ownership filter from `TaskService.changeStatus` and the link check from
+  `TaskController` made two of them fail.
+- **2b (done)**: `GET /api/books`, `/api/books/current`, `/api/current-reading`,
+  `/api/reading-notes` and `/api/learning-topics` take `userId`; `POST` on books, notes, current
+  reading and topics takes it in the body. A note belongs to whoever owns its book and a topic to
+  whoever owns its goal, so neither table got its own column. Writing a note on someone else's
+  book, or adding a topic under someone else's goal, is rejected with the unknown-id 400. A note
+  of 70% own words or more marks only the *author's* reader-notes routine item done and logs the
+  day for the author; it used to mark every account's. `BookResponse` carries `userId`.
+  `BookRepository.findCurrent()` and `CurrentReadingLogRepository.findLatest()` stay global on
+  purpose: hub-sync still uses the first, and moving hub-sync onto the owner account is part 5.
+  Tested by `ScopedReadingAndTopicsApiIntegrationTest` (11 tests), checked by mutation: removing
+  the book-ownership filter and the goal-ownership filter made two of them fail.
+- **2c (done)**: `GET /api/goals`, `/api/routine-items` and `/api/daily-logs` with no `userId`
+  list only unowned rows (they listed every account's before). A routine item cannot be created
+  under someone else's goal, and a day cannot be logged against someone else's routine item or
+  learning topic; each is rejected with the unknown-id 400. Logging a day now always assigns the
+  day to the request's user (it was the same in effect, now through one code path).
+  Tested by `ScopedGoalsItemsAndLogsApiIntegrationTest` (8 tests), checked by mutation (restoring
+  the old goal list and dropping the daily-log link check made two fail). One Phase 8 test,
+  `UserScopedDataApiIntegrationTest.dailyLogsCreatedForOneUserAreNotVisibleWhenListingAnother`,
+  logged two accounts against one shared unowned routine item, which is exactly the cross-account
+  link the new rule rejects; it now gives each user their own item and still proves the isolation.
+- **Part 3 (frontend) is done** (see `frontend.md`): every personal page and Server Action now
+  sends the session user's id, so the userId-less view is no longer used by the app. It remains
+  in the API only until the access-control stage replaces `userId` with the signed token. The one
+  consumer still reading unowned rows is the intelligence service (part 4).
+- **Part 5 (integrations are the owner's) is done.** The integrations run on credentials set for
+  the whole deployment, so what they pull in belongs to the deployment's owner. New
+  `service/OwnerAccount` resolves the owner from `OWNER_EMAIL` (the same variable the owner claim
+  uses): `owner()`, `isOwner(id)`, `isIntegrationTarget(itemOwner)`. With no owner configured, or
+  no account registered with that email yet, there is no owner and integrations write only to
+  unowned rows, which is what they have always written to.
+  - **WakaTime, ActivityWatch, GitHub, RescueTime** now log only into routine items owned by the
+    owner or by nobody, and the log belongs to the item's owner. They used to log into *every*
+    routine item with their source whoever owned it (any account could create an item with source
+    `WAKATIME` and receive the owner's coding hours), and the log they created belonged to nobody,
+    so after the owner claim a new synced day would not have shown on the owner's pages.
+  - **Hub-sync** looked up the "journaling" and "writing" items by name across every account, so a
+    new user's "journaling" item could receive the owner's journal entries. It now picks the
+    owner's item (or an unowned one), assigns the log to the item's owner, and keeps the
+    hub-synced current book on the owner's side: the latest of the owner's books and the unowned
+    ones, never another user's, so a new user adding a book no longer makes it write a duplicate.
+  - **`GET /api/watering-holes?userId=`**: the owner (and the userId-less legacy view) get the real
+    status; any other account gets every source "not connected" with no activity, which is true
+    for it.
+  - **Measurements and hub-file records stay global.** Only the Watering holes status page reads
+    them. Health ingest is unchanged (token-protected, writes measurements only).
+  - Tested by `OwnerAccountTest` (4), `IntegrationOwnershipTest` (6, covering all four sync
+    services), four new `HubSyncServiceTest` cases and `WateringHolesOwnerOnlyApiTest` (3); three
+    deliberate breaks (WakaTime writing to every item, hub-sync ignoring ownership, Watering
+    holes ignoring the user) each made tests fail. The existing sync tests construct the services
+    with no owner configured, so they still prove the pre-account behaviour.
+- **A build trap found on the way**: with VS Code's Java language server running, an edit that
+  does not compile can leave Eclipse-compiled `Unresolved compilation problem` stubs in
+  `target/classes`, which Maven then treats as up to date. `./mvnw -q compile` printed nothing
+  and the failure only appeared at runtime. Use `./mvnw clean test` (or `clean test-compile`)
+  when sources changed while the IDE is open.
+
+**Per-user scoping, part 6: id-only routes closed, and the route map.** Writing the
+end-to-end test found four holes the per-route tests had missed:
+- `PATCH /api/granary/pauses/{id}/decide` and `/reflect` and `PATCH /api/evidence-events/{id}/question`
+  took only a row id, so any caller could change any account's pause or question its credit.
+  They now require `userId`. Someone else's row answers 404, like one that does not exist, and a
+  missing `userId` answers 400.
+- `POST /api/evidence-events` accepted another account's goal. A goal must now have the same
+  owner as the user (400 otherwise), so an unowned founder goal cannot receive a new user's evidence.
+
+Who sees what, by route group (all rules also hold for creates: the new row belongs to `userId`):
+
+| Routes | `userId` given | `userId` omitted | Someone else's row |
+|---|---|---|---|
+| `/api/goals`, `/routine-items`, `/learning-topics`, `/schedule-templates`, `/tasks`, `/daily-logs` (**token**, access control part 2) | The token's user only; a `userId` in the request is not read | 401 | Linking to it is 400; changing a task is 404 |
+| `/api/books`, `/reading-notes`, `/current-reading`, `/books/current` (**token**, access control part 3) | The token's user only | 401 | A note on another user's book is 400 |
+| `/api/granary/summary`, `/pauses`, `/pauses/due`, `/savings`, `/saving-target-amount` (**token**, access control part 1) | The token's user only | 401 | Not reachable |
+| `/api/granary/pauses/{id}/decide`, `/reflect` (**token**) | Must own the row | 401 | 404 |
+| `/api/evidence-events` (ingest, ledger) and `/{id}/question` (**token**) | The token's user; a goal must be the user's own | 401 | Question: 404; goal: 400 |
+| `/api/watering-holes` (**token**) | Real status for the owner, all sources off for anyone else (and for everyone when no owner is configured) | 401 | Not applicable |
+| `/api/organisations/**` (**token**, access control part 4) | The token's user must hold the right the route needs (founding admin, or cohort member for the dashboard and survey) | 401 | 403 |
+
+`CrossUserIsolationApiIntegrationTest` (17 tests) creates data for two accounts on every personal
+route, reads each list as A, as B and as nobody, and tries each cross-account write. It fails if a
+route is added or changed without following the rules above. A deliberate break (the pause
+ownership filter removed) made it fail.
+
+**Access control, part 1: the Granary takes its user from the token.** The stage is split into
+five parts (the Granary first, then personal data, books and credits, cohorts and the owner role,
+and finally the intelligence and sync services plus a 401 sweep).
+- `/api/granary/**` joins `/api/users/**` in the JWT filter chain (`SecurityConfig`). No token, or a
+  bad one, is 401.
+- The user is `TokenUser.idOf(jwt)`, the token's subject. Granary routes no longer have a `userId`
+  query parameter, body field or form field (`StoreSavingRequest` is gone; `CreatePauseRequest` and
+  `SetSavingTargetAmountRequest` lost the field). A `userId` sent anyway is not read.
+- Someone else's pause is 404, as before, now judged against the token's user.
+- The frontend's `backendFetch` and `backendFetchMultipart` send the session token as a bearer
+  header on every call when a session exists. A caller's own `Authorization` header wins, so the
+  login, GitHub and health calls are unchanged.
+- Tests: `GranaryTokenApiIntegrationTest` (5); the other Granary tests and
+  `CrossUserIsolationApiIntegrationTest` now sign in with `TestTokens.asUser(id)`. Removing
+  `/api/granary/**` from the protected chain makes the new test fail.
+- **Rollback**: revert the commit. No migration, no data change.
+
+**Access control, part 2: personal data takes its user from the token.** Goals, routine items,
+learning topics, daily logs, tasks and schedule templates join the JWT filter chain. No token is 401.
+Their `userId` query parameter and request-body field are gone, and one sent anyway is ignored.
+- The "no `userId` shows only unowned rows" rule is gone for these routes: nobody can list unowned
+  rows through the API any more. They still exist (the seeded goals, and anything the owner claim
+  has not moved), and the sync services still reach them directly, not over HTTP.
+- `POST /api/goals` and the others require a user that exists: a token whose user is gone is 400.
+- The intelligence service reads these routes, so it now forwards the caller's `Authorization`
+  header (see `docs/intelligence-service.md`). The frontend sends the session token to it.
+- Tests: `PersonalDataTokenApiIntegrationTest` (4). Eight tests for the removed "unowned view"
+  rule were deleted; the rest of the older tests now sign in with `TestTokens.asUser`. Removing
+  `/api/tasks/**` and `/api/goals/**` from the protected chain made the new test error out.
+- **Rollback**: revert the commit. No migration, no data change.
+
+**Access control, part 3: reading, Watering holes and credits take their user from the token.**
+Books, reading notes, current reading, `GET /api/watering-holes` and the evidence routes (ingest,
+ledger, question) join the JWT filter chain. No token is 401, and a `userId` in the request is not
+read (`BookRequest`, `ReadingNoteRequest`, `CurrentReadingRequest` and `EvidenceEventRequest` lost
+the field).
+- Watering holes: the owner (from `OWNER_EMAIL`) sees the real status; every other account sees all
+  sources off. With no owner configured nobody is the owner, so everyone sees all sources off. The
+  old no-`userId` view, which showed the real status to anyone, is gone.
+- Tests: `ReadingAndCreditsTokenApiIntegrationTest` (5). The "unowned books" test for the removed
+  view rule was deleted. Removing `/api/books/**` and `/api/evidence-events/**` from the protected
+  chain made the new test error out.
+- **Rollback**: revert the commit. No migration, no data change.
+
+**Access control, part 4: cohort routes and the owner role.**
+- `/api/organisations/**` joins the JWT filter chain. No token is 401. The founding admin of a new
+  organisation is the token's user; `requestingUserId` and `foundingAdminUserId` are gone from every
+  request, and one sent anyway is ignored. Phase 12's rights are unchanged (admins read aggregates and
+  manage the cohort, members read the dashboard and answer the survey, outsiders get 403), now judged
+  against the token. Anyone signed in can still create an organisation, as before.
+- **Owner role** (migration `V29__user_role.sql`, `User.role`, `UserRole`, `OwnerRoleService`).
+  Every account is `USER`. At startup `OwnerClaimRunner` calls `OwnerRoleService`, which gives
+  `OWNER` to the account whose email is in `OWNER_EMAIL` and takes it from any other account, so there
+  is exactly one owner. It runs separately from the data claim, so a failed claim cannot leave the
+  owner without the role. The role column is read-only for the application (`updatable = false`); only
+  that startup update changes it. No address is in code, SQL or logs. Nothing reads the role yet:
+  the operations page and API docs (staged Prompts 3 and 4) will check it on the server.
+- Tests: `OrganisationTokenApiIntegrationTest` (4), `OwnerRoleServiceTest` (5), two new
+  `OwnerClaimRunnerTest` cases. Unprotecting the organisation routes and removing the demotion step each
+  made a test fail.
+- **Rollback**: revert the commit. `V29` only adds a column with a default; it can stay.
+
+**Access control, part 5: the last claimed ids, and a sweep.**
+- **Hillside** (`/api/hillside`, `/api/hillside/v2`): still a public ranking, but "you" comes only from
+  a valid token (a new filter chain: no token is a visitor, a bad token is 401). The `asUserId`
+  parameter is gone and ignored. It was a real leak: naming any opted-in person returned their rank,
+  score and neighbours.
+- **Intelligence service**: `/suggestion`, `/patterns` and `/tally` have no `userId` parameter and
+  no row filter; the backend returns only the token's rows (see `docs/intelligence-service.md`).
+- **The sweep**: `EveryRouteNeedsATokenTest` walks every `/api/**` route the application serves and
+  requires 401 without a token, except three open on purpose (sign-in, health push with its own token,
+  the hillside). A new route left unprotected fails it, and so does a stale entry in its list.
+- **Dead code removed**: the repository methods that listed unowned rows (nothing calls them now).
+  The unowned rows themselves, and the sync services' use of them, stay.
+- Tests: `EveryRouteNeedsATokenTest` (2), `HillsideTokenApiIntegrationTest` (3). Unprotecting a route
+  made the sweep fail; the hillside test was red before the change.
+- **Rollback**: revert the commit. No migration, no data change.
+
+**The stage is finished**: every route that acts for a person takes that person from the signed
+token. **Secret handling**: compose has no default `AUTH_JWT_SECRET` any more and refuses to start without one.
+The development value is generated locally into the git-ignored `infra/.env` (with `OWNER_EMAIL`), and
+`infra/.env.example` names the variables only. Tokens are signed with it, so anyone holding it can sign
+a token for any user: production needs its own, generated there. The swap list is in `PROJECT.md`'s backlog.
+
+**Still open**: outside the Granary, the user id is claimed by the caller, not proven by a token. Anyone who can reach
+the backend can send any `userId`. That is the access-control stage.
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-25 | The intelligence service's spec reaches the owner through the backend, from an internal port, and not through a shared secret | The service has no authentication of its own (it forwards the caller's token to the backend), so it cannot tell the owner from anyone. A second port that Compose never publishes needs no secret, follows the metrics port, and leaves the owner check in the one place that already has it. A header secret between the services would have been a new credential to store and rotate |
+| 2026-10-25 | The API documentation derives its 401 from `SecurityConfig`'s own pattern lists (superseded for 400, 403 and 404 the same day: they are now per route, see "Error codes") | A 401 written by hand per route would drift from the chains the moment a route moved. The chains and the document now read the same constants. The other codes depend on what each service does, which is not known without reading all of them, so claiming them per route would be guessing. The shared response says what the API can answer and that a route answers only some of it |
+| 2026-10-25 | springdoc `2.10.0`, not a 3.x release | springdoc 3.x is built for Spring Boot 4; its own compatibility table lists Boot 3.5.x with 2.8.x to 2.10.x. 2.10.0 is the latest of that line. Checked against springdoc.org on 25 Oct 2026, not from memory |
+| 2026-10-25 | The documentation gate is a filter in the optional-token chain that answers 404, not a `permitAll`-then-controller check | springdoc's endpoints are not our controllers, so there is no controller to put an owner check in. A filter after the bearer-token filter sees the caller and can refuse everything springdoc serves, including its static UI files, with one rule |
+| 2026-10-21 | The owner account is defined once (`OwnerAccount`, from `OWNER_EMAIL`) and used by the claim, every integration and the Watering holes status | The same address answers "whose data does the deployment's own credentials produce" everywhere; three separate readings of the variable would let the claim and the integrations disagree about who the owner is |
+| 2026-10-21 | An integration may write to the owner's items and to unowned items, nobody else's | Unowned items are the pre-account data the integrations have always written to, so they must keep working before the owner claim runs; the owner's items are what that data becomes after it. A rule of "owner's items only" would stop every integration in the gap between deploying this and running the claim |
+| 2026-10-21 | Another account sees every watering hole as "not connected", not an error or a hidden page | It is true: that account has no integration of its own. Per-user integrations (each person's own WakaTime key) would be a separate feature |
+| 2026-10-21 | A request with no `userId` sees only unowned rows, instead of everything | "Omitted means everything" was the Phase 8 compromise to keep the single-user app working, but it means the userId-less view shows every account's data. Unowned rows are the founder's pre-account data, which the owner claim hands to the owner account, so after the claim the userId-less view is empty. It is kept only until part 3 moves the frontend onto the session user |
+| 2026-10-21 | Someone else's task, template or routine item answers exactly like one that does not exist (404 or the same 400) | A different answer for "exists but is not yours" would let anyone probe which ids exist and how many rows other accounts have |
+| 2026-10-21 | Pre-account data is given to the owner by a startup claim driven by `OWNER_EMAIL`, not by a migration | A migration cannot know whose account is the founder's, and putting an address in a migration or a config file would publish it. The variable is read once at startup, only NULL rows move, and it is idempotent, so leaving it set is harmless |
+| 2026-10-21 | The owner claim is all-or-nothing and a failed claim is logged, not fatal | A half-claimed database (some tables owned, some not) is worse than an unclaimed one, and a typo in an environment variable should not stop the app from starting |
+| 2026-10-21 | `measurements` and `hub_sync_processed_files` are not given a `user_id` | They hold what the deployment's own integrations pull in (one set of credentials for the whole deployment). Giving each user a copy of the owner's WakaTime hours would be wrong, and per-user integrations are a separate feature |
+| 2026-10-19 | M-Pesa statement parsing uses one regex matching the whole transaction-row shape, not a general-purpose PDF table extractor | PDFBox's basic `PDFTextStripper` doesn't preserve table column boundaries reliably; a row-shape regex anchored on the structurally distinctive parts (a receipt id, an ISO-ish date/time, a status word, three trailing decimal amounts) degrades to "no match, fail loudly" when the layout differs, rather than silently misreading columns — matching the proposed "fail loudly on format changes" approach |
+| 2026-10-19 | Category classification is a fixed keyword-to-category map with an OTHER fallback, not a model or a configurable rule set | Matches `tally.py`'s own precedent for simple, stated rules over fitted parameters (Phase 2's skip-heavy threshold); a spending category guess from free text is inherently approximate, and OTHER makes that honest instead of forcing every transaction into a category it doesn't really belong to |
+| 2026-10-19 | The PDF's bytes are read into a plain `byte[]` and never touch a file on disk, rather than "save then delete" | A save-then-delete step is one more place a bug, a crash between the two steps, or a forgotten cleanup path could leave the file behind; never writing it in the first place removes that failure mode entirely instead of relying on a delete call always running |
+| 2026-10-19 | `MpesaStatementPasswordRequiredException` is a distinct exception/response type from `MpesaStatementParseException`, both separately caught in `GlobalExceptionHandler` | The two failures need different frontend behaviour (prompt for a password vs. show "couldn't read this, format may have changed") — collapsing them into one generic 400 would make that distinction only inferable from message text, which is fragile compared to a `type` field |
+| 2026-10-19 | Re-importing the same statement month overwrites that month's category totals (an upsert), not a new set of rows alongside the old one | A user re-uploading a statement (a correction, or the same one twice by accident) should get one true set of totals for that month, not two conflicting sets the page would have to somehow reconcile or pick between |
+| 2026-10-19 | Phase 12 built as data-model groundwork only this slice — no CSV invites, no dashboard metrics, no frontend | The full feature (bulk CSV invites, four pilot measures with denominators, weekly check-in history, small-groups-hidden, a frontend admin/learner dashboard) is more than three parts; per the standing rule, only the first (the data model and the admin/learner access rule everything else depends on) is built now |
+| 2026-10-19 | Admin status lives on `organisation_admins`, scoped to the organisation, not to a cohort | The design reference's admin view spans multiple cohorts under one organisation header ("Cohort 14", "Cohort 13" both under the same admin nav); a per-cohort admin role would need to be granted separately for each new cohort an admin creates, which doesn't match "run a programme," not "run one cohort" |
+| 2026-10-19 | "Invite" means reserving a cohort seat via `CohortInvite`, never sending an actual email | Flagged to the user and confirmed before building, same as Phase 11's M-Pesa handling: this app has no outbound email infrastructure at all. Fabricating a "sent" state for mail that was never sent would be worse than being honest that notifying the invitee is a future integration |
+| 2026-10-19 | A CSV bulk invite reports a per-row outcome for every row, never a bare success count | Matches the M-Pesa parser's "fail loudly, never silently wrong" instinct — an admin who pastes in a messy list (typos, existing members, a seat limit reached partway through) needs to see exactly which rows did what, not infer it from a number |
+| 2026-10-19 | `fulfillInvitesForNewUser` is called unconditionally from both `AuthController.register` and `.githubLogin`, not gated on "was this a brand-new account" | It's a safe no-op when there are no pending invites for that email, so there's no need to thread a new/existing flag through `AuthService` just to skip calling it — simpler than the alternative for no behavioural cost |
+| 2026-10-19 | Cohort "checked in" uses `DailyLog`, not the hillside's `daily_credits` | User's explicit choice, flagged as a real fork with behavioural consequences (the credit pipeline requires hillside opt-in, which cohort members shouldn't need) before building either way |
+| 2026-10-19 | The supportive/neutral/pressuring survey was built this slice rather than deferred | User's explicit choice over leaving the fourth pilot measure unavailable; scoped to one question, one answer per learner per cohort, no reminders or UI beyond a bare submit |
+| 2026-10-19 | `CohortDashboardService` is a new service, not more methods added to `OrganisationService` | `OrganisationService` is about who's in what and who administers it; the dashboard is read-mostly aggregation over several other tables (`Goal`, `DailyLog`, survey responses) that has nothing to do with membership CRUD — same separation `HillsideV2Service` already has from `GranaryService` despite both reading user-scoped data |
+| 2026-10-19 | A study group is set via the CSV's optional second column, not a separate endpoint | Matches the design reference: groups are assigned at invite time ("Morning group," "Evening group"), not edited afterward as a standalone action — no need for more surface area than the one place groups are actually set |
+| 2026-10-19 | The by-group breakdown denominates by every group member, not just activated ones, unlike the cohort-wide measures | Matches the design reference's own group table ("12 of 14" where 14 is the group's full headcount) exactly, rather than silently reusing the cohort-wide measures' activated-only convention where the design doesn't ask for it |
+| 2026-10-19 | The weekly check-in chart shares one `activatedDenominator` across every bar, instead of recomputing a per-week activated count | Matches the design reference's single "of 34 activated" caption under the whole chart; a per-week denominator would also be a stranger number to explain (activation is evaluated as of now, not as of that past week) |
+| 2026-10-19 | A future week's `checkedIn` is `null`, never `0` | A week that hasn't started can't have "zero people checked in" reported about it — that would read as a real, bad result rather than "no data yet," which is what the design reference's dashed, blank bar actually means |
+| 2026-10-21 | A test whose result depends on `CohortMembership.joinedAt` or `Goal.createdAt` pins both to the date it is about, instead of using a date near the real "now" | They are DB-generated (`DEFAULT now()`) and not settable through the entities, so a test using a literal date only passes on the day it was written. The earlier rule ("anchor to the real wall-clock date") was wrong: it made the test pass that day and fail two days later (Stage 1, 2026-10-21). `activationDoesNotDependOnTheRealDate` is the regression guard |
+| 2026-10-19 | `setSeatLimit`/`submitSurveyResponse` return `204`, via `@ResponseStatus(HttpStatus.NO_CONTENT)`, not a bare `200` | Found live: the frontend's shared `request()` helper only special-cases `204` and otherwise always tries `response.json()`, so a `void` controller method's default `200`-with-empty-body threw `"Unexpected end of JSON input"` the first time either endpoint was actually called from the frontend. An honestly-empty write response should be `204`, matching the rest of this app's convention, rather than teaching the frontend to tolerate a malformed `200` |
+| 2026-10-19 | `GranaryController`'s endpoints are `permitAll`, not JWT-protected like `/api/users/me/**` | Matches `/api/evidence-events`' own precedent, not a weaker standard: the frontend already resolves identity from the verified session cookie server-side and only ever sends that id, never a client-editable `userId` field in a form. Adding JWT verification here specifically, when nothing else at this app's current endpoints enforces it except the one `/api/users/me` proof-of-concept, would be inconsistent rigor rather than real additional safety |
+| 2026-10-19 | `isDueForTwentyFourHourFollowUp`/`isDueForThirtyDayFollowUp` are methods on `PauseDecision` itself, not computed in the service or controller | The due-ness of a pause is a property of its own state (its two stored dates plus whether it's been decided/reflected on), not a computation that needs anything external; keeping it on the entity means `GranaryService`, the controller, and any future caller all get the identical, single definition of "due" for free |
+| 2026-10-19 | The granary frontend's "Decline"/"Proceed" buttons are available on every undecided pause, not only once `dueForTwentyFourHourFollowUp` is true | Found while building the "I've already decided" button the design reference shows: gating the decide buttons behind the 24-hour mark would make that button a dead end with nowhere for an immediate decision to land. A real decision is always valid whenever the user actually makes it, not just once a timer says so — the UI still shows "Waiting · {date}" alongside the buttons when the 24-hour mark hasn't passed yet, so the timing information isn't lost |
+| 2026-10-18 | Profile is its own `GET`/`PUT /api/users/me/profile` response type, not added to `UserResponse`/`GET /api/users/me` | `GET /api/users/me` is already called from several places that have no reason to ever see profile data (the sidebar's "signed in as," Hillside's session check); keeping it lean means there's no response path that could ever leak interests/thinkers/currency by accident just because something reused the "get the current user" call. The privacy test (`profileDataNeverAppearsInTheHillsideResponse`) is stronger for having two genuinely separate response shapes to prove apart, not one shape with fields that happen to be omitted sometimes |
+| 2026-10-18 | `User.updateProfile(...)` takes every field as nullable and only applies the ones that aren't null, rather than requiring the full profile on every `PUT` | Matches this project's existing partial-update precedent (`HillsideOptInRequest` aside, most PATCH/PUT endpoints here update one concern at a time); a Profile form with many independent fields (interests, thinkers, currency, time zone, day-end hour, the analogies switch) shouldn't need to resend fields the user isn't currently touching |
+| 2026-10-18 | `day_end_hour` defaults to 0, which is a mathematical no-op in `EvidenceCreditService`'s `hour < dayEndHour` check | Every existing Phase 9 test, and every real user until they visit Profile and change it, needs to see exactly the same local-date behavior as before this column existed — an hour comparison that can never be true at the default value guarantees that without a separate "is this feature on" flag |
+| 2026-10-18 | `scoring_rules`, `interests`, `thinkers`, and `learning_preferences` all reuse `StringListConverter` (JSON array in a TEXT column) rather than join tables | None of these are queried into — a profile is always read back whole, never filtered by "users who like football" — so a join table would add schema and query complexity for a capability nothing in this app needs yet. Same reasoning `reading_notes.ideas_connected`/`quoted_phrases` already established |
 | 2026-10-18 | Phase 9: one implicit "cohort" (every `hillside_opt_in = true` user) backs both the "cohort" and "open" scopes, rather than building minimal cohort groundwork ahead of Phase 12 | Asked the user directly, since `organisations`/`cohorts` are explicitly Phase 12 work and `CLAUDE.md`'s "build only the current phase" rule applies; this keeps Phase 9's schema stable (no `cohort_id` to retrofit later) while still shipping the full credit pipeline and real UI, including the scope segmented control, now |
 | 2026-10-18 | Phase 9: `users.time_zone` added now (migration V18), ahead of Phase 10's full Profile page | Asked the user directly, since Phase 9's own test list requires "a credit decided on Nairobi time near midnight lands on the right local date," which needs *some* per-user time zone to exist first; one column is the same narrow-groundwork pattern `V14__users.sql` used for accounts ahead of full auth, not later-phase logic |
 | 2026-10-18 | `EvidenceCreditService.ingest` is not itself `@Transactional` across its dedupe-lookup/save/award sequence | Each step's own safety comes from the database, not from Java-level transaction boundaries: the dedupe lookup is a fast-path check backed by `evidence_events`' `UNIQUE` constraint (with a caught `DataIntegrityViolationException` fallback), and the credit award is a native `ON CONFLICT DO NOTHING` upsert. Wrapping the whole method in one transaction would add nothing these two constraints don't already guarantee, and would hold a transaction open longer than necessary |
@@ -518,6 +1066,28 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
 
 ## Open questions
 
+- M-Pesa's real statement PDF text layout has never been verified against a real statement —
+  per the task's own instruction, `MpesaStatementParser`/`MpesaPdfReader` are tested only
+  against a synthetic fixture built in-test. The row-shape regex is a best-effort match for
+  the publicly-documented statement structure (receipt no., completion time, details,
+  transaction status, paid in, withdrawn, balance); if the real extracted text differs enough
+  that the regex never matches, every import will fail loudly (by design) until someone
+  checks it against a real statement and adjusts the pattern.
+- The category keyword map (`MpesaStatementParser.CATEGORY_KEYWORDS`) is a first pass, not
+  validated against real M-Pesa transaction description text — merchant names, Till/Paybill
+  numbers, and phrasing it hasn't seen will land in OTHER rather than their real category
+  until the map is extended with real examples.
+- Bank statement CSV import and a typed-in/read money-market-fund balance (both named in the
+  design reference's "Where the granary drinks from" card) aren't built — only M-Pesa and the
+  manual tap exist as sources.
+- `pause_decisions.amount`/`heard_from` are free text; there's no structured currency amount
+  or a fixed enum for "where did you hear it" (the frontend offers a fixed radio set, but the
+  backend accepts anything) — fine for the current single-field-per-pause scope, but would
+  need revisiting if this data were ever aggregated or charted.
+- No endpoint deletes a profile's data or exports it (the design reference shows "Export my
+  data"/"Delete my account" buttons; not built — out of this phase's explicit scope).
+- Nothing yet calls `PUT /api/users/me/profile` except the frontend's own Profile page; no
+  other feature (e.g. the granary, Phase 11) reads profile fields yet.
 - Phase 9's "cohort-scoped by default" hillside isn't real yet — `/api/hillside/v2`'s
   "cohort" and "open" scopes both resolve to the same opted-in population, since
   `organisations`/`cohorts` don't exist until Phase 12. The decisions log records this as a
@@ -569,3 +1139,95 @@ counted" table; the frontend builds that directly from `GET /api/routine-items`'
   existing. Whether JWTs should carry a shorter expiry Next.js actively refreshes, and what
   that refresh looks like across the frontend/backend boundary, isn't decided; nothing
   exercises refresh behavior yet, since nothing refreshes.
+
+## Observability, part 1
+
+Every request gets an `X-Request-Id` (`RequestIdFilter`, before Spring Security), logged on one
+`request completed` line per request; logs are JSON; `/actuator/health` and `/actuator/prometheus` are
+on port 8081 only (`MANAGEMENT_PORT`), never on 8080 and not published by Compose. Details, what is
+recorded about people, and how to turn it off: `docs/observability.md`. The route sweep
+(`EveryRouteNeedsATokenTest`) covers only `/api/**`; the management port is a separate server.
+
+## API documentation (staged Prompt 4)
+
+Staged Prompt 4 has five parts: (1) springdoc on the backend, owner-only; (2) a summary, the request and response shapes and the error codes on every endpoint, with a check that fails if one is missing; (3) the intelligence service's own docs, off on its open port; (4) the operations page linking to both; (5) the docs. **All five are done.**
+
+**In one line.** The owner opens `/watchtower/docs` on the frontend (a link on `/watchtower`) and sees both APIs in one read-only Swagger UI. The raw documents are `GET /v3/api-docs` (the backend's) and `GET /api/watchtower/intelligence-api-docs` (the intelligence service's, handed over by the backend). Everyone else, signed in or not, gets a plain 404 on every one of these addresses. **To keep it true**: a new controller method needs an `@Operation(summary = ...)`, and `ApiDocsCoverageTest` fails, naming the method, if it has none or is hidden from the document. The intelligence service's six routes have the same rule (`test_api_docs.py`).
+
+- **Where it lives.** `GET /v3/api-docs` (the OpenAPI 3.1 document) and the Swagger UI (`/swagger-ui.html`, which redirects to `/swagger-ui/index.html`) on the backend's app port. springdoc `2.10.0` (`springdoc-openapi-starter-webmvc-ui`): springdoc's own compatibility table pairs Spring Boot 3.5.x with its 2.8.x to 2.10.x releases, and 2.10.0 is the latest 2.x. It is not managed by the Boot parent, so the version is in `pom.xml`.
+- **Owner only.** `OwnerOnlyDocsFilter` answers a plain **404 with no body** to everyone but the owner: a signed-in stranger, a signed-out visitor, and everyone when no `OWNER_EMAIL` is set. A malformed token is still refused (401) before it, like the other owner-only addresses. The docs addresses share the optional-token chain with `/api/hillside/**` and `/api/watchtower/**` in `SecurityConfig`, for the same reason: on the token-required chain a signed-out visitor would get a 401, which would tell them the documentation exists. The chain and the filter read the same `OwnerOnlyDocsFilter.PATTERNS`, so they cannot disagree about what is documentation. The filter is not a Spring bean on purpose (a `Filter` bean would also be registered outside the security chain).
+- **Not reachable from the public frontend except through its owner-only route**: the frontend serves none of the backend's own docs addresses (404), and the management port does not serve them. A browser cannot send the bearer token on a plain page load, so the owner opens the viewer through `/watchtower/docs` on the frontend (part 4, below), which passes the owner's session on.
+- **Tested by** `ApiDocsOwnerOnlyTest` (6: the owner gets the spec with the operations page's routes in it and the UI page; another account and a signed-out visitor get 404 on all five addresses; the 404 body does not contain the spec; a malformed token gets 401) and `ApiDocsWithNoOwnerTest` (1). Three deliberate breaks (filter not installed; owner check inverted; the UI assets left out of the gate) each failed the matching tests. The route sweep (`EveryRouteNeedsATokenTest`) still passes unchanged.
+- **Part 2: every operation is described.** All 58 operations have a one-line summary (`@Operation(summary = ...)` on each controller method). `ApiDocsCoverageTest` fails, and names the offender, if a controller method is missing from the document (for example hidden) or an operation has no summary, so a new endpoint cannot be added without one. Request and response shapes come from the DTO types: every 2xx response has a documented shape, and the two write operations with no body (`POST /api/granary/savings`, `PATCH /api/evidence-events/{id}/question`) take none.
+- **Error codes** (`ApiDocsConfig`, `ApiDocsErrorsTest`):
+  - **401** is on exactly the routes the security chains refuse, read from `SecurityConfig.TOKEN_REQUIRED_PATTERNS` and `OPTIONAL_TOKEN_PATTERNS` (the chains use the same constants): 57 of 58 operations. `POST /api/auth/register` is open and has none. `login` (a wrong email or password), `github-login` (the internal token) and `POST /api/measurements` (the health-ingest token) say what their own 401 means, on the method.
+  - **404** on the four owner-only `/api/watchtower` routes: "you are not the owner".
+  - **400, 403 and 404 are per route** (25 Oct 2026, Backlog item A). Each controller method carries `@ApiResponse` lines written from reading what that route can throw, following the controller into the services and helpers it calls and mapping each exception through `GlobalExceptionHandler` (`IllegalArgumentException` and `IllegalStateException` and the M-Pesa errors are 400, `NoSuchElementException` is 404, the two organisation and cohort exceptions are 403). A route that takes a body, a query value, a path value or an upload also documents 400, because Spring answers a missing or unreadable one with 400. A route that can fail none of those ways claims nothing: `GET /api/users/me`, `/profile`, `/api/goals`, `/api/routine-items`, `/api/books`, `/api/granary/pauses`, `/api/granary/pauses/due` and `/api/watering-holes`. **Order matters and I got it wrong once**: setting the seat limit checks the admin first, so a missing organisation answers 403, and I had documented a 404 it can never give; calling the route found it, and the 403 now says so.
+  - **One `default` response on every operation** for anything not listed: the account behind a valid token no longer existing (400 or 404, the one "No user with id" case that is not route-specific), or a server failure (500). The M-Pesa import also has a 500 for an upload that cannot be read, not documented per route.
+  - **How it is held to the code.** `ApiDocsErrorsTest` checks, by reflection over the real handlers, that every route with a body, query value, path value or upload documents 400; that the organisation routes document 403 and 404 (not creating an organisation, and not the seat limit); that the id-lookup routes document 404; and that the routes above that cannot fail do not claim to. **What it cannot check is the wording and the service-level codes**: those are my reading of the code on 25 Oct 2026 and can drift when a service changes. Checked against the running backend: 14 calls, and the three that disagreed at first were two request bodies I had got wrong and the seat-limit case above.
+- **Part 3: the intelligence service's document, through the backend.** `GET /api/watchtower/intelligence-api-docs` (`WatchtowerIntelligenceDocsService`) returns the intelligence service's OpenAPI document to the owner and answers 404 to everyone else (the service is not asked). The service serves it only on an internal docs port that is never published (`docs/intelligence-service.md`); the address is `WATCHTOWER_INTELLIGENCE_DOCS_URL`, configuration and never request input. A missing or silent service is a 503; a reply that is not JSON, not an OpenAPI document or over a megabyte is a 502; a non-200 reply is a 503. The route sits under `/api/watchtower`, so the coverage and error tests above picked it up without a change (summary, 401, 404, and its own 502 and 503 on the method). Tested by `WatchtowerIntelligenceDocsTest` (2), `...UnavailableTest` (1), `...NotConfiguredTest` (1), `...BadDocumentTest` (3).
+- **Part 4: the viewer.** The owner opens the documentation at `/watchtower/docs` on the frontend (`docs/frontend.md`), which passes the session on. The Swagger UI is told to read **both** specs, Backend and Intelligence service, from the frontend's addresses (`springdoc.swagger-ui.urls`), and its `configUrl` is the frontend's too, because the UI re-reads it and the backend's own address would be a 404 in the browser. It is **read-only**: `supported-submit-methods` is empty, so there is no "Try it out". The online validator is off. `OpenAPI.servers` is one relative server (`/`), so springdoc does not fill it with the internal host name `backend:8080`. springdoc also builds `oauth2RedirectUrl` from that host name and no property changes it, so the frontend's route drops it from the answer. Tested by `ApiDocsSwaggerConfigTest` (5).
+- **Tested by** `ApiDocsCoverageTest` (2) and `ApiDocsErrorsTest` (4), written before the code. Two deliberate breaks on coverage (a summary removed, a method hidden) and four on errors (no 401, no shared response, the login 401 left out, the owner-only 404 left out) each failed the matching test.
+
+- **Prompt 4's acceptance checks, one by one.**
+  1. *`/v3/api-docs` and the Swagger UI return 404 to anyone who is not the owner*: `ApiDocsOwnerOnlyTest` and `ApiDocsWithNoOwnerTest`, on five addresses, for a signed-in stranger, a signed-out visitor and the no-owner case; also checked live on 25 Oct 2026, and through the frontend's `/watchtower/docs` addresses.
+  2. *Every controller method appears in the spec with a summary, and a test or script fails if one is missing*: `ApiDocsCoverageTest` (58 of 58 on 25 Oct 2026), proved by two breaks.
+  3. *`docs/backend.md` and `docs/intelligence-service.md` say where the docs live*: this section and "API documentation" in `docs/intelligence-service.md`.
+  4. *The intelligence service's `/docs` and `/redoc` are off on the open port and served only through the owner page*: off (404 on `/docs`, `/redoc`, `/openapi.json` on port 8000); its spec reaches the owner through the backend. **ReDoc itself is not provided**: both specs are in the Swagger UI.
+  5. *The operations page links to both*: one link, to a viewer with a dropdown for both APIs.
+  6. *The request and response shapes and the error codes on every endpoint*: shapes yes. Error codes: yes, per route (401 from the security chains, 400, 403 and 404 from the code, see above), with the limit stated there that the service-level wording is not machine-checked.
+
+## Observability, part 5
+
+`GET /api/watchtower/services` (`WatchtowerController`, `ServiceHealthService`) is the owner-only operations
+page's first endpoint. Only the owner (`OwnerAccount`, from `OWNER_EMAIL`) gets data; a signed-in non-owner, a
+signed-out visitor, and everyone when no owner is set get a plain 404, never a 401. So `/api/watchtower/**` is on
+the optional-token chain in `SecurityConfig` (with `/api/hillside/**`) and is listed as open on purpose in
+`EveryRouteNeedsATokenTest`. Probe addresses are `watchtower.*-url` (env `WATCHTOWER_*_URL`), configuration only.
+`GET /api/watchtower/metrics?range=1h|6h|24h` (`WatchtowerMetricsService`) returns the page's charts from Prometheus
+(`WATCHTOWER_PROMETHEUS_BASE_URL`) using a fixed list of queries that a test keeps equal to the Grafana dashboard's;
+a caller picks only the range. A chart carries at most 8 series, the ones with the largest peaks, with `totalSeries` and
+`truncated` so the page can say it cut. `GET /api/watchtower/logs` (`WatchtowerLogsService`) reads Loki
+(`WATCHTOWER_LOKI_BASE_URL`) with a fixed service list and two checked values, a level from a fixed list and an id of plain
+characters; anything else is a 400. `GET /api/watchtower/sync` (`WatchtowerSyncService`) joins each source's switch and
+newest data (`WateringHoleStatusService`, extracted from `WateringHoleStatusController`, which still masks it for
+non-owners) with its run state from Prometheus, and gives one result word per source. Details and the checks that ran:
+`docs/observability.md`, "Part 5".
+
+## Time zone validation (staged Prompt 6, part 5)
+
+`User.updateProfile` and `User.changeTimeZone` refuse a time zone `ZoneId.of` cannot read (`IllegalArgumentException`, which the API answers as 400) and leave the saved zone unchanged. The Granary and the credit ledger call `ZoneId.of(user.getTimeZone())` on every request, so one bad saved value used to break them for that person. Test: `UserControllerApiIntegrationTest.aTimeZoneThatIsNotARealZoneIsRejectedAndTheSavedZoneStays`. Zones saved before this change are not re-checked.
+
+## Demo profile (staged Prompt 6, part 9, backend only)
+
+An opt-in sample account for demonstrations. **Off by default.** `DEMO_PROFILE_ENABLED=true` in `infra/.env` (passed to the backend as `DEMO_ENABLED`, property `demo.enabled`) switches it on.
+
+- **Endpoint.** `POST /api/auth/demo-login`, internal token only (the same `AUTH_INTERNAL_TOKEN` rule as `github-login`: with none configured it fails closed). When the profile is off the route answers **404**, before any token check, as if it did not exist.
+- **The account.** `DemoProfileService.open()` finds or creates `demo@routine-machine.invalid` (a reserved `.invalid` name that can never receive mail), flags it `users.demo = true` (migration V30), sets its zone to `Africa/Nairobi` and gives it a random password nobody sees, so a password sign-in can never succeed. `UserResponse` now carries `demo`, so the frontend can label the account.
+- **The sample data.** Two goals and four routines (all named "sample" or plain), a three-routine schedule for every day, and 21 days of made-up logs in a fixed pattern (most days shown up, a few missed). Opening the demo again adds only the recent days' logs that are missing, never a second account or duplicate rows. The data belongs to the demo account like any other account's, so no one else sees it.
+- **Tests** (7, `DemoLoginDisabledApiIntegrationTest`, `DemoLoginEnabledApiIntegrationTest`): 404 when off even with a valid token; 401 without or with a wrong token; the account is flagged and on a `.invalid` address; the seeded rows exist and belong to it; a second open adds no rows and no second account; password guesses fail; another person's `/api/goals` is empty and their `demo` is false. Two deliberate breaks (always-on switch, no duplicate guard) each failed the matching test.
+- **Not built yet:** the frontend button, a visible "sample data" label, and the sign-in action. Until they exist the endpoint is not reachable from the app.
+
+## Weekly failure mode (staged Prompt 7, part 4, backend)
+
+The weekly prompt "Which failure mode did you meet this week?" (`docs/understanding-first.md`, the eight modes). The frontend card is on Today (`docs/frontend.md`).
+
+- **Routes** (token required, `/api/failure-modes/**` is in `SecurityConfig.TOKEN_REQUIRED_PATTERNS`, so `EveryRouteNeedsATokenTest` covers it):
+  - `GET /api/failure-modes/current` returns `{weekStart, answered, failureMode}` for this week.
+  - `PUT /api/failure-modes/current` with `{"failureMode": "PROGRESSION"}` saves the answer, or changes it if this week already has one. A missing or unknown mode is a 400 and nothing is saved.
+- **The nine values** (`FailureMode`): the eight modes, `FORMING`, `DISLODGING`, `ASSUMPTION`, `LOCATION`, `ACHIEVEMENT`, `PROGRESSION`, `INTERRUPTION`, `MISLEAD`, and `NONE` ("none this week", added at Miguel's request as a choice of last resort).
+- **The week** starts on Monday in the person's own time zone (`User.timeZone`), the same Monday the Path uses (`WeeklyFailureModeService.weekStart`). Who is asking comes from the token only.
+- **Storage**: its own table (`docs/database.md`, V31), user-owned, one row per person per week. The staged prompt said "stored with the existing logs"; the existing `daily_logs` rows are tied to a routine item or a learning topic, so an answer about a week does not fit there. I stored it beside them in the same database, owned and scoped the same way. If it must live in `daily_logs` itself, say so.
+- **Tests** (10: 7 API, 3 unit): the week rule across a Monday, every weekday, a Sunday and a year boundary; no answer yet; save and read back; answering again keeps one row; all eight and `NONE` accepted; a made-up, null, empty or missing mode refused with nothing saved; one person's answer never seen by another; no token refused. Two deliberate breaks (always insert; the week is the day) failed 2 and 2 tests.
+- **Not built**: a history list, and any reporting on the answers.
+
+**The day the weekly question starts** (staged Prompt 7, part 6): `users.failure_mode_prompt_day` (migration V32, a `DayOfWeek` name, `MONDAY` until the person chooses). It is part of the Profile: `GET` and `PUT /api/users/me/profile` carry `failureModePromptDay`; a PUT that omits it leaves it alone, and a value that is not a day name (including lower case) is a 400 that changes nothing (`User.changeFailureModePromptDay`). Two tests in `UserControllerApiIntegrationTest`. The backend only stores it; the frontend decides when to show the question (`docs/frontend.md`).
+
+## The author's own day for reading notes (Backlog P, part 3)
+
+A reading note assessed at 70 percent own words or more marks the day's reading routine done (`ReadingNoteService.markReadingDoneToday`). It used `LocalDate.now()`, the server's date, so a note written between midnight and 3 a.m. in Nairobi was logged on the previous day. It now logs the day **in the author's saved time zone** (`User.timeZone`); a book with no owner has no zone and uses UTC.
+
+- **The clock is a parameter.** `ReadingNoteService` takes a `Clock`; `ClockConfig` provides `Clock.systemUTC()` for the application, and a test passes a fixed one. The old tests compared with `LocalDate.now()` and so could fail depending on the hour they ran (the trap noted in the decisions log); they now use a fixed moment.
+- **Tests** (4 new, 9 in `ReadingNoteServiceTest`): a note at 22:30 UTC on Sunday counts for Monday in Nairobi, and for Sunday for a UTC author and a Los Angeles author; an unowned book uses the UTC day; two notes in one personal day, two UTC hours apart across the UTC midnight, make one log. Two deliberate breaks (always UTC; the real clock) failed 1 and 4.
+- **Not changed**: the five sync services still use `LocalDate.now()`; they are owner-only (Backlog P (c)).
+

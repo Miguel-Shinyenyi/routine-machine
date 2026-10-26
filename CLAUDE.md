@@ -15,7 +15,10 @@ Claude Code reads this file at the start of every task. Practices that apply to 
 | Pattern detection, suggestions (`intelligence-service/`) | `docs/intelligence-service.md` |
 | Reading the UMWAYI hub | `docs/hub-sync.md` |
 | Dashboard (`frontend/`) | `docs/frontend.md`, then `frontend/AGENTS.md` |
+| Metrics, logs, traces, alerts, the owner-only operations page | `docs/observability.md` |
+| API documentation (the owner-only viewer for both APIs) | `docs/backend.md` ("API documentation"), `docs/intelligence-service.md`, `docs/frontend.md` |
 | Tests | `docs/testing.md` |
+| The concerns record (the 111 concepts), or an audit | `docs/architecture.md`, then `docs/engineering-concerns.md` |
 
 ## Rules that already apply
 
@@ -35,13 +38,14 @@ hub-sync reads encrypted journal content only through the unlock flow documented
 
 `./mvnw test` in `backend/` needs Docker for Testcontainers. `pytest` in `intelligence-service/`. `npm run lint`, `npm test` and `npm run build` in `frontend/`. Commands and ports are in `PROJECT.md`.
 
-## Understanding first, and the 59 concerns
+## Understanding first, and the 111 concerns
 
 These rules come from the UMWAYI hub (`docs/understanding-first.md` and `docs/engineering-concerns.md`). They apply to every task here.
 
+- The cycle of every step: understand things as they are, not as you want them to be. Then let AI write what you understood is needed. Check the output against the goal. Weigh the consequences and know how to undo the change before you ship it.
 - State the goal in one sentence before any work, in the other person's words. After the work, check the output against that sentence.
 - Stay close behind AI output. Do not accept code you cannot explain. Review each change before the next one starts.
 - Solve the problem as stated. Do not draft, follow up or audit before you are asked.
 - Name the failure mode when you notice it: Forming, Dislodging, Assumption, Location, Achievement, Progression, Interruption, Mislead. Apply its remedy.
 - When there is so much to do that nothing moves, pick the smallest next piece and finish it.
-- Keep a concerns record in the design doc: one row per concept (1 to 59), answered applies, not applicable or deferred, with a reason and evidence. Add it when asked for an audit, and at the start of any new project.
+- Keep a concerns record in the design doc: one row per concept (1 to 111), answered applies, not applicable or deferred, with a reason and evidence. Add it when asked for an audit, and at the start of any new project.

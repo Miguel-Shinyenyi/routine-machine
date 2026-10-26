@@ -1,4 +1,5 @@
 import { ApiError, backendFetch } from "@/lib/api";
+import { requireSessionUserId } from "@/lib/auth/session";
 import { markQuotes } from "@/lib/markQuotes";
 import type { Book, ReadingNote } from "@/lib/types";
 import { NewBookForm } from "@/components/NewBookForm";
@@ -40,6 +41,7 @@ function noteStatusLabel(note: ReadingNote): string {
 }
 
 export default async function ReadingPage() {
+  await requireSessionUserId();
   const book = await fetchCurrentBook();
   const notes = book ? await backendFetch<ReadingNote[]>(`/api/reading-notes?bookId=${book.id}`) : [];
   const [latestNote, ...earlierNotes] = notes;

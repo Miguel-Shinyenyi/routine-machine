@@ -33,10 +33,23 @@ class HubSyncServiceTest extends AbstractIntegrationTest {
     @Autowired
     private com.routinemachine.core.repository.BookRepository bookRepository;
 
+    @Autowired
+    private com.routinemachine.core.repository.UserRepository userRepository;
+
     private HubSyncService serviceWith(GitHubContentClient client, HubJournalReader journalReader) {
+        return serviceWith(client, journalReader, "");
+    }
+
+    // ownerEmail "" = no owner configured, so only unowned (pre-account) rows are the sync's targets.
+    private HubSyncService serviceWith(GitHubContentClient client, HubJournalReader journalReader, String ownerEmail) {
         return new HubSyncService(
                 client, journalReader, routineItemRepository, dailyLogRepository,
-                processedFileRepository, bookRepository);
+                processedFileRepository, bookRepository,
+                new com.routinemachine.core.service.OwnerAccount(userRepository, ownerEmail));
+    }
+
+    private com.routinemachine.core.domain.User saveUser(String email) {
+        return userRepository.save(new com.routinemachine.core.domain.User(email, "irrelevant-hash", null, null));
     }
 
     private HubSyncService serviceWith(GitHubContentClient client) {
@@ -192,5 +205,86 @@ class HubSyncServiceTest extends AbstractIntegrationTest {
         service.syncOnce();
 
         assertThat(bookRepository.findAll()).hasSize(1);
+    }
+
+    // --- Per-user scoping, part 5: hub-sync is the owner's own integration. It found the
+    // "journaling"/"writing" routine item by name across every account, and wrote an unowned
+    // book as the current one for everybody.
+
+    @Test
+    void aJournalEntryLogsTheOwnersJournalingItemNotAnotherUsersItemWithTheSameName() {
+        var owner = saveUser("hub-owner@example.com");
+        var other = saveUser("hub-other@example.com");
+        // The other user's item is saved first, so a lookup by name alone would pick it.
+        var othersItem = new RoutineItem("journaling", null);
+        othersItem.assignUser(other);
+        othersItem = routineItemRepository.save(othersItem);
+        var ownersItem = new RoutineItem("journaling", null);
+        ownersItem.assignUser(owner);
+        ownersItem = routineItemRepository.save(ownersItem);
+        var client = new FakeGitHubContentClient(
+                Map.of("journal/entries", List.of(new GitHubFile("journal/entries/2026-10-12.md", "sha-own"))),
+                Map.of());
+
+        serviceWith(client, new HubJournalReader("unused", () -> null), "hub-owner@example.com").syncOnce();
+
+        Long ownersId = ownersItem.getId();
+        Long othersId = othersItem.getId();
+        var logs = dailyLogRepository.findByLogDate(LocalDate.of(2026, 10, 12));
+        assertThat(logs).hasSize(1);
+        assertThat(logs.get(0).getRoutineItem().getId()).isEqualTo(ownersId).isNotEqualTo(othersId);
+        assertThat(logs.get(0).getUser().getId()).isEqualTo(owner.getId());
+    }
+
+    @Test
+    void aNewUsersJournalingItemNeverReceivesTheOwnersJournalEntries() {
+        saveUser("hub-owner2@example.com");
+        var newcomer = saveUser("hub-newcomer@example.com");
+        var newcomersItem = new RoutineItem("journaling", null);
+        newcomersItem.assignUser(newcomer);
+        routineItemRepository.save(newcomersItem);
+        var client = new FakeGitHubContentClient(
+                Map.of("journal/entries", List.of(new GitHubFile("journal/entries/2026-10-13.md", "sha-new"))),
+                Map.of());
+
+        serviceWith(client, new HubJournalReader("unused", () -> null), "hub-owner2@example.com").syncOnce();
+
+        assertThat(dailyLogRepository.findByLogDate(LocalDate.of(2026, 10, 13))).isEmpty();
+    }
+
+    @Test
+    void theSyncedCurrentBookBelongsToTheOwner(@TempDir Path tempDir) throws Exception {
+        Assumptions.assumeTrue(GitCryptTestFixture.isGitCryptAvailable(), "git-crypt not on PATH, skipping");
+        var owner = saveUser("hub-owner3@example.com");
+        Path repoDir = tempDir.resolve("umwayi");
+        String key = GitCryptTestFixture.createEncryptedJournalRepo(repoDir, "2026-10-16.md", "- Current book: Sapiens\n");
+
+        serviceWith(new FakeGitHubContentClient(Map.of(), Map.of()), new HubJournalReader(repoDir.toString(), () -> key),
+                "hub-owner3@example.com").syncOnce();
+
+        var books = bookRepository.findByUserIdOrderByCreatedAtDesc(owner.getId());
+        assertThat(books).hasSize(1);
+        assertThat(books.get(0).getTitle()).isEqualTo("Sapiens");
+        assertThat(bookRepository.findAll().stream().filter(b -> b.getUser() == null).map(b -> b.getTitle()).toList())
+                .doesNotContain("Sapiens");
+    }
+
+    @Test
+    void anotherUsersNewerBookDoesNotMakeHubSyncWriteADuplicateOfTheOwnersBook(@TempDir Path tempDir) throws Exception {
+        Assumptions.assumeTrue(GitCryptTestFixture.isGitCryptAvailable(), "git-crypt not on PATH, skipping");
+        var owner = saveUser("hub-owner4@example.com");
+        var other = saveUser("hub-other4@example.com");
+        Path repoDir = tempDir.resolve("umwayi");
+        String key = GitCryptTestFixture.createEncryptedJournalRepo(repoDir, "2026-10-16.md", "- Current book: Sapiens\n");
+        var service = serviceWith(new FakeGitHubContentClient(Map.of(), Map.of()),
+                new HubJournalReader(repoDir.toString(), () -> key), "hub-owner4@example.com");
+        service.syncOnce();
+        var othersBook = new com.routinemachine.core.domain.Book("Someone elses book", com.routinemachine.core.domain.ReadingSource.MANUAL);
+        othersBook.assignUser(other);
+        bookRepository.save(othersBook);
+
+        service.syncOnce();
+
+        assertThat(bookRepository.findByUserIdOrderByCreatedAtDesc(owner.getId())).hasSize(1);
     }
 }

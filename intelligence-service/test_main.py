@@ -61,43 +61,6 @@ def test_suggestion_returns_404_when_no_learning_topics_exist_yet():
 
 
 @respx.mock
-def test_suggestion_ignores_goals_and_logs_owned_by_a_hillside_demo_user():
-    # Phase 8's hillside demo users each have their own goals/daily_logs now (userId set);
-    # this service has no "current user" concept and must keep treating only the unowned
-    # (userId None) data as its single-user world, or demo data leaks into real suggestions.
-    respx.get(f"{BACKEND_BASE_URL}/api/goals").mock(
-        return_value=httpx.Response(200, json=[
-            {"id": 1, "name": "cmu-masters-application", "description": None, "userId": None},
-            {"id": 99, "name": "someone else's goal", "description": None, "userId": 7},
-        ])
-    )
-    respx.get(f"{BACKEND_BASE_URL}/api/learning-topics").mock(
-        return_value=httpx.Response(200, json=[
-            {"id": 10, "name": "CMU essay draft", "goalId": 1, "goalName": "cmu-masters-application"},
-        ])
-    )
-    respx.get(f"{BACKEND_BASE_URL}/api/daily-logs").mock(
-        return_value=httpx.Response(200, json=[
-            {
-                "id": 1, "logDate": "2026-09-10", "routineItemId": None, "learningTopicId": 10,
-                "source": "manual", "userId": None,
-            },
-            {
-                "id": 2, "logDate": "2026-10-16", "routineItemId": None, "learningTopicId": 10,
-                "source": "manual", "userId": 7,
-            },
-        ])
-    )
-
-    response = client.get("/suggestion")
-
-    assert response.status_code == 200
-    # Only the unowned log should count toward "last logged on" — if the demo user's log
-    # leaked in, this would be the more recent 2026-10-16 date instead.
-    assert response.json()["lastLoggedOn"] == "2026-09-10"
-
-
-@respx.mock
 def test_patterns_calls_the_backend_and_returns_computed_statistics():
     today = date.today()
     created = today - timedelta(days=1)
@@ -154,6 +117,58 @@ def test_tally_calls_the_backend_and_returns_computed_statistics():
     assert body["goalWeekHours"][0]["goalId"] == 5
     assert body["goalWeekHours"][0]["cumulativeHours"] == 1.0
     assert body["routineShownUp"][0]["shownUpDays"] == 1
+
+
+# --- Access control, part 5 (docs/intelligence-service.md): /suggestion, /patterns and /tally have no
+# userId parameter. The backend returns only the rows of the person in the forwarded token, so
+# this service neither asks for a user nor filters by one.
+
+def _mock_backend(goals=None, topics=None, items=None, logs=None):
+    return {
+        "goals": respx.get(f"{BACKEND_BASE_URL}/api/goals").mock(return_value=httpx.Response(200, json=goals or [])),
+        "topics": respx.get(f"{BACKEND_BASE_URL}/api/learning-topics").mock(
+            return_value=httpx.Response(200, json=topics or [])),
+        "items": respx.get(f"{BACKEND_BASE_URL}/api/routine-items").mock(
+            return_value=httpx.Response(200, json=items or [])),
+        "logs": respx.get(f"{BACKEND_BASE_URL}/api/daily-logs").mock(return_value=httpx.Response(200, json=logs or [])),
+    }
+
+
+@respx.mock
+def test_a_user_id_in_the_request_is_not_read_and_never_sent_to_the_backend():
+    routes = _mock_backend(items=[], topics=[], logs=[], goals=[])
+
+    for path in ("/suggestion", "/patterns", "/tally"):
+        client.get(path, params={"userId": 5})
+
+    for name, route in routes.items():
+        for call in route.calls:
+            assert "userId" not in call.request.url.params, name
+
+
+@respx.mock
+def test_suggestion_uses_every_row_the_backend_returns():
+    # The backend already limited the rows to the signed-in person, so none are filtered out here,
+    # whatever userId they carry.
+    _mock_backend(
+        goals=[{"id": 1, "name": "mine", "description": None, "userId": 5}],
+        topics=[{"id": 10, "name": "my topic", "goalId": 1, "goalName": "mine"}],
+        logs=[{"id": 1, "logDate": "2026-09-10", "routineItemId": None, "learningTopicId": 10,
+               "source": "manual", "userId": 5}],
+    )
+
+    response = client.get("/suggestion")
+
+    assert response.status_code == 200
+    assert response.json()["goal"]["name"] == "mine"
+    assert response.json()["lastLoggedOn"] == "2026-09-10"
+
+
+@respx.mock
+def test_suggestion_for_a_new_user_with_no_topics_is_a_404():
+    _mock_backend(goals=[], topics=[], logs=[])
+
+    assert client.get("/suggestion").status_code == 404
 
 
 @respx.mock
@@ -230,3 +245,107 @@ def test_assess_reading_note_returns_502_when_the_anthropic_api_request_fails(mo
     })
 
     assert response.status_code == 502
+
+
+@respx.mock
+def test_analogy_calls_claude_and_returns_the_analogy_and_definition(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    respx.post(f"{ANTHROPIC_BASE_URL}/v1/messages").mock(
+        return_value=httpx.Response(200, json={
+            "content": [{"type": "text", "text": json.dumps({
+                "analogy": "A goal counts once, however many replays.",
+                "definition": "A key that makes a repeated request idempotent.",
+            })}],
+        })
+    )
+
+    response = client.post("/analogy", json={"topic": "idempotency keys", "interest": "football"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["analogy"] == "A goal counts once, however many replays."
+    assert body["definition"] == "A key that makes a repeated request idempotent."
+    assert body["label"] == "analogy"
+    assert body["topic"] == "idempotency keys"
+    assert body["interest"] == "football"
+
+
+@respx.mock
+def test_analogy_is_cached_per_topic_and_interest_and_claude_is_called_only_once(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    route = respx.post(f"{ANTHROPIC_BASE_URL}/v1/messages").mock(
+        return_value=httpx.Response(200, json={
+            "content": [{"type": "text", "text": json.dumps({
+                "analogy": "x", "definition": "y",
+            })}],
+        })
+    )
+
+    first = client.post("/analogy", json={"topic": "a cached topic", "interest": "chess"})
+    second = client.post("/analogy", json={"topic": "a cached topic", "interest": "chess"})
+    # Case-insensitive, whitespace-trimmed: the same pairing however it's typed next time.
+    third = client.post("/analogy", json={"topic": "  A Cached Topic  ", "interest": "Chess"})
+
+    assert first.status_code == second.status_code == third.status_code == 200
+    assert second.json()["analogy"] == "x"
+    assert route.call_count == 1
+
+
+def test_analogy_returns_503_when_no_api_key_is_configured(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    response = client.post("/analogy", json={"topic": "a topic with no key configured", "interest": "music"})
+
+    assert response.status_code == 503
+
+
+@respx.mock
+def test_analogy_returns_502_when_claude_responds_with_unparseable_content(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    respx.post(f"{ANTHROPIC_BASE_URL}/v1/messages").mock(
+        return_value=httpx.Response(200, json={
+            "content": [{"type": "text", "text": "I can't help with that."}],
+        })
+    )
+
+    response = client.post("/analogy", json={"topic": "an unparseable topic", "interest": "cooking"})
+
+    assert response.status_code == 502
+
+
+@respx.mock
+def test_the_callers_token_is_forwarded_to_every_backend_read():
+    # Access control, part 2: the backend takes the user from the token, so this service has to
+    # pass on the one it was given for /suggestion, /patterns and /tally.
+    routes = {
+        path: respx.get(f"{BACKEND_BASE_URL}{path}").mock(return_value=httpx.Response(200, json=[]))
+        for path in ("/api/goals", "/api/learning-topics", "/api/routine-items", "/api/daily-logs")
+    }
+    headers = {"Authorization": "Bearer the-callers-token"}
+
+    client.get("/suggestion", headers=headers)
+    client.get("/patterns", headers=headers)
+    client.get("/tally", headers=headers)
+
+    for path, route in routes.items():
+        assert route.called, path
+        for call in route.calls:
+            assert call.request.headers.get("authorization") == "Bearer the-callers-token", path
+
+
+@respx.mock
+def test_no_token_means_none_is_sent_to_the_backend():
+    route = respx.get(f"{BACKEND_BASE_URL}/api/routine-items").mock(return_value=httpx.Response(200, json=[]))
+    respx.get(f"{BACKEND_BASE_URL}/api/daily-logs").mock(return_value=httpx.Response(200, json=[]))
+
+    client.get("/patterns")
+
+    assert "authorization" not in route.calls[0].request.headers
+
+
+@respx.mock
+def test_a_backend_refusal_for_a_missing_token_is_a_401_not_a_server_error():
+    respx.get(f"{BACKEND_BASE_URL}/api/routine-items").mock(return_value=httpx.Response(401))
+    respx.get(f"{BACKEND_BASE_URL}/api/daily-logs").mock(return_value=httpx.Response(401))
+
+    assert client.get("/patterns").status_code == 401

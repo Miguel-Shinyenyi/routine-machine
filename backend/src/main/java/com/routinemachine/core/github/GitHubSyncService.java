@@ -8,6 +8,7 @@ import com.routinemachine.core.domain.RoutineItemSource;
 import com.routinemachine.core.repository.DailyLogRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import com.routinemachine.core.service.MeasurementService;
+import com.routinemachine.core.service.OwnerAccount;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -30,6 +31,7 @@ public class GitHubSyncService {
     private final RoutineItemRepository routineItemRepository;
     private final DailyLogRepository dailyLogRepository;
     private final MeasurementService measurementService;
+    private final OwnerAccount ownerAccount;
     private final boolean enabled;
 
     @Autowired
@@ -38,11 +40,13 @@ public class GitHubSyncService {
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
             MeasurementService measurementService,
+            OwnerAccount ownerAccount,
             @Value("${github-sync.enabled:true}") boolean enabled) {
         this.gitHubCommitClient = gitHubCommitClient;
         this.routineItemRepository = routineItemRepository;
         this.dailyLogRepository = dailyLogRepository;
         this.measurementService = measurementService;
+        this.ownerAccount = ownerAccount;
         this.enabled = enabled;
     }
 
@@ -52,8 +56,9 @@ public class GitHubSyncService {
             GitHubCommitClient gitHubCommitClient,
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
-            MeasurementService measurementService) {
-        this(gitHubCommitClient, routineItemRepository, dailyLogRepository, measurementService, true);
+            MeasurementService measurementService,
+            OwnerAccount ownerAccount) {
+        this(gitHubCommitClient, routineItemRepository, dailyLogRepository, measurementService, ownerAccount, true);
     }
 
     @Scheduled(fixedDelayString = "${github-sync.poll-interval-ms:900000}")
@@ -68,7 +73,7 @@ public class GitHubSyncService {
         LocalDate today = LocalDate.now();
         List<GitHubCommitDailyTotal> totals =
                 gitHubCommitClient.fetchDailyCommitCounts(today.minusDays(SYNC_WINDOW_DAYS), today);
-        List<RoutineItem> gitHubRoutineItems = routineItemRepository.findBySource(RoutineItemSource.GITHUB);
+        List<RoutineItem> gitHubRoutineItems = ownerAccount.integrationTargets(routineItemRepository.findBySource(RoutineItemSource.GITHUB));
 
         for (GitHubCommitDailyTotal total : totals) {
             if (total.commitCount() <= 0) {
@@ -79,8 +84,10 @@ public class GitHubSyncService {
 
             for (RoutineItem routineItem : gitHubRoutineItems) {
                 if (!dailyLogRepository.existsByRoutineItemIdAndLogDate(routineItem.getId(), total.date())) {
-                    dailyLogRepository.save(
-                            DailyLog.forRoutineItem(total.date(), routineItem, DailyLogSource.GITHUB_SYNC));
+                    DailyLog syncedLog = DailyLog.forRoutineItem(total.date(), routineItem, DailyLogSource.GITHUB_SYNC);
+                    // The day belongs to whoever owns the item, never to nobody.
+                    syncedLog.assignUser(routineItem.getUser());
+                    dailyLogRepository.save(syncedLog);
                 }
             }
         }

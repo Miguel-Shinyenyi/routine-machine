@@ -1,6 +1,9 @@
 package com.routinemachine.core.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -9,7 +12,11 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
+import java.time.DateTimeException;
+import java.time.DayOfWeek;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.List;
 import java.util.Objects;
 
 // Phase 8 groundwork: an account someone can register or log into (password, GitHub, or
@@ -36,16 +43,67 @@ public class User {
     @Column(name = "display_name")
     private String displayName;
 
+    // Read-only here: the database default gives every new account USER, and only OwnerRoleService
+    // (a direct update at startup, from OWNER_EMAIL) ever changes it. Saving a User never writes it.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, insertable = false, updatable = false)
+    private UserRole role = UserRole.USER;
+
     // Defaults false: the hillside should never enroll a user who hasn't explicitly agreed to
     // be compared against others, even if they already have non-private routine items.
     @Column(name = "hillside_opt_in", nullable = false)
     private boolean hillsideOptIn = false;
+
+    // The weekday the weekly failure-mode question starts showing on Today (staged Prompt 7), chosen on the Profile page.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "failure_mode_prompt_day", nullable = false)
+    private DayOfWeek failureModePromptDay = DayOfWeek.MONDAY;
+
+    // True only for the sample account opened by DemoProfileService. Never true for a real person.
+    @Column(name = "demo", nullable = false)
+    private boolean demo = false;
 
     // Phase 9 groundwork (see V18__user_time_zone.sql): an IANA zone id ("Africa/Nairobi"),
     // defaulting to UTC. Decides which calendar day a credit lands on — see
     // EvidenceCreditService. Phase 10's Profile page is where a user actually sets this.
     @Column(name = "time_zone", nullable = false)
     private String timeZone = "UTC";
+
+    // Phase 10 (docs/product-direction.md's Profile section): what this person loves, who
+    // they return to for ideas, and how they like to learn. Never read by HillsideV2Service
+    // or anything cohort-facing — see docs/backend.md's decisions log and the privacy test
+    // that proves it.
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "interests")
+    private List<String> interests;
+
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "thinkers")
+    private List<String> thinkers;
+
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "learning_preferences")
+    private List<String> learningPreferences;
+
+    @Column(name = "currency")
+    private String currency;
+
+    // An hour (0-23) before which an evidence event still counts for the previous calendar
+    // day — see EvidenceCreditService. Defaults 0 (midnight): no shift, an ordinary calendar
+    // day, until the user sets otherwise on their Profile page.
+    @Column(name = "day_end_hour", nullable = false)
+    private int dayEndHour = 0;
+
+    // Defaults true: an analogy is an aid offered by default, not something a user has to
+    // opt into — matches Today's staff card already showing a suggestion unprompted.
+    @Column(name = "analogies_enabled", nullable = false)
+    private boolean analogiesEnabled = true;
+
+    // Phase 11 (docs/product-direction.md's granary section): "a daily amount the user picks
+    // (KSh 50 in the design)." Null until the user sets one on the granary page; a tap with no
+    // amount set must ask for one rather than guessing a figure.
+    @Column(name = "saving_target_amount")
+    private Integer savingTargetAmount;
 
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
@@ -64,6 +122,22 @@ public class User {
         this.displayName = displayName;
     }
 
+    public DayOfWeek getFailureModePromptDay() {
+        return failureModePromptDay;
+    }
+
+    public void changeFailureModePromptDay(DayOfWeek day) {
+        this.failureModePromptDay = Objects.requireNonNull(day, "day must not be null");
+    }
+
+    public boolean isDemo() {
+        return demo;
+    }
+
+    public void markDemo() {
+        this.demo = true;
+    }
+
     public void linkGithubId(String githubId) {
         this.githubId = Objects.requireNonNull(githubId, "githubId must not be null");
     }
@@ -76,6 +150,10 @@ public class User {
         this.hillsideOptIn = false;
     }
 
+    public UserRole getRole() {
+        return role;
+    }
+
     public boolean isHillsideOptIn() {
         return hillsideOptIn;
     }
@@ -85,7 +163,70 @@ public class User {
     }
 
     public void changeTimeZone(String timeZone) {
-        this.timeZone = Objects.requireNonNull(timeZone, "timeZone must not be null");
+        this.timeZone = validTimeZone(Objects.requireNonNull(timeZone, "timeZone must not be null"));
+    }
+
+    // A zone the Granary and the credit ledger later hand to ZoneId.of; a bad name saved here would break them
+    // for this person on every request, so it is refused when it is set.
+    private static String validTimeZone(String timeZone) {
+        try {
+            ZoneId.of(timeZone);
+        } catch (DateTimeException e) {
+            throw new IllegalArgumentException("timeZone must be a real zone name such as Africa/Nairobi");
+        }
+        return timeZone;
+    }
+
+    public List<String> getInterests() {
+        return interests;
+    }
+
+    public List<String> getThinkers() {
+        return thinkers;
+    }
+
+    public List<String> getLearningPreferences() {
+        return learningPreferences;
+    }
+
+    public String getCurrency() {
+        return currency;
+    }
+
+    public int getDayEndHour() {
+        return dayEndHour;
+    }
+
+    public boolean isAnalogiesEnabled() {
+        return analogiesEnabled;
+    }
+
+    public void updateProfile(
+            List<String> interests, List<String> thinkers, List<String> learningPreferences,
+            String currency, Integer dayEndHour, String timeZone, Boolean analogiesEnabled) {
+        if (interests != null) this.interests = interests;
+        if (thinkers != null) this.thinkers = thinkers;
+        if (learningPreferences != null) this.learningPreferences = learningPreferences;
+        if (currency != null) this.currency = currency;
+        if (dayEndHour != null) {
+            if (dayEndHour < 0 || dayEndHour > 23) {
+                throw new IllegalArgumentException("dayEndHour must be between 0 and 23");
+            }
+            this.dayEndHour = dayEndHour;
+        }
+        if (timeZone != null) this.timeZone = validTimeZone(timeZone);
+        if (analogiesEnabled != null) this.analogiesEnabled = analogiesEnabled;
+    }
+
+    public Integer getSavingTargetAmount() {
+        return savingTargetAmount;
+    }
+
+    public void changeSavingTargetAmount(int savingTargetAmount) {
+        if (savingTargetAmount <= 0) {
+            throw new IllegalArgumentException("savingTargetAmount must be positive");
+        }
+        this.savingTargetAmount = savingTargetAmount;
     }
 
     public Long getId() {

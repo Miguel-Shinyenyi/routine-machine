@@ -52,6 +52,12 @@ public class Task {
     @JoinColumn(name = "daily_log_id")
     private DailyLog dailyLog;
 
+    // Nullable until OwnerClaimService hands pre-account rows to the owner (V28). From then on
+    // every row belongs to one user; see docs/backend.md's per-user scoping notes.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
+
     @Generated(event = EventType.INSERT)
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private OffsetDateTime createdAt;
@@ -135,6 +141,14 @@ public class Task {
 
     public DailyLog getDailyLog() {
         return dailyLog;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void assignUser(User user) {
+        this.user = user;
     }
 
     public OffsetDateTime getCreatedAt() {

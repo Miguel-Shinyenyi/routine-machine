@@ -1,5 +1,9 @@
 package com.routinemachine.core.hubsync;
 
+import com.routinemachine.core.github.GitHubRequests;
+import com.routinemachine.core.observability.FailureDescription;
+import com.routinemachine.core.observability.GitHubRateLimit;
+import com.routinemachine.core.observability.SyncMetrics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -27,6 +31,7 @@ public class GitHubContentClientImpl implements GitHubContentClient {
 
     private final String repoSlug;
     private final HttpClient httpClient;
+    private final String token;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public GitHubContentClientImpl() {
@@ -38,6 +43,8 @@ public class GitHubContentClientImpl implements GitHubContentClient {
     GitHubContentClientImpl(String repoSlug) {
         this.repoSlug = repoSlug;
         this.httpClient = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
+        this.token = GitHubRequests.tokenFrom(System::getenv);
+        log.info("hub-sync: {}", token == null ? "no GITHUB_TOKEN, so GitHub allows 60 requests an hour" : "using GITHUB_TOKEN");
     }
 
     @Override
@@ -45,7 +52,8 @@ public class GitHubContentClientImpl implements GitHubContentClient {
         try {
             HttpResponse<String> response = get("https://api.github.com/repos/" + repoSlug + "/contents/" + path);
             if (response.statusCode() != 200) {
-                log.info("hub-sync: listing {} returned HTTP {}", path, response.statusCode());
+                log.info("hub-sync: listing {} returned HTTP {}{}", path, response.statusCode(), limitNote(response));
+                SyncMetrics.failure("hub");
                 return List.of();
             }
             JsonNode items = objectMapper.readTree(response.body());
@@ -57,12 +65,14 @@ public class GitHubContentClientImpl implements GitHubContentClient {
                     }
                 }
             }
+            SyncMetrics.success("hub");
             return files;
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            log.info("hub-sync: failed to list {}: {}", path, e.getClass().getSimpleName());
+            log.info("hub-sync: failed to list {}: {}", path, FailureDescription.of(e));
+            SyncMetrics.failure("hub");
             return List.of();
         }
     }
@@ -73,7 +83,7 @@ public class GitHubContentClientImpl implements GitHubContentClient {
             HttpResponse<String> response = get(
                     "https://api.github.com/repos/" + repoSlug + "/commits?path=" + path + "&per_page=100");
             if (response.statusCode() != 200) {
-                log.info("hub-sync: commit history for {} returned HTTP {}", path, response.statusCode());
+                log.info("hub-sync: commit history for {} returned HTTP {}{}", path, response.statusCode(), limitNote(response));
                 return Optional.empty();
             }
             JsonNode commits = objectMapper.readTree(response.body());
@@ -94,18 +104,19 @@ public class GitHubContentClientImpl implements GitHubContentClient {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            log.info("hub-sync: failed to read commit history for {}: {}", path, e.getClass().getSimpleName());
+            log.info("hub-sync: failed to read commit history for {}: {}", path, FailureDescription.of(e));
             return Optional.empty();
         }
     }
 
     private HttpResponse<String> get(String url) throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(TIMEOUT)
-                .header("Accept", "application/vnd.github+json")
-                .header("User-Agent", "routine-machine-hub-sync")
-                .GET()
-                .build();
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpRequest request = GitHubRequests.get(URI.create(url), "routine-machine-hub-sync", token, TIMEOUT);
+        return GitHubRequests.sendWithOneRetry(r -> httpClient.send(r, HttpResponse.BodyHandlers.ofString()), request,
+                GitHubRequests.RETRY_PAUSE_MILLIS);
+    }
+
+    // " (rate limited until ...)" when GitHub's headers say the quota is used up, else nothing.
+    private static String limitNote(HttpResponse<?> response) {
+        return GitHubRateLimit.describe(response.headers()).map(note -> " (" + note + ")").orElse("");
     }
 }

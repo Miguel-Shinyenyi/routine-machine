@@ -101,6 +101,117 @@ class UserControllerApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void gettingTheProfileReturnsDefaultsForANewUser() throws Exception {
+        User user = userRepository.save(new User("profile-defaults@example.com", "irrelevant-hash", null, null));
+
+        mockMvc.perform(get("/api/users/me/profile")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dayEndHour", is(0)))
+                .andExpect(jsonPath("$.timeZone", is("UTC")))
+                .andExpect(jsonPath("$.analogiesEnabled", is(true)))
+                .andExpect(jsonPath("$.failureModePromptDay", is("MONDAY")));
+    }
+
+    @Test
+    void updatingTheProfileChangesOnlyTheFieldsSent() throws Exception {
+        User user = userRepository.save(new User("profile-update@example.com", "irrelevant-hash", null, null));
+
+        mockMvc.perform(put("/api/users/me/profile")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"interests\": [\"football\", \"philosophy\"], \"dayEndHour\": 3, "
+                                + "\"timeZone\": \"Africa/Nairobi\", \"currency\": \"KES\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interests[0]", is("football")))
+                .andExpect(jsonPath("$.dayEndHour", is(3)))
+                .andExpect(jsonPath("$.timeZone", is("Africa/Nairobi")))
+                .andExpect(jsonPath("$.currency", is("KES")))
+                .andExpect(jsonPath("$.analogiesEnabled", is(true)));
+
+        mockMvc.perform(put("/api/users/me/profile")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"analogiesEnabled\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interests[0]", is("football")))
+                .andExpect(jsonPath("$.analogiesEnabled", is(false)));
+    }
+
+    @Test
+    void anOutOfRangeDayEndHourIsRejected() throws Exception {
+        User user = userRepository.save(new User("profile-bad-hour@example.com", "irrelevant-hash", null, null));
+
+        mockMvc.perform(put("/api/users/me/profile")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dayEndHour\": 24}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void aTimeZoneThatIsNotARealZoneIsRejectedAndTheSavedZoneStays() throws Exception {
+        User user = userRepository.save(new User("profile-bad-zone@example.com", "irrelevant-hash", null, null));
+
+        for (String bad : new String[] {"Mars/Base", "not a zone", "   "}) {
+            mockMvc.perform(put("/api/users/me/profile")
+                            .header("Authorization", "Bearer " + signedToken(user.getId().toString()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"timeZone\": \"" + bad + "\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        mockMvc.perform(get("/api/users/me/profile")
+                        .header("Authorization", "Bearer " + signedToken(user.getId().toString())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.timeZone", is("UTC")));
+    }
+
+    @Test
+    void theDayTheWeeklyFailureModeQuestionStartsOnIsChosenAndKept() throws Exception {
+        User user = userRepository.save(new User("profile-prompt-day@example.com", "irrelevant-hash", null, null));
+        String token = "Bearer " + signedToken(user.getId().toString());
+
+        mockMvc.perform(put("/api/users/me/profile").header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"failureModePromptDay\": \"THURSDAY\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureModePromptDay", is("THURSDAY")));
+
+        // A later update that does not mention it leaves it alone.
+        mockMvc.perform(put("/api/users/me/profile").header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"dayEndHour\": 2}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureModePromptDay", is("THURSDAY")))
+                .andExpect(jsonPath("$.dayEndHour", is(2)));
+
+        mockMvc.perform(get("/api/users/me/profile").header("Authorization", token))
+                .andExpect(jsonPath("$.failureModePromptDay", is("THURSDAY")));
+    }
+
+    @Test
+    void aDayThatIsNotADayOfTheWeekIsRejectedAndTheChoiceStays() throws Exception {
+        User user = userRepository.save(new User("profile-bad-prompt-day@example.com", "irrelevant-hash", null, null));
+        String token = "Bearer " + signedToken(user.getId().toString());
+
+        for (String bad : new String[] {"FUNDAY", "monday", ""}) {
+            mockMvc.perform(put("/api/users/me/profile").header("Authorization", token)
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"failureModePromptDay\": \"" + bad + "\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+        mockMvc.perform(get("/api/users/me/profile").header("Authorization", token))
+                .andExpect(jsonPath("$.failureModePromptDay", is("MONDAY")));
+    }
+
+    @Test
+    void theProfileEndpointsRequireAValidToken() throws Exception {
+        mockMvc.perform(get("/api/users/me/profile")).andExpect(status().isUnauthorized());
+        mockMvc.perform(put("/api/users/me/profile")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void aMissingTokenIsRejected() throws Exception {
         mockMvc.perform(get("/api/users/me"))
                 .andExpect(status().isUnauthorized());

@@ -1,9 +1,17 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.RoutineItem;
 import com.routinemachine.core.domain.ScheduleTemplate;
+import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import com.routinemachine.core.repository.ScheduleTemplateRepository;
+import com.routinemachine.core.repository.UserRepository;
+import com.routinemachine.core.service.Ownership;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,30 +32,43 @@ public class ScheduleTemplateController {
 
     private final ScheduleTemplateRepository scheduleTemplateRepository;
     private final RoutineItemRepository routineItemRepository;
+    private final UserRepository userRepository;
 
     public ScheduleTemplateController(
-            ScheduleTemplateRepository scheduleTemplateRepository, RoutineItemRepository routineItemRepository) {
+            ScheduleTemplateRepository scheduleTemplateRepository, RoutineItemRepository routineItemRepository,
+            UserRepository userRepository) {
         this.scheduleTemplateRepository = scheduleTemplateRepository;
         this.routineItemRepository = routineItemRepository;
+        this.userRepository = userRepository;
     }
 
+    @Operation(summary = "List schedule templates")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping
-    public List<ScheduleTemplateResponse> list(@RequestParam Optional<DayOfWeek> dayOfWeek) {
+    public List<ScheduleTemplateResponse> list(
+            @AuthenticationPrincipal Jwt jwt, @RequestParam Optional<DayOfWeek> dayOfWeek) {
+        Long userId = TokenUser.idOf(jwt);
         List<ScheduleTemplate> templates = dayOfWeek
-                .map(scheduleTemplateRepository::findByDayOfWeekWithRoutineItem)
-                .orElseGet(scheduleTemplateRepository::findAllWithRoutineItem);
+                .map(day -> scheduleTemplateRepository.findByDayOfWeekAndUserId(day, userId))
+                .orElseGet(() -> scheduleTemplateRepository.findByUserId(userId));
         return templates.stream().map(ScheduleTemplateResponse::from).toList();
     }
 
+    @Operation(summary = "Create a schedule template")
+    @ApiResponse(responseCode = "400", description = "There is no routine item with that id, or it belongs to someone else. routineItemId is required when targetType is ROUTINE_ITEM. routineItemId must not be set when targetType is LEARNING_SLOT. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ScheduleTemplateResponse create(@Valid @RequestBody ScheduleTemplateRequest request) {
+    public ScheduleTemplateResponse create(
+            @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ScheduleTemplateRequest request) {
+        Long userId = TokenUser.idOf(jwt);
+        User owner = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
         ScheduleTemplate template = switch (request.targetType()) {
             case ROUTINE_ITEM -> {
                 if (request.routineItemId() == null) {
                     throw new IllegalArgumentException("routineItemId is required when targetType is ROUTINE_ITEM");
                 }
-                RoutineItem item = findRoutineItem(request.routineItemId());
+                RoutineItem item = findRoutineItem(request.routineItemId(), owner);
                 yield ScheduleTemplate.forRoutineItem(
                         request.dayOfWeek(), item, request.targetDurationMinutes(), request.sortOrder(), request.label());
             }
@@ -59,11 +80,14 @@ public class ScheduleTemplateController {
                         request.dayOfWeek(), request.targetDurationMinutes(), request.sortOrder(), request.label());
             }
         };
+        template.assignUser(owner);
         return ScheduleTemplateResponse.from(scheduleTemplateRepository.save(template));
     }
 
-    private RoutineItem findRoutineItem(Long id) {
+    // Someone else's routine item answers exactly like one that does not exist.
+    private RoutineItem findRoutineItem(Long id, User owner) {
         return routineItemRepository.findById(id)
+                .filter(found -> Ownership.sameOwner(found.getUser(), owner))
                 .orElseThrow(() -> new IllegalArgumentException("No routine item with id " + id));
     }
 }

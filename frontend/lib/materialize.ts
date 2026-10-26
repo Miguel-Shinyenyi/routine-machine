@@ -1,4 +1,4 @@
-import { backendFetch, intelligenceFetch } from "./api";
+import { ApiError, backendFetch, intelligenceFetch } from "./api";
 import { dayOfWeekName, templatesNeedingMaterialization } from "./schedule";
 import type { ScheduleTemplate, Suggestion, Task } from "./types";
 
@@ -7,6 +7,8 @@ import type { ScheduleTemplate, Suggestion, Task } from "./types";
 // open question schedule.md left for implementation time, that the frontend (not the backend)
 // orchestrates the cross-service call: resolving a LEARNING_SLOT template's topic for the day
 // means asking the intelligence service, and the backend stays unaware that service exists.
+// Per-user scoping (docs/backend.md): reads the user's own templates and tasks, and creates the
+// day's tasks as theirs.
 export async function materializeDay(date: string): Promise<Task[]> {
   const day = dayOfWeekName(date);
   const [templates, existingTasks] = await Promise.all([
@@ -34,7 +36,14 @@ export async function materializeDay(date: string): Promise<Task[]> {
       body.learningTopicId = suggestion.topic.id;
     }
 
-    created.push(await backendFetch<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) }));
+    try {
+      created.push(await backendFetch<Task>("/api/tasks", { method: "POST", body: JSON.stringify(body) }));
+    } catch (error) {
+      // The backend refuses a topic that is not this user's own; the suggestion is now scoped to
+      // the user too, so this should not happen, but a refused slot is skipped, not fatal.
+      if (error instanceof ApiError && error.status === 400) continue;
+      throw error;
+    }
   }
 
   return [...existingTasks, ...created];

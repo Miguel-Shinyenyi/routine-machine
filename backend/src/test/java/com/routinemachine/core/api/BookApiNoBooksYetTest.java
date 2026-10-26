@@ -7,6 +7,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -17,11 +18,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class BookApiNoBooksYetTest extends AbstractIntegrationTest {
 
     @Autowired
+    private com.routinemachine.core.repository.UserRepository meRepository;
+
+    private com.routinemachine.core.domain.User me;
+
+    @org.junit.jupiter.api.BeforeEach
+    void signInAsANewUser() {
+        me = meRepository.save(new com.routinemachine.core.domain.User(
+                "BookApiNoBooksYetTest-" + System.nanoTime() + "@example.com", "irrelevant-hash", null, null));
+    }
+
+    @Autowired
     private MockMvc mockMvc;
 
     @Test
     void returns404WhenNoBookHasBeenLoggedYet() throws Exception {
-        mockMvc.perform(get("/api/books/current"))
+        mockMvc.perform(get("/api/books/current").with(asUser(me.getId())))
                 .andExpect(status().isNotFound());
     }
 }

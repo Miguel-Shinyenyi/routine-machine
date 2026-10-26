@@ -1,6 +1,7 @@
 package com.routinemachine.core.api;
 
 import com.routinemachine.core.domain.ScheduleTemplate;
+import com.routinemachine.core.service.Ownership;
 
 public record ScheduleTemplateResponse(
         Long id,
@@ -9,7 +10,8 @@ public record ScheduleTemplateResponse(
         Long routineItemId,
         int targetDurationMinutes,
         int sortOrder,
-        String label) {
+        String label,
+        Long userId) {
 
     public static ScheduleTemplateResponse from(ScheduleTemplate template) {
         return new ScheduleTemplateResponse(
@@ -19,6 +21,7 @@ public record ScheduleTemplateResponse(
                 template.getRoutineItem() == null ? null : template.getRoutineItem().getId(),
                 template.getTargetDurationMinutes(),
                 template.getSortOrder(),
-                template.getLabel());
+                template.getLabel(),
+                Ownership.idOf(template.getUser()));
     }
 }

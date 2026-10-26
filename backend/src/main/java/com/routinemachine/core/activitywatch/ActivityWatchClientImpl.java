@@ -1,5 +1,6 @@
 package com.routinemachine.core.activitywatch;
 
+import com.routinemachine.core.observability.SyncMetrics;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -74,6 +75,7 @@ public class ActivityWatchClientImpl implements ActivityWatchClient {
             HttpResponse<String> response = get(baseUrl + "/api/0/buckets/");
             if (response.statusCode() != 200) {
                 log.info("activitywatch-sync: listing buckets returned HTTP {}", response.statusCode());
+                SyncMetrics.failure("activitywatch");
                 return Optional.empty();
             }
             JsonNode buckets = objectMapper.readTree(response.body());
@@ -90,6 +92,7 @@ public class ActivityWatchClientImpl implements ActivityWatchClient {
                 Thread.currentThread().interrupt();
             }
             log.info("activitywatch-sync: failed to list buckets: {}", e.getClass().getSimpleName());
+            SyncMetrics.failure("activitywatch");
             return Optional.empty();
         }
     }
@@ -103,14 +106,17 @@ public class ActivityWatchClientImpl implements ActivityWatchClient {
             HttpResponse<String> response = get(url);
             if (response.statusCode() != 200) {
                 log.info("activitywatch-sync: fetching events for {} returned HTTP {}", bucketId, response.statusCode());
+                SyncMetrics.failure("activitywatch");
                 return List.of();
             }
+            SyncMetrics.success("activitywatch");
             return sumNotAfkSecondsByDay(response.body());
         } catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             log.info("activitywatch-sync: failed to fetch events for {}: {}", bucketId, e.getClass().getSimpleName());
+            SyncMetrics.failure("activitywatch");
             return List.of();
         }
     }

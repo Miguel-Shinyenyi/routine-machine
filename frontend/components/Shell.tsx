@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
-import { logoutAction } from "@/lib/auth/actions";
 
 // Icon paths copied from docs/design-reference/pages/*.html's inline nav SVGs (the canvas
 // design export), not a new icon set invented here — see docs/frontend.md's decisions log.
@@ -23,6 +22,12 @@ const ICONS: Record<string, React.ReactNode> = {
   ),
   "/tally": <path d="M5 5v14M9 5v14M13 5v14M17 5v14M3 15l18-6" />,
   "/reading": <path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" />,
+  "/granary": (
+    <>
+      <path d="M8 3h8M9 3v3L6 10v9a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-9l-3-4V3" />
+      <path d="M6 13h12" />
+    </>
+  ),
   "/hillside": <path d="M2 19l7-10 4 5 3-3 6 8z" />,
   "/watering-holes": <path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z" />,
 };
@@ -33,13 +38,15 @@ const SIDEBAR_LINKS = [
   { href: "/flock", label: "Flock" },
   { href: "/tally", label: "Tally" },
   { href: "/reading", label: "Reading" },
+  { href: "/granary", label: "Granary" },
   { href: "/hillside", label: "Hillside" },
   { href: "/watering-holes", label: "Watering holes" },
 ];
 
-// The reference's phone tab bar is Today, Path, Reading, Tally, Hillside; Flock and
-// Watering holes open from Tally on phone instead (docs/design-reference/README.md).
-const PHONE_LINKS = ["/today", "/path", "/reading", "/tally", "/hillside"];
+// Matches the updated design reference's phone tab bar exactly: Today, Reading, Granary,
+// Tally, Hillside — Path moved off (its "opens from Today" cross-link isn't built, same
+// already-flagged gap as Flock/Watering holes below), now that Granary actually exists.
+const PHONE_LINKS = ["/today", "/reading", "/granary", "/tally", "/hillside"];
 
 function NavIcon({ href }: { href: string }) {
   return (
@@ -60,6 +67,15 @@ function NavIcon({ href }: { href: string }) {
   );
 }
 
+// Shown on every page while signed in as the demo account, so nobody mistakes the sample data for a real person's.
+function DemoBanner() {
+  return (
+    <p role="status" className="mb-4 rounded-[12px] px-3 py-2 text-[13px] font-semibold" style={{ background: "rgba(233,162,59,.2)" }}>
+      Sample data. This is a demo account with made-up information. Nothing here is a real person&rsquo;s.
+    </p>
+  );
+}
+
 export function Shell({
   children,
   doneCount,
@@ -68,6 +84,7 @@ export function Shell({
   routineCount,
   connectedCount,
   userEmail,
+  demo,
 }: {
   children: React.ReactNode;
   doneCount: number | null;
@@ -76,6 +93,7 @@ export function Shell({
   routineCount: number | null;
   connectedCount: number | null;
   userEmail: string | null;
+  demo: boolean;
 }) {
   const pathname = usePathname();
   const watchedFor =
@@ -90,6 +108,72 @@ export function Shell({
   // reason. No Shell chrome at all on these two routes.
   if (pathname === "/login" || pathname === "/register") {
     return <main className="mx-auto w-full max-w-[1100px] px-5 py-6">{children}</main>;
+  }
+
+  // The cohort dashboard gets its own nav, matching the design reference: cohort.html's
+  // sidebar (aria-label="Programme admin") is a completely separate nav from the personal
+  // shepherd app's, not an entry added to it. Shown to whoever can reach the page at all —
+  // an admin or a learner, the backend's own 403 already gates anyone else — since "learners
+  // can read this exact page" in the reference means the same sidebar, not a second one.
+  // No "Seats and invites"/"Reports"/"Privacy and data" links: those pages don't exist yet,
+  // and a nav link to nothing would be worse than no nav link.
+  const cohortMatch = pathname.match(/^\/cohort\/([^/]+)/);
+  if (cohortMatch) {
+    const cohortId = cohortMatch[1];
+    return (
+      <div className="flex min-h-full flex-col md:flex-row">
+        <aside className="glass sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col gap-1 border-r hairline px-3 py-5 md:flex">
+          <Link
+            href={`/cohort/${cohortId}`}
+            className="mb-4 flex items-center gap-2.5 px-2.5 py-1.5 text-[15px] font-semibold text-ink"
+          >
+            <span
+              className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px]"
+              style={{ background: "var(--tint)" }}
+              aria-hidden="true"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#1d1d1f" strokeWidth="2.4" strokeLinecap="round">
+                <path d="M14 21V8a4 4 0 0 0-8 0" />
+              </svg>
+            </span>
+            Routine Machine
+          </Link>
+          <Link
+            href={`/cohort/${cohortId}`}
+            aria-current="page"
+            className="flex min-h-9 items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[14px] text-ink"
+            style={{ background: "rgba(233,162,59,.2)", fontWeight: 600 }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="var(--tint-text)"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              className="shrink-0"
+            >
+              <path d="M4 19h16M7 16V9M12 16V5M17 16v-4" />
+            </svg>
+            Cohort {cohortId}
+          </Link>
+          <div className="mt-auto flex flex-col gap-2 pt-4">
+            <Link href="/today" className="flex min-h-9 items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[14px] text-ink hover:bg-fill">
+              My own Today
+            </Link>
+            <p className="px-2.5 text-[12px] text-muted">
+              Admins see cohort totals only. Learners can read this exact page.
+            </p>
+            <ThemeToggle />
+          </div>
+        </aside>
+
+        <main className="mx-auto w-full max-w-[1100px] flex-1 px-5 pb-10 pt-6">{demo && <DemoBanner />}{children}</main>
+      </div>
+    );
   }
 
   return (
@@ -138,26 +222,36 @@ export function Shell({
         <div className="mt-auto flex flex-col gap-2 pt-4">
           {watchedFor && <p className="px-2.5 text-[12px] text-muted">{watchedFor}</p>}
           {userEmail ? (
-            <div className="flex items-center justify-between gap-2 px-2.5">
-              <span className="truncate text-[12px] text-muted" title={userEmail}>
-                {userEmail}
+            <Link
+              href="/profile"
+              aria-current={pathname === "/profile" ? "page" : undefined}
+              className="flex min-h-9 items-center gap-2.5 rounded-[8px] px-2.5 py-1.5 text-[14px] text-ink hover:bg-fill"
+              style={pathname === "/profile" ? { background: "rgba(233,162,59,.2)", fontWeight: 600 } : undefined}
+              title={userEmail}
+            >
+              <span
+                aria-hidden="true"
+                className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                style={{ background: "#6b4226" }}
+              >
+                {userEmail.charAt(0).toUpperCase()}
               </span>
-              <form action={logoutAction}>
-                <button type="submit" className="text-[12px] font-medium text-tint-text hover:underline">
-                  Sign out
-                </button>
-              </form>
-            </div>
+              Profile
+            </Link>
           ) : (
             <Link href="/login" className="px-2.5 text-[12px] font-medium text-tint-text hover:underline">
               Sign in
             </Link>
           )}
+          <Link href="/privacy" className="px-2.5 text-[12px] text-muted hover:underline">
+            Privacy
+          </Link>
           <ThemeToggle />
         </div>
       </aside>
 
       <main className="mx-auto w-full max-w-[1100px] flex-1 px-5 pb-28 pt-6 md:pb-10">
+        {demo && <DemoBanner />}
         {children}
       </main>
 

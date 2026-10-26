@@ -15,6 +15,18 @@ public interface LearningTopicRepository extends JpaRepository<LearningTopic, Lo
     @Query("SELECT t FROM LearningTopic t JOIN FETCH t.goal")
     List<LearningTopic> findAllWithGoal();
 
+    // Also loads the goal's owner, so a caller can check who a topic belongs to (a topic is
+    // owned through its goal) outside a transaction.
+    @Query("SELECT t FROM LearningTopic t JOIN FETCH t.goal g LEFT JOIN FETCH g.user WHERE t.id = :id")
+    java.util.Optional<LearningTopic> findWithGoalAndOwnerById(@Param("id") Long id);
+
+    // Per-user scoping (docs/backend.md): a topic belongs to whoever owns its goal.
+    @Query("SELECT t FROM LearningTopic t JOIN FETCH t.goal g WHERE g.user.id = :userId")
+    List<LearningTopic> findByOwnerWithGoal(@Param("userId") Long userId);
+
+    @Query("SELECT t FROM LearningTopic t JOIN FETCH t.goal g WHERE g.id = :goalId AND g.user.id = :userId")
+    List<LearningTopic> findByGoalIdAndOwnerWithGoal(@Param("goalId") Long goalId, @Param("userId") Long userId);
+
     @Query("SELECT t FROM LearningTopic t JOIN FETCH t.goal WHERE t.goal.id = :goalId")
     List<LearningTopic> findByGoalIdWithGoal(@Param("goalId") Long goalId);
 }

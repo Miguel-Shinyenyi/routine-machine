@@ -1,8 +1,10 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { ApiError, backendFetch } from "@/lib/api";
-import { createSession, destroySession } from "./session";
+import { ApiError, authenticatedBackendFetch, backendFetch } from "@/lib/api";
+import { demoEnabledFrom, openDemo } from "@/lib/demo";
+import { registrationTimeZone } from "@/lib/timeZone";
+import { createSession, destroySession, getSessionToken } from "./session";
 
 export interface AuthFormState {
   error: string | null;
@@ -57,6 +59,34 @@ export async function registerAction(_prevState: AuthFormState, formData: FormDa
   }
 
   await createSession(user.id);
+
+  // The browser's time zone, so the new account does not start on UTC. A failure here must not stop sign-up:
+  // the person can still set it on their Profile page.
+  const timeZone = registrationTimeZone(formData.get("timeZone"));
+  const token = await getSessionToken();
+  if (timeZone && token) {
+    await authenticatedBackendFetch("/api/users/me/profile", token, {
+      method: "PUT",
+      body: JSON.stringify({ timeZone }),
+    }).catch(() => undefined);
+  }
+  redirect("/today");
+}
+
+// The opt-in demo profile: signs in as the one flagged sample account, only when DEMO_PROFILE_ENABLED is on. Any failure goes back to
+// the sign-in page with a note, never into someone else's account.
+export async function demoLoginAction(): Promise<void> {
+  const userId = await openDemo({
+    enabled: demoEnabledFrom(process.env.DEMO_PROFILE_ENABLED),
+    internalToken: process.env.AUTH_INTERNAL_TOKEN,
+    call: (internalToken) =>
+      backendFetch<{ id: number; demo: boolean }>("/api/auth/demo-login", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${internalToken}` },
+      }),
+  });
+  if (userId === null) redirect("/login?demo=unavailable");
+  await createSession(userId);
   redirect("/today");
 }
 

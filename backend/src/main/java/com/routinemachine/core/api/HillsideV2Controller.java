@@ -1,5 +1,10 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.service.HillsideV2Service;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,12 +16,9 @@ import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.Optional;
 
-// Phase 9: the credit-based hillside. asUserId is a demo-mode parameter until the real
-// session is wired through (same pattern v1's /api/hillside already uses, and the same
-// "cohort" and "open" scope both resolve to the same opted-in population until Phase 12
-// builds real cohorts — see docs/backend.md's decisions log). seasonStart, when omitted,
-// defaults to the most recent Monday in UTC — a stand-in for "the cohort's time zone" until
-// Phase 12, documented as an open question.
+// Phase 9: the credit-based hillside. "You" comes only from a valid token: a visitor with none sees the ranking without a
+// band, and no parameter can name another person. seasonStart, when omitted, defaults to the most recent Monday in UTC,
+// a stand-in for "the cohort's time zone" that docs/backend.md records as an open question.
 @RestController
 @RequestMapping("/api/hillside/v2")
 public class HillsideV2Controller {
@@ -27,12 +29,16 @@ public class HillsideV2Controller {
         this.hillsideV2Service = hillsideV2Service;
     }
 
+    @Operation(summary = "Get the credit-based hillside (version 2)")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping
     public HillsideV2Response get(
             @RequestParam Optional<Long> goalId, @RequestParam Optional<LocalDate> seasonStart,
-            @RequestParam Optional<Long> asUserId) {
+            @AuthenticationPrincipal Jwt jwt) {
+        // "You" comes only from a valid token; a visitor with none sees the ranking without a band.
+        Long you = jwt == null ? null : TokenUser.idOf(jwt);
         LocalDate start = seasonStart.orElseGet(() -> LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)));
         LocalDate end = start.plusDays(6);
-        return HillsideV2Response.from(hillsideV2Service.compute(goalId.orElse(null), start, end, asUserId.orElse(null)));
+        return HillsideV2Response.from(hillsideV2Service.compute(goalId.orElse(null), start, end, you));
     }
 }

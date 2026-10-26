@@ -1,4 +1,5 @@
 import { backendFetch } from "@/lib/api";
+import { requireSessionUserId } from "@/lib/auth/session";
 import { sourceLabel } from "@/lib/sourceLabels";
 import { routineIcon } from "@/lib/routineIcons";
 import type { Goal, LearningTopic, RoutineItem, ScheduleTemplate, Task } from "@/lib/types";
@@ -6,6 +7,7 @@ import { NewScheduleTemplateForm } from "@/components/NewScheduleTemplateForm";
 import { NewAdHocTaskForm } from "@/components/NewAdHocTaskForm";
 import { NewRoutineItemForm } from "@/components/NewRoutineItemForm";
 import { NewLearningTopicForm } from "@/components/NewLearningTopicForm";
+import { NewGoalForm } from "@/components/NewGoalForm";
 
 const CATEGORIES = ["BODY", "MIND", "WORK", "HOME"] as const;
 const CATEGORY_LABELS: Record<string, string> = { BODY: "Body", MIND: "Mind", WORK: "Work", HOME: "Home" };
@@ -29,6 +31,7 @@ const HILLSIDE_FIELD_LABELS: Record<string, string> = {
 const ROW_GRID = "minmax(150px,1.2fr) minmax(180px,1.6fr) minmax(120px,1fr) minmax(110px,.9fr) 16px";
 
 export default async function FlockPage() {
+  await requireSessionUserId();
   const [templates, allRoutineItems, learningTopics, goals, allTasks] = await Promise.all([
     backendFetch<ScheduleTemplate[]>("/api/schedule-templates"),
     backendFetch<RoutineItem[]>("/api/routine-items"),
@@ -37,11 +40,9 @@ export default async function FlockPage() {
     backendFetch<Task[]>("/api/tasks"),
   ]);
 
-  // GET /api/routine-items with no userId returns every legacy row AND every demo user's own
-  // items (Phase 8's hillside seed data) in one flat list — Flock is this single-user app's
-  // own management page, not a multi-user view, so it only ever shows the unowned (userId
-  // null) items, same as this page's single-user world before Phase 8 existed.
-  const routineItems = allRoutineItems.filter((item) => item.userId == null);
+  // Every list above is already this signed-in user's own (per-user scoping, docs/backend.md),
+  // so there is nothing left to filter out here. A new account's Flock is simply empty.
+  const routineItems = allRoutineItems;
   const adHocTasks = allTasks.filter((task) => task.scheduleTemplateId === null);
   const uncategorised = routineItems.filter((item) => item.category === null);
 
@@ -148,7 +149,9 @@ export default async function FlockPage() {
             </div>
           </div>
         )}
-        {routineItems.length === 0 && <p className="text-[13px] text-muted">None yet</p>}
+        {routineItems.length === 0 && (
+          <p className="text-[13px] text-muted">None yet. Add one below: a small thing you can do most days.</p>
+        )}
         <div className="card p-4">
           <h2 className="text-[17px] font-semibold">Private stays private.</h2>
           <p className="mt-1.5 text-[14px] text-muted">
@@ -161,6 +164,24 @@ export default async function FlockPage() {
         </div>
       </section>
 
+      <section id="goals">
+        <h2 className="section-title mb-3">Goals</h2>
+        <ul className="card mb-4 flex flex-col gap-1 p-4 text-[15px]">
+          {goals.map((goal) => (
+            <li key={goal.id}>
+              {goal.name}
+              {goal.description && <span className="text-[13px] text-muted"> ({goal.description})</span>}
+            </li>
+          ))}
+          {goals.length === 0 && (
+            <li className="text-[13px] text-muted">
+              None yet. A goal is what your hours add up to. Add one below, then point a routine at it.
+            </li>
+          )}
+        </ul>
+        <NewGoalForm existingNames={goals.map((goal) => goal.name)} />
+      </section>
+
       <section>
         <h2 className="section-title mb-3">Learning topics</h2>
         <ul className="card mb-4 flex flex-col gap-1 p-4 text-[15px]">
@@ -169,7 +190,12 @@ export default async function FlockPage() {
               {topic.name} <span className="text-[13px] text-muted">({topic.goalName})</span>
             </li>
           ))}
-          {learningTopics.length === 0 && <li className="text-[13px] text-muted">None yet</li>}
+          {learningTopics.length === 0 && (
+            <li className="text-[13px] text-muted">
+              None yet. A topic is something you study; the Shepherd suggests one a day.{" "}
+              {goals.length === 0 ? "Add a goal above first." : "Add one below."}
+            </li>
+          )}
         </ul>
         <NewLearningTopicForm goals={goals} />
       </section>
@@ -184,7 +210,11 @@ export default async function FlockPage() {
               {template.targetDurationMinutes}min)
             </li>
           ))}
-          {templates.length === 0 && <li className="text-[13px] text-muted">None yet</li>}
+          {templates.length === 0 && (
+            <li className="text-[13px] text-muted">
+              None yet. Pick a routine, the day and how long it takes, and it appears on Today and the Path.
+            </li>
+          )}
         </ul>
         <NewScheduleTemplateForm routineItems={routineItems} />
       </section>

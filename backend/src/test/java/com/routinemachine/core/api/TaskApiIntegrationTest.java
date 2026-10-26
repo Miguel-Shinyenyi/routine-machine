@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.DayOfWeek;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -32,6 +33,33 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class TaskApiIntegrationTest extends AbstractIntegrationTest {
+
+    @Autowired
+    private com.routinemachine.core.repository.UserRepository userRepository;
+
+    private com.routinemachine.core.domain.User me;
+
+    @org.junit.jupiter.api.BeforeEach
+    void signInAsANewUser() {
+        me = userRepository.save(new com.routinemachine.core.domain.User(
+                "TaskApiIntegrationTest-" + System.nanoTime() + "@example.com", "irrelevant-hash", null, null));
+    }
+
+    // A goal this test's user owns. The seeded goals belong to nobody and the API never shows those.
+    private com.routinemachine.core.domain.Goal myGoal(String name) {
+        return goalRepository.save(new com.routinemachine.core.domain.Goal(name, null, me));
+    }
+
+    private ScheduleTemplate saveMine(ScheduleTemplate template) {
+        template.assignUser(me);
+        return scheduleTemplateRepository.save(template);
+    }
+
+    private com.routinemachine.core.domain.RoutineItem myItem(String name) {
+        com.routinemachine.core.domain.RoutineItem item = new com.routinemachine.core.domain.RoutineItem(name, null);
+        item.assignUser(me);
+        return routineItemRepository.save(item);
+    }
 
     @Autowired
     private MockMvc mockMvc;
@@ -53,7 +81,7 @@ class TaskApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void createsAnAdHocTaskWithNoTarget() throws Exception {
-        mockMvc.perform(post("/api/tasks")
+        mockMvc.perform(post("/api/tasks").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"taskDate": "2026-09-21", "label": "call the dentist"}
@@ -66,11 +94,11 @@ class TaskApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void materializesATaskFromARoutineItemTemplate() throws Exception {
-        RoutineItem item = routineItemRepository.save(new RoutineItem("weight lifting", null));
-        ScheduleTemplate template = scheduleTemplateRepository.save(
+        RoutineItem item = myItem("weight lifting");
+        ScheduleTemplate template = saveMine(
                 ScheduleTemplate.forRoutineItem(DayOfWeek.MONDAY, item, 60, 1, "Weight lifting"));
 
-        mockMvc.perform(post("/api/tasks")
+        mockMvc.perform(post("/api/tasks").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"taskDate": "2026-09-21", "scheduleTemplateId": %d}
@@ -82,10 +110,10 @@ class TaskApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void materializingALearningSlotTaskRequiresAResolvedTopic() throws Exception {
-        ScheduleTemplate template = scheduleTemplateRepository.save(
+        ScheduleTemplate template = saveMine(
                 ScheduleTemplate.forLearningSlot(DayOfWeek.TUESDAY, 45, 1, "Goal-suggested topic"));
 
-        mockMvc.perform(post("/api/tasks")
+        mockMvc.perform(post("/api/tasks").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"taskDate": "2026-09-22", "scheduleTemplateId": %d}
@@ -95,12 +123,12 @@ class TaskApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void materializesALearningSlotTaskWithASuppliedTopic() throws Exception {
-        Goal goal = goalRepository.findFirstByName("target-roles").orElseThrow();
+        Goal goal = myGoal("target-roles");
         LearningTopic topic = learningTopicRepository.save(new LearningTopic("PostHog analytics", goal));
-        ScheduleTemplate template = scheduleTemplateRepository.save(
+        ScheduleTemplate template = saveMine(
                 ScheduleTemplate.forLearningSlot(DayOfWeek.TUESDAY, 45, 1, "Goal-suggested topic"));
 
-        mockMvc.perform(post("/api/tasks")
+        mockMvc.perform(post("/api/tasks").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"taskDate": "2026-09-22", "scheduleTemplateId": %d, "learningTopicId": %d}
@@ -111,8 +139,8 @@ class TaskApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void movingATaskToDoneCreatesADailyLog() throws Exception {
-        RoutineItem item = routineItemRepository.save(new RoutineItem("journaling", null));
-        String body = mockMvc.perform(post("/api/tasks")
+        RoutineItem item = myItem("journaling");
+        String body = mockMvc.perform(post("/api/tasks").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"taskDate": "2026-09-21", "label": "journaling", "routineItemId": %d}
@@ -120,7 +148,7 @@ class TaskApiIntegrationTest extends AbstractIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         Long taskId = ((Number) JsonPath.read(body, "$.id")).longValue();
 
-        mockMvc.perform(patch("/api/tasks/" + taskId)
+        mockMvc.perform(patch("/api/tasks/" + taskId).with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "DONE"}
@@ -140,7 +168,7 @@ class TaskApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void returns404ForAStatusUpdateOnANonexistentTask() throws Exception {
-        mockMvc.perform(patch("/api/tasks/999999")
+        mockMvc.perform(patch("/api/tasks/999999").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status": "DONE"}
@@ -150,14 +178,14 @@ class TaskApiIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void listsTasksFilteredByDate() throws Exception {
-        mockMvc.perform(post("/api/tasks")
+        mockMvc.perform(post("/api/tasks").with(asUser(me.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"taskDate": "2026-09-25", "label": "one-off"}
                                 """))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/tasks").param("date", "2026-09-25"))
+        mockMvc.perform(get("/api/tasks").with(asUser(me.getId())).param("date", "2026-09-25"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].label", hasItem("one-off")));
     }

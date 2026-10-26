@@ -1,20 +1,7 @@
 import { backendFetch } from "@/lib/api";
-import { sourceLabel } from "@/lib/sourceLabels";
+import { requireSessionUserId } from "@/lib/auth/session";
+import { measurementSourceLabel, sourceLabel } from "@/lib/sourceLabels";
 import type { RoutineItem, WateringHoleStatus } from "@/lib/types";
-
-// WateringHoleStatus.source is a MeasurementSource (push/pull sync status), a different enum
-// from RoutineItemSource ("How each activity is counted" below) — same names mostly overlap,
-// but "Health data" (a status card) and "Health Connect" (a source chip) are deliberately
-// different labels for the same underlying integration, so this stays its own small map
-// rather than reusing lib/sourceLabels's RoutineItemSource-keyed one.
-const SOURCE_LABELS: Record<string, string> = {
-  HUB: "UMWAYI hub",
-  WAKATIME: "WakaTime",
-  ACTIVITYWATCH: "ActivityWatch",
-  GITHUB: "GitHub",
-  RESCUETIME: "RescueTime",
-  HEALTH: "Health data",
-};
 
 // Matching docs-reference/pages/watering-holes.html's coloured source marks, not an arbitrary
 // new palette — each source keeps the same colour the reference assigns it.
@@ -56,7 +43,7 @@ const MEASUREMENT_TO_ROUTINE_SOURCE: Record<string, string> = {
 };
 
 function SourceCard({ status, feedsInto }: { status: WateringHoleStatus; feedsInto: string[] }) {
-  const label = SOURCE_LABELS[status.source] ?? status.source;
+  const label = measurementSourceLabel(status.source);
   return (
     <div className="card flex flex-col gap-2 p-4">
       <div className="flex items-center gap-2.5">
@@ -79,6 +66,7 @@ function SourceCard({ status, feedsInto }: { status: WateringHoleStatus; feedsIn
 }
 
 export default async function WateringHolesPage() {
+  await requireSessionUserId();
   const [statuses, routineItems] = await Promise.all([
     backendFetch<WateringHoleStatus[]>("/api/watering-holes"),
     backendFetch<RoutineItem[]>("/api/routine-items"),
@@ -86,11 +74,9 @@ export default async function WateringHolesPage() {
 
   const connected = statuses.filter((s) => s.enabled);
   const notConnected = statuses.filter((s) => !s.enabled);
-  // Same reasoning as Flock: exclude Phase 8's hillside demo users' own items, this table is
-  // this single-user app's own "how my activity gets counted" list, not a multi-user view.
-  // Unlike an earlier version, this now includes manually-tapped items too — the reference's
-  // own table does (shown with "Tapped" as the main source), not just automatic ones.
-  const countedItems = routineItems.filter((item) => item.userId == null);
+  // This user's own routine items (per-user scoping, docs/backend.md): the "how my activity gets
+  // counted" table. Includes manually-tapped items too, as the reference's own table does.
+  const countedItems = routineItems;
 
   function feedsInto(measurementSource: string): string[] {
     const routineSource = MEASUREMENT_TO_ROUTINE_SOURCE[measurementSource];

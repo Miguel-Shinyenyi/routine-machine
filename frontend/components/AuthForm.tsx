@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import type { AuthFormState } from "@/lib/auth/actions";
 
 const INITIAL_STATE: AuthFormState = { error: null };
@@ -9,15 +9,25 @@ export function AuthForm({
   action,
   submitLabel,
   passwordAutoComplete,
+  sendTimeZone = false,
 }: {
   action: (state: AuthFormState, formData: FormData) => Promise<AuthFormState>;
   submitLabel: string;
   passwordAutoComplete: "current-password" | "new-password";
+  // Sign-up only: tell the server the browser's time zone, so a new account does not start on UTC.
+  sendTimeZone?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL_STATE);
+  const zoneField = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (sendTimeZone && zoneField.current) {
+      zoneField.current.value = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+    }
+  }, [sendTimeZone]);
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
+      {sendTimeZone && <input ref={zoneField} type="hidden" name="timeZone" />}
       <label className="flex flex-col gap-1 text-[13px] font-semibold">
         Email
         <input name="email" type="email" required autoComplete="email" className="field" />

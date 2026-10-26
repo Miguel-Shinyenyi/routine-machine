@@ -41,8 +41,8 @@ public class DailyLog {
     @Column(name = "measured_minutes")
     private Integer measuredMinutes;
 
-    // Nullable, Phase 8 groundwork: NULL means legacy/unowned, same reasoning as
-    // RoutineItem.user. See docs/backend.md's decisions log.
+    // Nullable: NULL is an unowned (pre-account) row, until OwnerClaimService hands it to the owner. See docs/backend.md's
+    // per-user scoping notes.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;

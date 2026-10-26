@@ -1,5 +1,10 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.ReadingNote;
 import com.routinemachine.core.repository.ReadingNoteRepository;
 import com.routinemachine.core.service.ReadingNoteService;
@@ -28,19 +33,25 @@ public class ReadingNoteController {
         this.readingNoteService = readingNoteService;
     }
 
+    @Operation(summary = "List reading notes")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping
-    public List<ReadingNoteResponse> list(@RequestParam Optional<Long> bookId) {
-        List<ReadingNote> notes = bookId
-                .map(readingNoteRepository::findByBookIdWithBookOrderByCreatedAtDesc)
-                .orElseGet(readingNoteRepository::findAllWithBookOrderByCreatedAtDesc);
+    public List<ReadingNoteResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Optional<Long> bookId) {
+        // A note belongs to whoever owns its book. Asking for a specific book that is not yours
+        // simply finds nothing.
+        Long userId = TokenUser.idOf(jwt);
+        List<ReadingNote> notes = bookId.map(id -> readingNoteRepository.findByBookIdAndOwnerWithBook(id, userId))
+                .orElseGet(() -> readingNoteRepository.findByOwnerWithBook(userId));
         return notes.stream().map(ReadingNoteResponse::from).toList();
     }
 
+    @Operation(summary = "Save a reading note")
+    @ApiResponse(responseCode = "400", description = "There is no book with that id, or it belongs to someone else. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ReadingNoteResponse create(@Valid @RequestBody ReadingNoteRequest request) {
+    public ReadingNoteResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ReadingNoteRequest request) {
         ReadingNote saved = readingNoteService.createNote(
-                request.bookId(), request.noteText(), request.chapterPlaced(), request.ownWordsPercentage(),
+                request.bookId(), TokenUser.idOf(jwt), request.noteText(), request.chapterPlaced(), request.ownWordsPercentage(),
                 request.ideasConnected(), request.quotedPhrases(), request.questionBack());
         return ReadingNoteResponse.from(saved);
     }

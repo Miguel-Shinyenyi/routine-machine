@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -26,12 +27,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
-        "hub-sync.enabled=true", "wakatime-sync.enabled=false", "activitywatch-sync.enabled=true",
+        "owner.email=wh-status-owner@example.com", "hub-sync.enabled=true", "wakatime-sync.enabled=false", "activitywatch-sync.enabled=true",
         "github-sync.enabled=false", "rescuetime-sync.enabled=true"})
 class WateringHoleStatusControllerTest extends AbstractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private com.routinemachine.core.repository.UserRepository userRepository;
+
+    private com.routinemachine.core.domain.User owner;
+
+    @org.junit.jupiter.api.BeforeEach
+    void signInAsTheOwner() {
+        owner = userRepository.findByEmailIgnoreCase("wh-status-owner@example.com").orElseGet(
+                () -> userRepository.save(new com.routinemachine.core.domain.User(
+                        "wh-status-owner@example.com", "irrelevant-hash", null, null)));
+    }
 
     @Autowired
     private MeasurementRepository measurementRepository;
@@ -41,7 +54,7 @@ class WateringHoleStatusControllerTest extends AbstractIntegrationTest {
 
     @Test
     void eachSourcesEnabledFlagReflectsItsOwnConfiguredProperty() throws Exception {
-        mockMvc.perform(get("/api/watering-holes"))
+        mockMvc.perform(get("/api/watering-holes").with(asUser(owner.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.source=='HUB')].enabled").value(true))
                 .andExpect(jsonPath("$[?(@.source=='WAKATIME')].enabled").value(false))
@@ -53,7 +66,7 @@ class WateringHoleStatusControllerTest extends AbstractIntegrationTest {
 
     @Test
     void everySourceHasADescription() throws Exception {
-        mockMvc.perform(get("/api/watering-holes"))
+        mockMvc.perform(get("/api/watering-holes").with(asUser(owner.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].description").isNotEmpty())
                 .andExpect(jsonPath("$[5].description").isNotEmpty());
@@ -64,7 +77,7 @@ class WateringHoleStatusControllerTest extends AbstractIntegrationTest {
         measurementRepository.save(new Measurement(
                 MeasurementSource.GITHUB, "commit_count", LocalDate.of(2026, 10, 17), new BigDecimal("3")));
 
-        mockMvc.perform(get("/api/watering-holes"))
+        mockMvc.perform(get("/api/watering-holes").with(asUser(owner.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.source=='GITHUB')].lastActivityAt").isNotEmpty());
     }
@@ -74,14 +87,14 @@ class WateringHoleStatusControllerTest extends AbstractIntegrationTest {
         hubSyncProcessedFileRepository.save(new HubSyncProcessedFile(
                 "journal/entries/2026-10-17.md", "deadbeef", HubSyncFileKind.JOURNAL, LocalDate.of(2026, 10, 17)));
 
-        mockMvc.perform(get("/api/watering-holes"))
+        mockMvc.perform(get("/api/watering-holes").with(asUser(owner.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.source=='HUB')].lastActivityAt").isNotEmpty());
     }
 
     @Test
     void aSourceWithNoRecordedActivityHasANullLastActivityAt() throws Exception {
-        mockMvc.perform(get("/api/watering-holes"))
+        mockMvc.perform(get("/api/watering-holes").with(asUser(owner.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.source=='ACTIVITYWATCH')].lastActivityAt").value(contains(nullValue())));
     }

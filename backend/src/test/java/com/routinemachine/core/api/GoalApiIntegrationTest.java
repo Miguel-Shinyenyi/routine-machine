@@ -1,17 +1,17 @@
 package com.routinemachine.core.api;
 
 import com.routinemachine.core.AbstractIntegrationTest;
+import com.routinemachine.core.domain.User;
+import com.routinemachine.core.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 
-import static org.hamcrest.Matchers.hasItem;
+import static com.routinemachine.core.TestTokens.asUser;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -23,34 +23,20 @@ class GoalApiIntegrationTest extends AbstractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+    @Autowired
+    private UserRepository userRepository;
 
-    @Test
-    void listsTheThreeSeededGoals() throws Exception {
-        mockMvc.perform(get("/api/goals"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].name", hasItem("cmu-masters-application")))
-                .andExpect(jsonPath("$[*].name", hasItem("target-roles")))
-                .andExpect(jsonPath("$[*].name", hasItem("ai-engineer-evidence")));
-    }
-
-    private long registerUser(String email) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\": \"" + email + "\", \"password\": \"a-strong-password\"}"))
-                .andExpect(status().isCreated())
-                .andReturn();
-        String body = result.getResponse().getContentAsString();
-        return Long.parseLong(body.replaceAll(".*\"id\":(\\d+).*", "$1"));
+    private long newUser(String email) {
+        return userRepository.save(new User(email, "irrelevant-hash", null, null)).getId();
     }
 
     @Test
-    void createsAGoalForAUserAndReturnsIt() throws Exception {
-        long userId = registerUser("goal-owner@example.com");
+    void createsAGoalForTheSignedInUserAndReturnsIt() throws Exception {
+        long userId = newUser("goal-owner@example.com");
 
-        mockMvc.perform(post("/api/goals")
+        mockMvc.perform(post("/api/goals").with(asUser(userId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"learn rust\", \"description\": \"ship a small CLI\", \"userId\": "
-                                + userId + "}"))
+                        .content("{\"name\": \"learn rust\", \"description\": \"ship a small CLI\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.name", is("learn rust")))
@@ -59,61 +45,51 @@ class GoalApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void createsAGoalWithNoUserAndReturnsANullUserId() throws Exception {
-        mockMvc.perform(post("/api/goals")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"unowned goal\"}"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.userId", nullValue()));
-    }
-
-    @Test
     void rejectsAGoalWithNoName() throws Exception {
-        mockMvc.perform(post("/api/goals")
+        long userId = newUser("goal-noname@example.com");
+
+        mockMvc.perform(post("/api/goals").with(asUser(userId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"description\": \"missing a name\"}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void rejectsAGoalWithAnUnknownUserId() throws Exception {
-        mockMvc.perform(post("/api/goals")
+    void rejectsAGoalForATokenWhoseUserDoesNotExist() throws Exception {
+        mockMvc.perform(post("/api/goals").with(asUser(999999))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"orphan goal\", \"userId\": 999999}"))
+                        .content("{\"name\": \"orphan goal\"}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void rejectsASecondGoalWithTheSameNameForTheSameUser() throws Exception {
-        long userId = registerUser("goal-dup@example.com");
+        long userId = newUser("goal-dup@example.com");
 
-        mockMvc.perform(post("/api/goals")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"repeat\", \"userId\": " + userId + "}"))
+        mockMvc.perform(post("/api/goals").with(asUser(userId))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"repeat\"}"))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(post("/api/goals")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"repeat\", \"userId\": " + userId + "}"))
+        mockMvc.perform(post("/api/goals").with(asUser(userId))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"repeat\"}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void goalsCreatedForOneUserAreNotVisibleWhenListingAnother() throws Exception {
-        long userA = registerUser("goal-list-a@example.com");
-        long userB = registerUser("goal-list-b@example.com");
+        long userA = newUser("goal-list-a@example.com");
+        long userB = newUser("goal-list-b@example.com");
 
-        mockMvc.perform(post("/api/goals")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"User A's goal\", \"userId\": " + userA + "}"))
+        mockMvc.perform(post("/api/goals").with(asUser(userA))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"User A's goal\"}"))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/goals").param("userId", String.valueOf(userA)))
+        mockMvc.perform(get("/api/goals").with(asUser(userA)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()", is(1)))
                 .andExpect(jsonPath("$[0].name", is("User A's goal")));
 
-        mockMvc.perform(get("/api/goals").param("userId", String.valueOf(userB)))
+        mockMvc.perform(get("/api/goals").with(asUser(userB)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()", is(0)));
     }

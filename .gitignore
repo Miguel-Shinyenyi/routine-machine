@@ -28,3 +28,6 @@ docs/design-reference/compare/
 
 ### Local-machine Docker Compose overrides (not shared) ###
 infra/docker-compose.override.yml
+
+### Investor pack (private: financial model, applications. Never commit) ###
+investor-pack/

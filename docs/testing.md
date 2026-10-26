@@ -141,6 +141,53 @@ no rule present, an unknown user 400s, the ledger lists every event in a window 
 status, questioning a credit records the request, and `/api/hillside/v2` returns a real
 band/rank for an explicit season and no personal band for a user with no credits yet. 193
 backend tests, all passing (171 plus 22 new for Phase 9).
+`EvidenceCreditServiceTest` gained two Phase 10 cases: evidence just before the user's
+configured `dayEndHour` still counts for the previous calendar day, and evidence at or after
+it counts for the new one. `UserControllerApiIntegrationTest` covers `GET`/
+`PUT /api/users/me/profile`: a new user gets the documented defaults (`dayEndHour: 0`,
+`timeZone: "UTC"`, `analogiesEnabled: true`), updating sends only the fields that changed and
+leaves the rest alone (two sequential `PUT`s, the second touching only `analogiesEnabled`,
+confirms `interests` from the first call survived), an out-of-range `dayEndHour` (24) 400s, and
+both endpoints 401 with no token. `HillsideV2ApiIntegrationTest.profileDataNeverAppearsInTheHillsideResponse`
+is Phase 10's explicit "write a test that proves it" privacy requirement: sets distinctive
+marker strings on every profile field, calls `GET /api/hillside/v2`, and asserts none of the
+markers appear anywhere in the raw response body — not just that the response type doesn't
+name those fields, which would be true by construction and wouldn't actually catch a future
+regression that accidentally serialized the whole `User`. 200 backend tests, all passing (193
+plus 7 new for Phase 10).
+`GranaryServiceTest` covers the granary's own logic: storing twice the same day doesn't
+duplicate it; a missed day subtracts nothing; the month's target is the daily amount times
+days *elapsed* so far, not the whole month; the jar has exactly one entry per elapsed day;
+`totalStoredEver` includes savings from other months; creating a pause sets both follow-up
+dates; the 24-hour follow-up is due only once its time has passed and the pause is still
+undecided, and stops being due once decided; the 30-day follow-up is due independently of
+whether the pause was decided, and stops once reflected on; `pausesDueForFollowUp` finds only
+one user's own due pauses, not another user's. `GranaryApiIntegrationTest` covers the HTTP
+layer: setting the daily amount then storing updates the summary, storing twice the same day
+doesn't double it, storing with no amount set 400s, creating a pause then deciding then
+reflecting updates its state end to end, and deciding an unknown pause 404s.
+`HillsideV2ApiIntegrationTest` gained `granaryDataNeverAppearsInTheHillsideResponse`, the same
+marker-string technique as Phase 10's profile privacy test, for Phase 11's explicit "test it"
+boundary. 214 backend tests at that point.
+M-Pesa statement import added `MpesaStatementParserTest` (7 cases, a pure function against
+plain text in the documented transaction-row shape, never a real statement per the task's
+explicit instruction): sums withdrawn amounts by category; Paid In never counts; unmatched
+details fall into OTHER; the BETTING/DATA_AND_AIRTIME/LEARNING/OVERDRAFT_FEES keyword sets;
+how many transactions were parsed; the statement month is derived from the first transaction's
+date; and text with no recognisable rows at all fails loudly (`MpesaStatementParseException`)
+rather than returning empty totals. `MpesaPdfReaderTest` (5 cases) builds real PDF fixtures
+with PDFBox itself — an unprotected PDF, a password-protected one with the right password, one
+with no password given, one with the wrong password, and bytes that aren't a PDF at all —
+proving the actual text-extraction and decryption path, not just the parser's string handling.
+`GranaryServiceTest` gained 4 cases covering the full import pipeline (persists only category
+totals, re-importing the same month replaces rather than adds, the password-protected path
+with the right password, and with no password at all). `GranaryApiIntegrationTest` gained 2
+multipart-upload cases (`MockMultipartFile`) covering a successful import and persistence, and
+a clear `"type": "PARSE_ERROR"` on an unrecognisable statement.
+`HillsideV2ApiIntegrationTest.granaryDataNeverAppearsInTheHillsideResponse` was extended to
+also set a saving target amount and store a saving with a distinctive marker value, proving
+that leaks through the same hillside-privacy boundary too. 232 backend tests, all passing (214
+plus 18 new for the M-Pesa import slice).
 
 Intelligence service: pytest. The suggestion rule (`choose_suggestion`), the pattern-
 detection rule (`compute_patterns`), and the tally rule (`compute_tally`) are each tested
@@ -167,6 +214,16 @@ the filter were removed, not just return extra rows.
 `since_start` option: a deliberately tiny `window_days` is passed alongside `since_start=True`
 to prove it's ignored once set, and the no-logs case confirms the window still has a sane
 (single-day) fallback rather than exploding. 47 tests, all passing.
+Phase 10's `/analogy` gets the same pure-function/route split: `analogy.parse_analogy_response`
+(`test_analogy.py`, 7 cases: a well-formed response, stray prose tolerated, each required field
+missing in turn, no JSON object at all, malformed JSON, and the user-message builder names both
+the topic and the interest) and `POST /analogy` itself tested with `TestClient`/`respx`: a
+successful call, cached per `(topic, interest)` case-insensitively and whitespace-trimmed
+(asserts the mocked Anthropic route was hit exactly once across three calls, two of them
+differently-cased/spaced versions of the same pairing), no API key configured (503), and
+Anthropic responding with unparseable content (502). One of these was also verified against the
+real Anthropic API during manual testing, the same account-billing error `/reading-notes/assess`
+already hit in Phase 7, caught cleanly as a 502 rather than a crash. 58 tests, all passing.
 
 Frontend: Vitest, for pure logic only — `lib/schedule.ts` (which templates still need a task,
 a date's weekday independent of server timezone), `lib/formatDate.ts` and `lib/weekDates.ts`
@@ -181,7 +238,14 @@ lower, or tied against other days), and `lib/auth/jwt.ts` (`signSessionToken`/
 signed with the wrong secret, a tampered payload, and garbage input) — 29 tests total (Phase 9
 added no new pure-logic module: `seasonNumber` and `evidenceDescription` in `/hillside`'s page
 are small presentational helpers, same tier as the already-untested `formatDay` in the same
-file, not isolated business logic). `submitReadingNote` stays untested as a unit, since it's
+file, not isolated business logic; Phase 10 added no new pure-logic module either — `/profile`
+and Today's analogy wiring are both plain data-fetch-and-render, verified live instead, same
+as every other page; Phase 11's `/granary` is the same — all the real logic, month targets,
+the jar, due-follow-up checks, and the M-Pesa parsing/categorisation, lives on the backend,
+already covered by `GranaryServiceTest`/`MpesaStatementParserTest`/`MpesaPdfReaderTest`; the
+frontend's `MpesaImportForm` is a thin multipart-upload form with no logic of its own beyond
+reading the backend's error `type` field to decide which message to show). `submitReadingNote`
+stays untested as a unit, since it's
 a sequence of two external calls, not a pure function worth isolating. Page components are
 verified by running the app and clicking through the views and the full materialize → start
 → done flow in a browser instead, matching settlement-engine's frontend, which has no
@@ -205,12 +269,67 @@ and questioning a credit (confirmed it persists across a reload) all checked in 
 `docs/design-reference/compare.mjs` run against `/hillside` and `/hillside` @390 — the
 comparison surfaced three real structural gaps (no season number, the hide control was a text
 link instead of the reference's toggle switch, the ledger was missing its Evidence/Credit
-columns), fixed and re-compared before reporting.
+columns), fixed and re-compared before reporting. Phase 10's Profile page and Today's analogy
+wiring were verified live via Docker Compose: signed in, toggled an interest chip and set a
+time zone on Profile, saved, confirmed both persisted on reload; confirmed Today's staff card
+reaches the real `/analogy` endpoint (visible in the intelligence service's own logs and via a
+direct `curl`) without crashing the page when the call fails — which it did, on the same
+account-billing issue already documented for `/reading-notes/assess`. This surfaced a real
+deployment bug, not a logic bug: the intelligence service's Docker image crash-looped with
+`ModuleNotFoundError: No module named 'analogy'` because its `Dockerfile` copies an explicit
+file list that `analogy.py` hadn't been added to — caught by the live verification step, not by
+`pytest` (which runs against the real filesystem, not the built image), fixed, and the
+container confirmed actually starting before reporting. Phase 11's granary was verified live
+via Docker Compose: set a daily amount, tapped "store," confirmed the stats/jar/target updated
+correctly; logged a pause decision, confirmed both "Wait 24 hours" and "I've already decided"
+land on the same list with working Decline/Proceed controls regardless of the 24-hour timer,
+confirmed a decision persists on reload; confirmed the phone tab bar now matches the updated
+design reference exactly (Today/Reading/Granary/Tally/Hillside) via `compare.mjs`.
+Phase 11's M-Pesa statement import was verified live via Docker Compose with real
+PDFBox-generated fixtures (never a real statement): an unprotected statement imported
+and the "Where it went" category totals rendered correctly; a password-protected
+statement submitted with no password showed the correct inline "password-protected"
+error; the same statement resubmitted with the correct password imported successfully
+and cleared the form. The first "correct password still fails" result was a browser-automation
+testing mistake (a stale click coordinate landing on text below the Import button after the
+error message had pushed it down), not an application bug, confirmed by a direct `curl` of
+the same request succeeding throughout.
+
+## Observability and API documentation tests (staged Prompts 3 and 4)
+
+How the owner-page and API-docs tests are written, so the next one follows the same pattern.
+
+- **Stand-in servers, not mocks.** A test that needs Prometheus, Loki, the intelligence service or a probed service starts a
+  `com.sun.net.httpserver.HttpServer` on an ephemeral port, points the app at it with `@DynamicPropertySource`, and records
+  what it was asked (`WatchtowerMetricsControllerTest`, `WatchtowerProbesSendNoUpgradeTest`). That is how the tests prove which
+  queries reach Prometheus and that no outgoing call offers an HTTP upgrade.
+- **Owner-only routes are tested for three people**: the owner (`TestTokens.asUser(ownerId)`, with `owner.email` set by
+  `@TestPropertySource`), another account, and a signed-out visitor, and the stand-in must record that it was never asked for
+  the last two. One class per configuration that changes the Spring context (no owner, no address, unreachable address).
+- **Check the check.** After a test passes, break the code on purpose and see the right test fail (remove the owner check,
+  invert it, leave a route undocumented). A test that cannot fail proves nothing. Restore the file and diff it against a copy.
+- **Run `./mvnw -q clean test`, with `clean`.** An IDE attached to `backend/` writes class files into `target/` that fail with
+  "Unresolved compilation problems", and an unclean run then errors every test. It cost two invalid runs of deliberate breaks.
+- **The API documentation is held to the code** by `ApiDocsCoverageTest` (every controller method is in the document and has a
+  summary) and `ApiDocsErrorsTest` (401, 404 and the per-route 400 and 403 follow from the security patterns and the handler
+  signatures). The wording of the service-level codes is not machine-checked.
+- **Frontend**: only pure functions are unit-tested (`lib/*.test.ts`); pages and route handlers are checked by running the app.
+  For anything visual or interactive, look at it in a real browser. Curl passed three bugs in the Swagger viewer that Chrome
+  showed at once. For a phone width, embed the page in a 390 px `<iframe>`: resizing the window does not change the viewport.
+- **Live checks mint a session token** from the dev signing secret inside the shell command and never print it, for example
+  `curl -H "Authorization: Bearer $TOKEN"` against the backend or `-H "Cookie: session=$TOKEN"` against the frontend.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`: the backend tests (`./mvnw -B test`, Java 21, Testcontainers on the runner's Docker), `pytest` in `intelligence-service/` (Python 3.13) and, in `frontend/`, `npm ci`, `npm run lint`, `npm test` and `npm run build` (Node 20, the image's version). The three jobs run side by side. The same commands were run from a clean state on 25 Oct 2026 (480, 87 and 186 tests passing); **the workflow itself has not run on GitHub yet** (Backlog M in `PROJECT.md`).
 
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-21 | Real test runs use `./mvnw clean test` while VS Code's Java language server is running | The language server (Red Hat Java extension) compiles into `backend/target/classes` with the Eclipse compiler. A source error becomes an `Unresolved compilation problem` stub class that Maven treats as up to date, so `./mvnw -q compile` printed nothing and the error only appeared when a request hit the class. Found in per-user scoping part 2b; `clean` makes Maven compile from source and show the real error |
+| 2026-10-21 | Cohort tests that depend on `joined_at` or a goal's `created_at` pin both with a native `UPDATE`; `activationDoesNotDependOnTheRealDate` runs the scenario for 2031 and 2019 | Both are `DEFAULT now()` and not settable through the entities. A test with a literal date passes only on the day it was written: `checkedInThisWeekIsOutOfActivatedMembersOnly` passed on 2026-10-19 and failed on 2026-10-21, found by Stage 1's read-only run (which also found the weekly-chart API test would have broken on 2026-12-07). The earlier "anchor to today" fix had only hidden it |
+| 2026-10-21 | The owner-claim tests assert "no NULL rows left" and per-row ownership, not exact row counts | The seed migrations leave unowned rows (goals, routine items) in the test database, so a fixed count would break whenever a seed changes. The tests were also checked by mutation: dropping `books` from the claim list makes two of them fail |
 | 2026-10-18 | `twoConcurrentInsertsForTheSameUserGoalAndDayProduceOneRow` disables `@DataJpaTest`'s default per-test transaction (`@Transactional(propagation = NOT_SUPPORTED)`) and uses two raw JDBC connections from the test's own `DataSource` bean | `@DataJpaTest` wraps each test method in one transaction, rolled back at the end — the setup rows (user, goal, evidence events) would stay uncommitted and invisible to two separate connections racing against them, which would make this "concurrency" test pass or fail for the wrong reason (a foreign-key violation on invisible rows, not a real test of the `daily_credits` unique-constraint race). Disabling the wrapper makes setup commit for real, so the two threads' raw `INSERT ... ON CONFLICT DO NOTHING` statements are a genuine concurrent-commit test against Postgres |
 | 2026-10-18 | That same test surfaces each racing thread's exception via `Future.get()` instead of a bare `pool.submit(Runnable)` | First version of this test passed when it shouldn't have: a foreign-key violation inside the thread was silently swallowed (no `.get()` call to surface it), so the assertion saw 0 rows and failed for an unrelated reason before this was caught and fixed. A test that can pass for the wrong reason is worse than no test; `Future.get()` makes a racing thread's exception fail the test loudly |
 | 2026-10-18 | `EvidenceEventApiIntegrationTest`/`HillsideV2ApiIntegrationTest` don't build a signed JWT the way `UserControllerApiIntegrationTest` does | The new endpoints (`/api/evidence-events`, `/api/hillside/v2`) aren't behind the JWT-protected `/api/users/**` filter chain (see `SecurityConfig`) — same `permitAll` pattern `/api/hillside` v1 already uses, so there's no auth layer for these tests to exercise |
@@ -259,3 +378,14 @@ columns), fixed and re-compared before reporting.
   got in an earlier Phase 6 slice.
 - `RescueTimeClientImpl` has the same gap and, like `WakaTimeClientImpl`, has not been checked
   manually against the real API — no `RESCUETIME_API_KEY` available in this session.
+
+## Signing in inside tests
+
+Routes that take their user from the token (see `docs/backend.md`, access control) are called with `.with(TestTokens.asUser(userId))` (`backend/src/test/java/com/routinemachine/core/TestTokens.java`). It sets the token a signed-in request would carry, without a real signature. A request with no `.with(...)` is a signed-out request and gets 401 on those routes.
+
+## The route sweep
+
+`EveryRouteNeedsATokenTest` fails when any `/api/**` route answers without a token, except those listed in
+the test with a reason. Adding a route means either protecting it (add its path to the protected chain in
+`SecurityConfig`) or adding it to that list with a reason and a test of its own.
+

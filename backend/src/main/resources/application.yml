@@ -17,3 +17,68 @@ auth:
   # No default: a missing secret should fail the app at startup, not run with a guessable
   # one. See docs/backend.md's decisions log.
   jwt-secret: ${AUTH_JWT_SECRET}
+
+# The account that inherits the data created before accounts existed (OwnerClaimService). Unset:
+# nothing is claimed. Never put a real address in this file; set OWNER_EMAIL in the environment.
+owner:
+  email: ${OWNER_EMAIL:}
+
+# Observability (docs/observability.md). Metrics and health are served on their own port, which
+# docker-compose never publishes to the host and the browser never talks to; only the two endpoints
+# listed are exposed. Logs are one JSON object per line (Spring Boot's built-in structured logging,
+# Logstash format), and every line of a request carries its requestId from the MDC.
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    distribution:
+      # Latency buckets for the dashboards' p95 (docs/observability.md); off by default in Spring Boot.
+      percentiles-histogram:
+        http.server.requests: true
+
+logging:
+  structured:
+    format:
+      console: logstash
+
+# Owner-only operations page (docs/observability.md): where it probes each service. Empty means not configured.
+# Set by the Compose file; these are addresses the backend calls, never ones a request can supply.
+watchtower:
+  prometheus-base-url: ${WATCHTOWER_PROMETHEUS_BASE_URL:}
+  loki-base-url: ${WATCHTOWER_LOKI_BASE_URL:}
+  # The address a BROWSER can open Jaeger at (not the one the backend probes inside Docker); empty means no trace links.
+  jaeger-ui-url: ${WATCHTOWER_JAEGER_UI_URL:}
+  intelligence-url: ${WATCHTOWER_INTELLIGENCE_URL:}
+  # The intelligence service's API document, on its internal docs port (never published to the host).
+  intelligence-docs-url: ${WATCHTOWER_INTELLIGENCE_DOCS_URL:}
+  prometheus-url: ${WATCHTOWER_PROMETHEUS_URL:}
+  alertmanager-url: ${WATCHTOWER_ALERTMANAGER_URL:}
+  loki-url: ${WATCHTOWER_LOKI_URL:}
+  jaeger-url: ${WATCHTOWER_JAEGER_URL:}
+  grafana-url: ${WATCHTOWER_GRAFANA_URL:}
+
+# The API documentation page (staged Prompt 4, docs/backend.md). The owner opens it through the frontend's /watchtower/docs
+# route, which adds the owner's session; a browser cannot send a bearer token on a page load. So the UI is told to read both
+# specs from that route, not from the backend's own addresses. Read-only on purpose: no supported submit methods means no
+# "Try it out", so nothing opened here can send a request.
+springdoc:
+  swagger-ui:
+    urls:
+      - name: Backend
+        url: /watchtower/docs/spec/backend
+      - name: Intelligence service
+        url: /watchtower/docs/spec/intelligence
+    supported-submit-methods: []
+    # The UI reads its configuration from here and then reads this address again, so it must be the address the frontend
+    # serves it from; springdoc's own default is the backend's, which the browser cannot reach. (The frontend's docs route
+    # also drops oauth2RedirectUrl from the answer: springdoc builds it from the internal host name, and nothing uses it.)
+    config-url: /watchtower/docs/spec/config
+    # Off: the default asks an online validator about the spec's address.
+    validator-url: none

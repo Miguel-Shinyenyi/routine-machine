@@ -23,5 +23,9 @@ public interface RoutineItemRepository extends JpaRepository<RoutineItem, Long> 
 
     Optional<RoutineItem> findFirstByNameIgnoreCase(String name);
 
+    // Every account can have an item with the same name; callers that must pick the right one
+    // (hub-sync) filter by owner themselves.
+    List<RoutineItem> findByNameIgnoreCase(String name);
+
     List<RoutineItem> findBySource(RoutineItemSource source);
 }

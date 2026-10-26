@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { backendFetch } from "@/lib/api";
-import { todayIsoDate } from "@/lib/schedule";
+import { requireSessionUserId } from "@/lib/auth/session";
+import { getUserToday } from "@/lib/auth/userToday";
+import { formatWeekRange } from "@/lib/formatDate";
 import { addDays, mondayOf, weekDates } from "@/lib/weekDates";
 import type { ScheduleTemplate, Task } from "@/lib/types";
 
@@ -15,19 +17,9 @@ const DAY_ABBREV: Record<string, string> = {
   SUNDAY: "Sun",
 };
 const STILL_WATERS = new Set(["SATURDAY", "SUNDAY"]);
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 function dayOfMonth(isoDate: string): number {
   return Number(isoDate.slice(8, 10));
-}
-
-function eyebrowRange(monday: string): string {
-  const sunday = addDays(monday, 6);
-  const month = MONTHS[Number(monday.slice(5, 7)) - 1];
-  return `${dayOfMonth(monday)} to ${dayOfMonth(sunday)} ${month}`;
 }
 
 type DotStatus = "ok" | "miss" | "now" | "ahead";
@@ -45,10 +37,11 @@ function statusDot(status: DotStatus) {
 }
 
 export default async function PathPage(props: PageProps<"/path">) {
+  await requireSessionUserId();
   const searchParams = await props.searchParams;
   const rawMonday = searchParams.monday;
-  const monday = typeof rawMonday === "string" ? mondayOf(rawMonday) : mondayOf(todayIsoDate());
-  const today = todayIsoDate();
+  const today = await getUserToday();
+  const monday = typeof rawMonday === "string" ? mondayOf(rawMonday) : mondayOf(today);
   const dates = weekDates(monday);
 
   const [templates, ...tasksByDay] = await Promise.all([
@@ -90,7 +83,7 @@ export default async function PathPage(props: PageProps<"/path">) {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div className="min-w-0 flex-1 basis-[420px]">
-          <p className="text-[15px] font-semibold text-tint-text">{eyebrowRange(monday)}</p>
+          <p className="text-[15px] font-semibold text-tint-text">{formatWeekRange(monday)}</p>
           <h1 className="page-title">The path.</h1>
           <p className="mt-2 max-w-[62ch] text-[17px] text-muted">
             The same walk every week, on purpose. Order matters more than the clock. The
@@ -114,6 +107,13 @@ export default async function PathPage(props: PageProps<"/path">) {
           </Link>
         </div>
       </div>
+
+      {templates.length === 0 && (
+        <p className="card p-4 text-[15px]">
+          Your path is empty. <Link href="/flock#schedule-templates" className="text-tint-text hover:underline">Put a routine on it in the Flock</Link>{" "}
+          and it appears here, day by day.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-4 text-[13px] text-muted">
         <span className="flex items-center gap-1.5">{statusDot("ok")}Tended</span>

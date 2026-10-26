@@ -24,6 +24,17 @@
   --goal-line-1: #c27a12;
   --goal-line-2: #0066cc;
   --goal-line-3: #1b7332;
+  /* The owner's charts (components/charts/WatchtowerChart.tsx): eight categorical colours in a fixed order, checked
+     with the dataviz validator against --surface in each mode (all checks pass; the light set warns on contrast for
+     slots 3, 4 and 5, which is why every chart also has a legend and a table). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -48,6 +59,14 @@
     --goal-line-1: #d99232;
     --goal-line-2: #4d9bf0;
     --goal-line-3: #30d158;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
   }
 }
 
@@ -73,6 +92,14 @@
   --goal-line-1: #d99232;
   --goal-line-2: #4d9bf0;
   --goal-line-3: #30d158;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
 }
 
 @theme inline {
@@ -254,5 +281,73 @@ body {
   background: var(--tended-ink);
 }
 .switch[aria-checked="true"]::after {
+  transform: translateX(20px);
+}
+
+/* Phase 10: Profile's interest/learning-preference chip pickers, copied from the design
+   reference's own .pick rule (docs/design-reference/pages/base.css). Built from real
+   checkboxes (:has() toggles the look), not client JS, matching this app's server-rendered
+   toggle pattern everywhere else. */
+.pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pick label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--field-edge);
+  background: var(--surface);
+  border-radius: 980px;
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.pick label:has(input:checked) {
+  background: var(--tint-fill);
+  border-color: var(--tint);
+  color: var(--tint-text);
+  font-weight: 600;
+}
+.pick input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+/* Same look as .switch, driven by a real checkbox's :checked state (via Tailwind's `peer`)
+   instead of a server-set aria-checked attribute — for in-page toggles with no form
+   submission of their own, like Profile's "use my interests" switch. */
+.toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 51px;
+  height: 31px;
+  flex: none;
+  border-radius: 980px;
+  background: var(--fill);
+  transition: background 0.15s ease;
+}
+.toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+}
+.peer:checked ~ .toggle-track {
+  background: var(--tended-ink);
+}
+.peer:checked ~ .toggle-track::after {
   transform: translateX(20px);
 }

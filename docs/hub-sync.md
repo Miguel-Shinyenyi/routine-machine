@@ -59,6 +59,7 @@ below for rotation and the key's blast radius.
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-21 | Hub-sync logs only into the owner's (or an unowned) "journaling"/"writing" item, and writes the current book as the owner's | The hub is the owner's own journal. Looking the item up by name across every account let a new user's "journaling" item receive the owner's journal entries, and writing an unowned book let any account's book change the sync's idea of the current one. See `backend.md`'s per-user scoping part 5 |
 | 2026-10-17 | `syncCurrentBook()` now writes to Phase 7's `books` table, not `current_reading_log` | Agreed with the user before building Phase 7: `books` is a richer entity (chapter progress, author) that supersedes `current_reading_log` as the source of truth for "what am I reading." `current_reading_log`'s existing rows are kept for history, but hub-sync no longer writes new ones. Flagged and confirmed rather than decided silently, since it changes an existing integration point |
 | 2026-10-17 | Articles come from UMWAYI's real `site/philosophy/` and `site/tech/` directories, not a top-level `articles/` path | This doc originally assumed `articles/`, written before UMWAYI's actual structure was checked. The real repo has no such directory; `site/philosophy/` and `site/tech/` are the closest real equivalent (essay-style personal writing), confirmed by listing the repo directly. Flagged and confirmed rather than guessed silently, per the project's ambiguity rule |
 | 2026-10-17 | Poll on a schedule (`@Scheduled`, default 15 minutes), not a manual trigger | Phase 6 frames hub-sync as "automatic counting"; a personal single-user tool has no reason to make the person remember to ask for a sync. `hub-sync.enabled=false` (set in every test) stops it from firing outside a real deployment |
@@ -93,3 +94,35 @@ below for rotation and the key's blast radius.
   (`base64 -i <path>`, or `base64 <path>` on Linux). Replace the `UMWAYI_JOURNAL_KEY_B64`
   value in `infra/.env` or wherever the deployment injects it. Restart the backend. No code
   change: the reader reads the variable fresh on every call, nothing is cached.
+
+## GitHub's rate limit (found 25 Oct 2026)
+
+Hub sync and the GitHub watering hole both call GitHub's public API **without a token**. GitHub allows that **60 requests an
+hour per IP address**, shared by everything on that address, and answers `403` when it is used up. One sync run costs **4
+requests** (one GitHub events call and three hub directory listings), the sync runs **every 15 minutes** and **once at every
+backend start**. Steady state is therefore 16 requests an hour, a quarter of the quota; **every restart adds 4 more**, and
+anything else on the same address (a browser, a script, a test) draws on the same 60.
+- **How it showed up**: the owner page's sync table read `failing` for HUB and GITHUB for hours. On the day I looked the quota
+  was at 0 of 60 and resetting at 21:03 local. I had restarted the backend about 20 times and run about 25 requests of my own.
+- **What the log says now**: `hub-sync: listing journal/entries returned HTTP 403 (rate limited until 2026-10-25T18:03:23Z)`,
+  read from GitHub's `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers (`GitHubRateLimit`, 3 tests). Before, it said only
+  `returned HTTP 403` or `ConnectException`. Failed fetches also log their whole cause now (`FailureDescription`).
+- **An optional token is built** (`GITHUB_TOKEN`, 25 Oct 2026). With one GitHub allows 5,000 requests an hour instead of 60.
+  Set it in `infra/.env` (git-ignored; the name only is in `.env.example`) and restart the backend; the backend log says
+  `using GITHUB_TOKEN` or `no GITHUB_TOKEN, so GitHub allows 60 requests an hour`, never the value. A blank value is the same
+  as none. Make it a **fine-grained personal access token with no permissions and read-only access to public repositories**,
+  at github.com/settings/personal-access-tokens: both clients only read public data. `GitHubRequests` builds the requests
+  (`GitHubRequestsTest`, 5 tests, 4 breaks); the token goes only to the two hard-coded `https://api.github.com/...`
+  addresses. **Checked on the wire without a real token**: I started the backend with a deliberately fake one, and GitHub
+  answered `HTTP 401` to the sync, which proves the `Authorization` header is sent; the fake value appeared in no log line.
+  **Not checked**: a real token's 5,000 an hour, because I do not have one. Until one is set, expect HUB and GITHUB to read
+  `failing` for up to an hour after a burst of restarts.
+- **The earlier `ConnectException` failures, explained (25 Oct 2026).** Once the log carried the whole cause it read
+  `ConnectException <- ConnectException <- UnresolvedAddressException`: the JVM could not resolve `api.github.com` in the first
+  seconds after a container was created, although `getent` inside the same container resolved it before and after. It happened
+  on 1 of 3 recreates in my test and on none of 4 later ones, so it is intermittent. **Each GitHub and hub call is therefore
+  tried once more after 5 seconds if the connection itself failed** (`GitHubRequests.sendWithOneRetry`, `GitHubSendTest`, 5
+  tests, 3 breaks); an HTTP answer, a 403 included, and any other failure are never retried. The retry logs
+  `github: the connection failed (...); trying once more`. **I have not seen it fire live**; the unit tests are the only proof.
+  Why the JVM's lookup fails when the operating system's does not, I did not find.
+

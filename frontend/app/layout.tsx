@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { AnalyticsConsent } from "@/components/AnalyticsConsent";
 import { Shell } from "@/components/Shell";
+import { analyticsConfigured } from "@/lib/analytics/consent";
+import { readPendingEvents } from "@/lib/analytics/queue";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
-import { todayIsoDate } from "@/lib/schedule";
-import { getSessionToken } from "@/lib/auth/session";
+import { getUserToday } from "@/lib/auth/userToday";
+import { getSessionToken, getSessionUserId } from "@/lib/auth/session";
 import type { RoutineItem, Tally, Task, WateringHoleStatus } from "@/lib/types";
 import "./globals.css";
 
@@ -36,36 +39,58 @@ async function fetchShellContext(): Promise<{
   routineCount: number | null;
   connectedCount: number | null;
   userEmail: string | null;
+  demo: boolean;
 }> {
   const sessionToken = await getSessionToken();
+  const userId = await getSessionUserId();
+  const today = userId !== null ? await getUserToday() : "";
+  // Signed out (login, register): no personal data at all, so no personal calls either. A
+  // signed-out visitor used to see the founder's own counts in this sidebar.
   const [tasks, tally, routineItems, wateringHoles, me] = await Promise.all([
-    backendFetch<Task[]>(`/api/tasks?date=${todayIsoDate()}`).catch(() => null),
-    intelligenceFetch<Tally>("/tally").catch(() => null),
-    backendFetch<RoutineItem[]>("/api/routine-items").catch(() => null),
-    backendFetch<WateringHoleStatus[]>("/api/watering-holes").catch(() => null),
+    userId !== null
+      ? backendFetch<Task[]>(`/api/tasks?date=${today}`).catch(() => null)
+      : Promise.resolve(null),
+    userId !== null
+      ? intelligenceFetch<Tally>("/tally").catch(() => null)
+      : Promise.resolve(null),
+    userId !== null
+      ? backendFetch<RoutineItem[]>("/api/routine-items").catch(() => null)
+      : Promise.resolve(null),
+    // Owner-only integrations (docs/backend.md): anyone else gets every source "not connected".
+    userId !== null
+      ? backendFetch<WateringHoleStatus[]>("/api/watering-holes").catch(() => null)
+      : Promise.resolve(null),
     sessionToken
-      ? authenticatedBackendFetch<{ email: string }>("/api/users/me", sessionToken).catch(() => null)
+      ? authenticatedBackendFetch<{ email: string; demo?: boolean }>("/api/users/me", sessionToken).catch(() => null)
       : Promise.resolve(null),
   ]);
   return {
     doneCount: tasks ? tasks.filter((t) => t.status === "DONE").length : null,
     totalCount: tasks ? tasks.length : null,
     daysShownUp: tally ? tally.daysShownUpCount : null,
-    // Same unowned filter Flock itself applies — the sidebar badge should match the page it
-    // links to, not include Phase 8's hillside demo users' own items.
-    routineCount: routineItems ? routineItems.filter((item) => item.userId == null).length : null,
+    // This user's own routine items, the same list Flock shows.
+    routineCount: routineItems ? routineItems.length : null,
     // Reader's notes is always-on but isn't in /api/watering-holes (it's not a toggleable
     // external sync) — +1 matches Watering holes' own page, which always shows it connected.
     connectedCount: wateringHoles ? wateringHoles.filter((s) => s.enabled).length + 1 : null,
     // null when logged out, or when the cookie's token has expired/been tampered with — the
     // sidebar treats both exactly like "not signed in", same as getSessionUserId elsewhere.
     userEmail: me ? me.email : null,
+    // The one flagged sample account (staged Prompt 6): every page says so.
+    demo: me ? me.demo === true : false,
   };
 }
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const shellContext = await fetchShellContext();
 
+  // The signed-in person's internal id, for the analytics service to identify them by (and by nothing else). Null when signed out.
+  // The demo account is never identified: a demonstration is not a person to count.
+  const analyticsUserId = shellContext.demo ? null : await getSessionUserId();
+  // Notes a Server Action left after it succeeded (lib/analytics/queue.ts), read again and checked here, then handed to the browser, which
+  // sends them only if the visitor accepted. None unless analytics is configured.
+  const analyticsOn = analyticsConfigured(process.env.POSTHOG_KEY, process.env.POSTHOG_HOST);
+  const pendingEvents = await readPendingEvents();
   return (
     <html lang="en" className="h-full antialiased">
       <head>
@@ -73,6 +98,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full bg-canvas text-ink">
         <Shell {...shellContext}>{children}</Shell>
+        {/* Analytics (staged Prompt 5): only when the deployment has a key and a host, and only after the visitor accepts. */}
+        {analyticsOn && (
+          <AnalyticsConsent
+            posthogKey={process.env.POSTHOG_KEY as string}
+            posthogHost={process.env.POSTHOG_HOST as string}
+            userId={analyticsUserId}
+            pendingEvents={pendingEvents}
+          />
+        )}
       </body>
     </html>
   );

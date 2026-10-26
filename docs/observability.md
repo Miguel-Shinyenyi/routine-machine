@@ -1,0 +1,497 @@
+# Observability
+
+## Purpose
+
+How the application is watched: metrics, logs and traces across the backend and the intelligence
+service, and the owner-only page that shows them. It follows the settlement engine's
+`docs/observability.md` (Invoice-Financing repo, `dev` branch) as the reference, and says where it
+differs and why. Built in parts; this file describes only what exists.
+
+## Current state
+
+Staged Prompt 3 is built in five parts and **all five are done**. The owner opens `/watchtower` and sees service health, charts, sync status and logs with trace links; everyone else gets a plain 404. Part 4 is the Compose `observability` profile (4a Prometheus, Alertmanager and the alert rules; 4b Loki and Alloy for logs; 4c-i Jaeger and tracing; 4c-ii Grafana and its dashboard; metric exemplars).
+
+| Part | What | State |
+|---|---|---|
+| 1 | Backend: request id, JSON logs, metrics endpoint on its own port | Done |
+| 2 | Intelligence service: request id passed through, JSON logs, request metrics on their own port | Done |
+| 3 | Custom metrics (credits, syncs, note assessment, questioned credits) | Done |
+| 4 | Compose profile `observability`: Prometheus, Grafana, Loki and Promtail, Jaeger, Alertmanager, OpenTelemetry, alert rules | In three steps. **4a Prometheus, Alertmanager and the alert rules: done. 4b Loki and Alloy: done. 4c-i Jaeger and OpenTelemetry tracing: done.** 4c-ii Grafana and the dashboard: done, checked by `verify-grafana.sh` |
+| 5 | Owner-only operations page in the frontend (`/watchtower`) | Done. Six pieces: backend owner gate and service health; metrics for the charts; logs and trace links; sync status; the frontend page (404 gate, services, charts, sync table, logs, and the link to the API documentation); this documentation |
+
+### Part 1: the backend
+
+- **Request id.** `RequestIdFilter` (`com.routinemachine.core.observability`) runs before Spring
+  Security, so refused requests get one too. It reuses an incoming `X-Request-Id` only if it matches
+  `[A-Za-z0-9._-]{1,64}`, otherwise generates a UUID (a header with a newline or spaces could forge or
+  break a log line). The id is put in the MDC as `requestId` for the whole request, echoed on the
+  response, and removed afterwards, also when the request fails.
+- **One log line per request**, written when it ends: `request completed` with `method`, `path`,
+  `status` and `durationMs`, carrying `requestId`. Never the query string, a header or a body. The
+  `/actuator/` paths are not logged, so a metrics scrape every few seconds does not drown real lines.
+- **JSON logs.** `logging.structured.format.console: logstash` in `application.yml`: one JSON object per
+  line, MDC and key-value fields included. Spring Boot's built-in structured logging, not the
+  `logstash-logback-encoder` library (see the decisions log).
+- **Metrics.** `spring-boot-starter-actuator` and `micrometer-registry-prometheus` (version managed by
+  Spring Boot). `/actuator/prometheus` and `/actuator/health` are served on **port 8081**
+  (`management.server.port`, env `MANAGEMENT_PORT`), not on 8080. Nothing else is exposed
+  (`env`, `beans`, `heapdump`, `loggers` are 404). `docker-compose.yml` does not publish 8081, so it
+  is reachable only from other containers on the Compose network, which is where Prometheus will run.
+  Health details are hidden (`show-details: never`).
+- Tests: `RequestIdFilterTest` (7) and `ObservabilityEndpointsIntegrationTest` (5), both written first.
+
+### Part 2: the intelligence service
+
+- **Same request id rules** (`observability.py`, a pure ASGI middleware): an incoming `X-Request-Id` is
+  reused only if it matches `[A-Za-z0-9._-]{1,64}`, otherwise a UUID is made; it is echoed on the
+  response, stamped on every log record, and **sent on to the backend** on every call (`_backend_headers`),
+  so one request has one id in both services' logs.
+- **One log line per request**, `request completed`, with `method`, `path` (no query string), `status`,
+  `durationMs`. Logs are one JSON object per line (`JsonFormatter`). Only `method`, `path`, `status` and
+  `durationMs` can be added to a line; any other field a logger tries to attach is dropped, so a note or
+  an amount cannot leak through `extra=`. uvicorn's own access log, which prints query strings, is off
+  (`--no-access-log`).
+- **Metrics**: `http_requests_total{method,route,status}` and `http_request_duration_seconds{method,route}`,
+  served by `prometheus_client` on **port 9000** (`METRICS_PORT`; unset or 0 means off). `route` is the route
+  template, and anything that matches no route is the single label `unmatched`, so a scan of random paths
+  cannot create unlimited series. `/metrics` is not served on the API port (404). Compose does not publish
+  9000.
+- uvicorn's access logger is kept handler-free (`--no-access-log` alone is not enough once the root logger has a handler: uvicorn re-enables it), and `httpx`'s per-call URL logging is set to WARNING.
+- Tests: `test_observability.py` (16), written first.
+
+### Part 3: the custom metrics
+
+| Metric | Where | Tags | Meaning |
+|---|---|---|---|
+| `credits_events_total` | backend, `EvidenceCreditService` | `status` (ACCEPTED, REJECTED, PENDING, SELF_REPORTED), `rule_version` | Each new piece of evidence, by what was decided and by which published rule version (0 = no rule). A duplicate is not counted again |
+| `credits_questioned_total` | backend, `EvidenceEventController` | none | The first time a credit is questioned (asking again does not count) |
+| `sync_runs_total` | backend, each integration's client (`SyncMetrics`) | `source` (hub, wakatime, activitywatch, github, rescuetime), `outcome` (success, failure) | One count per fetch from that source. A missing API key is neither (the source is simply off). Hub counts directory listings only |
+| `sync_consecutive_failures` | backend, `SyncMetrics` | `source` | Failures in a row, back to 0 on a success: what the "failing three runs in a row" alert reads |
+| `sync_last_success_timestamp_seconds` | backend, `SyncMetrics` | `source` | When the source last succeeded |
+| `assessment_requests_total` | intelligence service | `outcome` (success, unavailable, upstream_error, unparseable) | Reading-note assessments by how they ended |
+| `assessment_duration_seconds` | intelligence service | none | How long an assessment takes (histogram) |
+| `assessment_tokens_total` | intelligence service | `direction` (input, output) | Model tokens, from the model's own usage report |
+| `assessment_estimated_cost_usd_total` | intelligence service | none | Tokens times the prices you set in `ANTHROPIC_INPUT_USD_PER_MTOK` and `ANTHROPIC_OUTPUT_USD_PER_MTOK` (USD per million tokens). **0 until you set them**: no price is assumed |
+
+No tag is a user, goal, book or note. Tests assert that on the credit and sync meters and that no assessment
+metric or log line carries the note text.
+
+Known limitation: the sync clients swallow failures into an empty result, so the metric is recorded where each
+client already logs the failure. Their HTTP calls have fixed URLs and no tests, so that wiring is verified by
+running the stack, not by unit tests. In Docker there is no local ActivityWatch server, so that source counts a
+failure on every poll; the alerts in part 4 must account for sources that are not expected to be up.
+
+### Part 4a: Prometheus, Alertmanager and the alerts
+
+Started only with the profile: `docker compose --profile observability up -d` (a plain `docker compose up`
+does not start them). Files are in `infra/observability/`.
+
+- **Prometheus** (`prom/prometheus:v3.13.1`, the reference's version; 3.13.4 exists as a newer patch) scrapes
+  three static targets every 15 seconds: the backend's management port (`backend:8081`), the intelligence
+  service's metrics port (`intelligence-service:9000`) and itself. UI at `http://localhost:9090`, bound to this
+  machine only (`127.0.0.1`). 7 days of data, memory capped at 512 MB.
+- **Alertmanager** (`prom/alertmanager:v0.33.1`) at `http://localhost:9093`, same binding, 128 MB cap. No
+  notification integration: a firing alert is visible in its own page and in Prometheus's Alerts page.
+- **The rules** (`alerts.yml`): `BackendDown` and `IntelligenceServiceDown` (target down for a minute),
+  `SyncSourceFailing` (`sync_consecutive_failures` of 3, with two deliberate exceptions: hub makes three
+  listing calls per run so it alerts at 9, and ActivityWatch, a local-only source with no server in Docker,
+  never alerts) and `AssessmentFailureRateHigh` (more than half of assessments ending in `upstream_error` or
+  `unparseable` for 15 minutes; a missing key and no traffic at all are not failures).
+- **Tests first**: `alerts_test.yml` is a `promtool` unit test of each rule (down, recovery, thresholds, the
+  exceptions, the no-traffic case). `infra/observability/check.sh` validates both configs and runs it.
+- Logs reach Loki only through Alloy; see part 4b.
+- Metrics and both UIs are not reachable from the browser-facing frontend: the backend's metrics port is
+  8081 and unpublished, the intelligence service's is 9000 and unpublished, and Prometheus and Alertmanager
+  bind to 127.0.0.1.
+
+### Part 4b: logs in Loki
+
+- **Loki** (`grafana/loki:3.7.9`, single binary, filesystem storage, 7 days kept, 512 MB cap) at
+  `http://localhost:3100`, bound to this machine only.
+- **Grafana Alloy** (`grafana/alloy:v1.21.0`) ships the logs. The reference used Promtail, which is deprecated
+  (its last release was May 2026); Alloy is its maintained replacement.
+- **Scope, on purpose** (`alloy.alloy`): only containers of the Compose project `infra` (the folder name of
+  `infra/docker-compose.yml`, so another project's container also called `backend` is never read), and only the
+  two services that write the scrubbed JSON logs, `backend` and `intelligence-service`. **Postgres is left
+  out** because an error line can contain row values such as an email address; the **frontend is left out**
+  because its server logs are not covered by the no-personal-data rule yet.
+- **Docker access is read-only and narrow.** Alloy talks to Docker through `tecnativa/docker-socket-proxy`
+  (v0.5.0) allowing only containers and networks, no writes. The raw `/var/run/docker.sock` is mounted into
+  that proxy and nowhere else.
+- **Labels**: `service` and `level` only. The request id stays in the line (a label per request would explode the
+  index). Find a request with `{service=~".+"} | json | requestId="<id>"`: one id returns the backend lines and
+  the intelligence service's line for the same request.
+- **Check**: `infra/observability/verify-logs.sh` against the running stack: the request id is found in Loki,
+  only the two services appear, no Postgres or frontend line, and no `secret-words` (a query-string value),
+  `@gmail.com` or `password` in anything shipped. `check.sh` also validates `loki.yml` and `alloy.alloy`.
+- Cost, measured idle: Loki about 97 MB, Alloy about 110 MB, the socket proxy about 28 MB of memory. Images:
+  Loki 191 MB, Alloy 928 MB (large), proxy 67 MB. Log data about 0.2 MB after a few minutes.
+
+### Part 4c-i: traces in Jaeger
+
+- **Off by default.** `TRACING_ENABLED=true` turns it on (for example
+  `TRACING_ENABLED=true docker compose --profile observability up -d`). Off, no agent is loaded and nothing is
+  exported; the request id, JSON logs and metrics all work as before.
+- **Backend**: the OpenTelemetry Java agent (2.32.0), downloaded in the Dockerfile and **checked against the
+  SHA-256 Maven Central publishes**, so a changed download fails the build. `backend/entrypoint.sh` attaches it
+  only when tracing is on. It traces HTTP, repository calls and JDBC. It also puts `trace_id` and `span_id` in
+  the log MDC, so they appear on the JSON log lines with no code.
+- **Intelligence service**: `opentelemetry-instrument` (auto-instrumentation 0.66b1, SDK 1.45.1) around uvicorn,
+  covering FastAPI and the outbound httpx calls to the backend; `traceId` is added to its JSON log lines
+  (`observability.py`, tested). W3C `traceparent` carries the trace from the intelligence service into the
+  backend, so one request is one trace.
+- **Jaeger v2** (`jaegertracing/jaeger:2.22.0`, in-memory storage, so traces do not survive a restart) receives
+  OTLP over gRPC on port 4317 inside the Compose network; UI at `http://localhost:16686`, bound to this machine.
+  Traces only: the metrics and logs exporters are off, those have their own pipelines.
+- **Check**: `infra/observability/verify-traces.sh` (stack running with tracing on): the intelligence service's
+  log line carries a trace id, the backend's log line carries the same one, Jaeger has one trace with spans from
+  both services, and the trace contains no bearer token or authorization header.
+- **What a trace records**: operation names, timings, status codes, the **URL of each request including its
+  query string**, and the SQL text with parameters as `?` (never the values). No headers, no bodies. The query
+  string is the part to watch: today the API's query strings hold dates and ids only, but a future route that
+  put a note or an amount in one would put it in the trace; keep such values in bodies.
+- Cost, measured idle with tracing on: the backend about 445 MB against 327 MB off (about 120 MB more), the
+  intelligence service about 55 MB against 42 MB, Jaeger about 20 MB; Jaeger's image 164 MB.
+- **The trace id on a metric (exemplars), done in four steps.** The staged prompt asks to show the
+  trace id in the metric, the log line and the trace. A metric carries it as a Prometheus *exemplar*, a trace id
+  attached to one observation of a histogram bucket. Steps: (1) the intelligence service attaches the id to
+  `http_request_duration_seconds` observations made inside a trace (done); (2) the backend does the same for
+  `http_server_requests` (done: `OtelSpanContext` is a `SpanContext` bean that reads the OpenTelemetry API, which the
+  Java agent backs; Spring Boot's own version needs Micrometer Tracing, which this service does not use); (3) Prometheus
+  stores them (done: `--enable-feature=exemplar-storage` on the Prometheus service; it negotiates OpenMetrics with
+  both services on its own, so `prometheus.yml` did not change); (4) Grafana shows them on the two p95 panels
+  (`exemplar: true`) and links each to its trace in the Jaeger UI (done, see 4c-ii). An exemplar appears only in the OpenMetrics text, which both services serve
+  when the scraper asks for it; the plain text is unchanged. With tracing off there is no span, so none is attached.
+  Checked live (tracing on): a request's latency bucket carried `trace_id="c4989b2f…"` on the backend and
+  `trace_id="92f77443…"` on the intelligence service, and the backend's id was a real trace in Jaeger and on the
+  backend's `request completed` log line. Prometheus keeps the latest exemplar per bucket for the same 7 days as its
+  samples. Check: `infra/observability/verify-exemplars.sh` (stack running with tracing on): after traced requests,
+  Prometheus's exemplar API returns a trace id for each service's latency histogram and each is a real trace in
+  Jaeger. Run on 2026-10-25: both exemplars carried the same trace id, one `/patterns` request across both services.
+  It first failed with the flag off. With tracing off no exemplar is attached, so the script fails by design.
+
+### Part 4c-ii: Grafana and the dashboard
+
+- **Grafana** (`grafana/grafana:13.2.4`, profile `observability`) at `http://localhost:3001`, bound to this machine.
+  Anonymous access, sign-up, Gravatar and update checks are off.
+- **Admin password**: `GRAFANA_ADMIN_PASSWORD` in `infra/.env` (name only in `.env.example`; generate one with
+  `openssl rand -base64 24`). The service's entrypoint refuses to start when it is empty, so Grafana never runs on its
+  default `admin/admin` login. The variable is **not** required by other compose commands: a `:?` on it would fail
+  every `docker compose` call, profile or not.
+- **Provisioned, not clicked together** (`infra/observability/grafana/provisioning/`): two datasources (Prometheus,
+  Loki; not editable) and one dashboard, `Routine Machine` (`dashboards/routine-machine.json`, not editable
+  in the UI). Change the JSON in the repo.
+- **Dashboard**: services up; p95 latency by route for the backend and the intelligence service; credits decided per
+  hour by status and by rule version; questioned credits; sync fetches, failures in a row and time since last success
+  per source; assessments, p95 latency, tokens and estimated cost; and the application logs, filtered by level and by
+  request or trace id. The level filter lists `WARN` (backend) and `WARNING` (intelligence service) and `CRITICAL`,
+  because the two services name levels differently.
+- **Metric to trace**: the two p95 panels show exemplars as dots; the Prometheus datasource's
+  `exemplarTraceIdDestinations` turns each one's `trace_id` into a link to `http://localhost:16686/trace/<id>`.
+  Needs tracing on; with it off the charts are as before. Shown through Grafana's own query API (the call a panel
+  makes), not yet seen as dots in a browser.
+- **Log to trace**: a log line that carries a trace id (`traceId` or `trace_id`) gets a link that opens that trace in
+  Jaeger (`http://localhost:16686/trace/<id>`). Tracing must be on (`TRACING_ENABLED=true`) for lines to carry one.
+- **No Jaeger datasource in Grafana.** Jaeger 2.22 dropped the v1 listing and search endpoints (`/api/services`,
+  `/api/operations` and `/api/traces?service=...` return 404); fetching one trace by id (`/api/traces/<id>`, which
+  `verify-traces.sh` uses) and `/api/v3/*` still work. Grafana's Jaeger datasource (plugin 13.0.5) calls
+  `/api/services`, so its health check fails with `404 Not Found`. Traces are read in the Jaeger UI, not inside Grafana.
+  Revisit when Grafana's plugin supports the v3 API.
+- **Latency buckets**: the backend now publishes `http_server_requests_seconds_bucket`
+  (`management.metrics.distribution.percentiles-histogram`), which Spring Boot does not do by default. The p95 panel
+  needs it. A test covers it.
+- **Check**: `infra/observability/verify-grafana.sh` (stack running): no login is refused, the default login does not
+  work, the two datasources are healthy, the dashboard is loaded, every query on it runs without error, the
+  Prometheus datasource links exemplars to Jaeger, and the p95 panels' exemplar queries return trace ids through
+  Grafana. A chart
+  with no data is fine on a new stack; a query that errors is not. Run on 2026-10-25: all checks pass, 14 queries.
+  The backend p95 panel shows no data until the backend image is rebuilt, because the running image predates the
+  latency-bucket setting.
+
+### Part 5: the owner-only operations page
+
+Six pieces: (1) the owner gate and service health in the backend; (2) metrics for the charts, read from Prometheus
+by the backend; (3) logs, read from Loki with allow-listed filters, and trace links; (4) each sync source's last run
+and result; (5) the frontend page and its 404; (6) docs (see "Piece 6" below). The link to the API documentation, which Prompt 3 asks for and Prompt 4 builds, is on the page too: see `docs/backend.md`, "API documentation".
+
+**Piece 1, done.** `GET /api/watchtower/services` (`WatchtowerController`, `ServiceHealthService`):
+- **Owner only.** The owner is the account named by `OWNER_EMAIL` (`OwnerAccount`). A signed-in person who is not the
+  owner, a signed-out visitor, and everyone when no owner is configured all get a plain **404**, never a 401 or a
+  login prompt, so the page is not known to exist. For that the path is on the optional-token security chain (the
+  hillside's), not the token-required one. A malformed token still gets 401, as on the hillside.
+- **What it returns**: a list of `{name, status}` with `UP`, `DOWN` or `NOT_CONFIGURED`. `backend` and `database`
+  come from the app's own health; the intelligence service, Prometheus, Alertmanager, Loki, Jaeger and Grafana are
+  probed (2 s timeout, in parallel) at addresses in `WATCHTOWER_*_URL`, set in `infra/docker-compose.yml`. The
+  addresses are configuration, never request input, so a request cannot make the backend fetch anything. The
+  answer holds no address and no error text. Without the `observability` profile the observability services show as
+  `DOWN`.
+- **Route sweep**: `EveryRouteNeedsATokenTest` lists `/api/watchtower` as open on purpose, with the reason. The
+  route's own tests (`WatchtowerControllerTest`, `WatchtowerWithNoOwnerTest`) prove it gives nothing without the
+  owner's token.
+- **Checked live**: owner 200 with all eight services `UP`; another account 404; signed out 404; a malformed token
+  401; stopping Loki made it `DOWN`.
+- **Seen, investigated 25 Oct 2026, cause not found**: Loki's own `/ready` answered 503 three times for a short time, so the page showed Loki `DOWN` although logs were flowing. What I found: Loki's own log shows its internal calls to itself (`127.0.0.1:9095`) timing out about once an hour (`DeadlineExceeded`, at 11:01, 12:03, 12:37, 12:42, 12:48, 13:56 and 15:04 UTC), and at 13:56 it logged "removing ingester failing healthcheck" (a client pool dropping its own ingester). That is the kind of event that could make `/ready` answer 503, but I did not catch a 503 at any of those moments, so the link is a guess, not a finding. I could not tie that to the laptop sleeping (the power log has no sleep or wake events that day) or to load (ten minutes of the full backend suite, polling `/ready` every half second, produced no 503 and no error). So the page was telling the truth for a moment. **A later check found the likely reason: the stall is machine-wide.** Prometheus scrapes the backend, the intelligence service and itself every 15 seconds, and at the moments Loki's calls to itself timed out (12:03, 12:37, 12:42, 13:56 and 15:04 UTC) two or three of those scrapes were slow at the same moment; there were 20 such moments in 12 hours, several of them while I was running builds and test suites. Unrelated services stalling together means the Docker environment was starved or paused, and Loki only reports it loudest because its health check has a short deadline. What starves it, outside my own builds, I did not find. The page now tries a failing probe once more after a pause (`watchtower.probe-retry-pause-ms`, 1 s), so a flap shorter than that is not shown; a service that is really down still reads `DOWN`, and the page then takes about 5 s to answer instead of 2 s (two 2 s tries and the pause). Tested by `WatchtowerProbeRetryTest`; the retry does not help a stall longer than a second.
+
+**Piece 2, done.** `GET /api/watchtower/metrics?range=1h|6h|24h` (`WatchtowerMetricsService`), same owner gate:
+- **A fixed list of 12 queries** (`WatchtowerMetricsService.QUERIES`): the p95 latency of both services, credits by status
+  and rule version, questioned credits, sync runs, failures in a row and time since last success, assessments, their
+  latency, tokens and estimated cost. They are the same expressions as the Grafana dashboard, and
+  `WatchtowerQueriesMatchDashboardTest` fails if either side changes alone. A caller chooses only the range (default
+  6h; 1h steps 30 s, 6h steps 60 s, 24h steps 300 s). Anything else is a 400, and a query string or `expr` parameter in
+  the request is ignored: it never reaches Prometheus.
+- **The answer** is `{available, range, charts: [{id, title, unit, series: [{label, points: [[seconds, value]]}]}]}`.
+  `available` is false, with no charts and a 200, when Prometheus is not configured or answers none of the queries
+  (the stack is not running). One failing query empties only its own chart. `NaN`, `+Inf` and `-Inf` points are
+  dropped, so a chart shows a gap. A chart carries at most 8 series (`MAX_SERIES`, was 12 until slice 3 of
+  piece 5): the 8 with the largest peaks, and the answer carries `totalSeries` and `truncated` so the page can say it cut.
+- **Prometheus address**: `WATCHTOWER_PROMETHEUS_BASE_URL` (`http://prometheus:9090` in Compose); configuration, never
+  request input. Labels in the answer are route templates, sync sources, outcomes, statuses and rule versions: the
+  tags the metrics already carry, never a user, goal, book or note.
+- **Checked live** (owner token, real Prometheus): 200 with 12 charts and real points for the latency and sync charts;
+  `range=24h` 200; `range=9999d` 400; another account 404; signed out 404. The credit, assessment and questioned-credit
+  charts were empty because this stack has recorded none of those events yet.
+- **Seen**: the backend latency chart reached the cap, so some routes are cut from the page (Grafana shows all). Fixed
+  in piece 5, slice 3: the cap is now 8, the kept series are the largest peaks, and the answer says it cut. A series whose points were all `NaN` is returned with an empty `points` list.
+- **A bug the tests found**: Java cannot parse Prometheus's `+Inf`, and the first version lost a whole chart to one such
+  point. One unreadable point is now skipped.
+
+**Piece 3, done.** `GET /api/watchtower/logs?level=&requestId=&range=` (`WatchtowerLogsService`), same owner gate. The gate
+runs before any validation, so a non-owner gets 404 whatever they send.
+- **What reaches Loki.** Only two values from the request, both checked: `level`, which must be one of `INFO`, `WARN`,
+  `WARNING`, `ERROR`, `CRITICAL`, `DEBUG` (the Grafana dashboard's list, kept equal by a test), and `requestId`, which
+  must be 1 to 64 of letters, digits, dot, underscore, hyphen (the services' own request-id pattern; a trace id fits it
+  too). It is placed as a plain-text match (`|= "..."`), never a regex. Anything else is a 400 and Loki is not asked. The
+  services read are fixed (`backend|intelligence-service`); a `service` or `query` parameter in the request is ignored.
+  A blank `requestId` is refused too, so the page must leave the parameter out when its box is empty.
+- **The answer** is `{available, range, entries: [{time, service, level, message, requestId, traceId, traceUrl}]}`:
+  at most 100 entries (`MAX_ENTRIES`), merged from Loki's streams newest first, messages cut at 1,000 characters. Each line is
+  reduced to those fields, so a logger name, a thread name or any other field in the line is not passed on. A line that
+  is not JSON (for example a JVM start-up message) is returned as its text with no ids. `available` is false with a 200
+  when Loki is not configured or does not answer.
+- **Trace links.** `traceUrl` is `WATCHTOWER_JAEGER_UI_URL` + `/trace/` + the id, only when the line carries a real
+  32-character trace id and the address is set. That address is the one a browser opens (`http://localhost:16686` in
+  Compose), not the one the backend probes inside Docker. Lines carry a trace id only when `TRACING_ENABLED=true`.
+- **Addresses** are configuration: `WATCHTOWER_LOKI_BASE_URL` (`http://loki:3100`) and `WATCHTOWER_JAEGER_UI_URL`.
+- **Shared range.** `WatchtowerRange` (1h, 6h, 24h and each step) is now one enum used by the charts and the logs.
+- **Checked live** (tracing on): a request sent with a known id was found by that id and, after Alloy picked up the
+  recreated backend container, returned the 2 backend lines and the 1 intelligence line (matching the container log and
+  Loki directly), each with a trace link; `level=ERROR` 200; an injection attempt in the id and in the level 400; another
+  account 404; signed out 404.
+- **Seen**: right after the backend container was recreated, the endpoint returned only the intelligence service's line
+  for a few seconds, because Alloy had not yet attached to the new container. Logs from before a restart are still there.
+
+**Piece 4, done.** `GET /api/watchtower/sync` (`WatchtowerSyncService`), same owner gate. It adds no new data. It joins what
+`/api/watering-holes` already knew with the run state Prometheus already held.
+- **The answer** is `{available, sources: [{source, enabled, lastActivityAt, result, consecutiveFailures, lastSuccessAt,
+  successes24h, failures24h}]}` for the six sources (HUB, WAKATIME, ACTIVITYWATCH, GITHUB, RESCUETIME, HEALTH).
+  `enabled` and `lastActivityAt` come from the database through `WateringHoleStatusService`, which I extracted from
+  `WateringHoleStatusController` so the two pages read one copy; the watering holes page still masks it for non-owners.
+- **Prometheus is asked three fixed questions** (`WatchtowerSyncService.QUERIES`): failures in a row, the last success
+  (`max_over_time` over 7 days, Prometheus's retention) and successes and failures over 24 hours by source. Nothing in
+  the request reaches it. The address is `WATCHTOWER_PROMETHEUS_BASE_URL`, as for the charts.
+- **The result word**, in this order: `off` (switched off), `push only` (HEALTH, which the backend never fetches),
+  `unknown` (Prometheus did not answer), `failing` (failures in a row above 0), `ok` (a last success is known),
+  `never succeeded`. `consecutiveFailures` and `lastSuccessAt` are null for a source Prometheus has no series for, not
+  0, because a source that has not run is not one with no failures.
+- **What survives a restart.** The 24-hour counts and the last success do (Prometheus keeps them). Failures in a row
+  do not: the gauge lives in the backend process, so it starts again after a restart. A source that failed before a
+  restart reads `ok` or `never succeeded` until it fails again. The first live run showed this for the last success, so the
+  query now looks back 7 days.
+- **Known gap.** Nothing records when a source last failed or last ran. A last-failure gauge would change the metrics,
+  the alert docs and the dashboard, so I did not add one. `lastActivityAt` is when data last arrived, not when the sync
+  last ran.
+- **Checked live** (owner token, real Prometheus): 200 with six sources; HUB, GITHUB and ACTIVITYWATCH `failing`, WAKATIME
+  `ok`, RESCUETIME and HEALTH `off`; another account 404; signed out 404. Before the 7-day lookback, HUB and GITHUB
+  showed no last success right after a backend recreate, although they had succeeded earlier that day.
+- **Seen, not looked into**: HUB and GITHUB were failing in the live stack (HUB 3 failures in a row; GITHUB 1), and
+  ACTIVITYWATCH fails every poll by design (no server in the Docker stack).
+
+**Piece 5, slice 1 of 4 (the frontend page).** `/watchtower` (`frontend/app/watchtower/page.tsx`, `lib/watchtower.ts`): the
+route, the 404 gate and the service health list. The frontend holds no owner logic. It calls `GET /api/watchtower/services`
+and turns the backend's 404 into the Next 404 page (a signed-out visitor too, with no redirect to `/login`). Any other
+failure is thrown, not shown as a 404. There is no sidebar link, so the owner types the address.
+- **Checked**: 4 Vitest tests written first (a 404 gives `null`, a 500 or a network error is thrown, a status maps to a
+  tone); two deliberate breaks (404 rethrown; every error treated as a 404) each failed the matching test; `npm test`
+  33 pass, `npm run lint` clean, `npm run build` lists `/watchtower`.
+- **Checked live** (rebuilt frontend container, session cookie minted from the dev signing secret): signed out 404;
+  another account 404; the owner 200 with all eight services. The page text appears only in the owner's response.
+- **Seen again, not explained**: the page showed Loki `Down` on its first load, then the backend's own probe read Loki `UP`
+  six times in a row and Loki's `/ready` answered 200 five times. This is the second sighting of the short blip recorded
+  under piece 1.
+
+**Piece 5, slice 2 of 4 (sync table on the page).** `/watchtower` now also reads `GET /api/watchtower/sync`
+(`fetchSync`, `syncTone`, `formatUtc` in `frontend/lib/watchtower.ts`) and shows one row per source: result chip (ok
+green, failing in the warning colour, everything else plain), failures in a row, last success, newest data and the last
+24 hours. Either call answering 404 gives the 404 page. If Prometheus is not answering, a line above the table says so.
+- **Checked**: 5 more Vitest tests written first (the sync fetch, its 404, the tone, the time format); two deliberate
+  breaks (404 rethrown, which failed the services and the sync test; `failing` shown as good) each failed the matching
+  test; `npm test` 38 pass, lint clean, build lists the route.
+- **Checked live** (rebuilt frontend, minted session cookies): signed out 404; another account 404; the owner 200 with the
+  six rows as the backend gave them (HUB failing with 3 in a row, WakaTime ok, ActivityWatch failing, GitHub failing,
+  RescueTime and Health off); the watering holes page still 200 for the owner.
+- **Seen**: starting the frontend with `docker compose up -d --build frontend` also recreated the backend, so for a
+  minute every page answered 500 (`ECONNREFUSED`) while the backend started. My first live run landed in that minute and
+  proved nothing; I redid it. After a backend restart, failures in a row also read from zero.
+- **GitHub and hub fetches fail often; investigated 25 Oct 2026, cause not found.** Prometheus's history for 14 hours shows 30 GitHub runs (the sync runs every 15 minutes and once at each backend start): 17 failed, 13 succeeded, and the failures come in pairs 15 minutes apart. The backend log said only `ConnectException`, so the reason could not be read. I checked what I could: `wget` and a Java client built like the app's, run from inside the backend container, reached GitHub 6 of 6 and 8 of 8 times, so the container's network and the client are not broken in general; GitHub resolves to an IPv4 address and a NAT64 one (`64:ff9b::/96`), which may matter and which I did not pin down. A startup run failed on 7 of 7 occasions I could see, then succeeded on the next restart, so that is not a rule either. Failed runs were near a slow scrape more often than successful ones (47% against 21%, small samples), so a machine-wide stall may be involved, but I will not claim it. **Then the log gave one answer (25 Oct, 17:24 UTC)**: the run failed with HTTP 403, and GitHub itself said the quota was used up: 60 of 60 requests an hour for this address, resetting at 21:03 local. The sync costs 4 requests a run, every 15 minutes and once per backend start, and I had restarted the backend about 20 times that day and made about 25 requests of my own while testing; see `docs/hub-sync.md`, "GitHub's rate limit". That explains the current failures. **The earlier `ConnectException` ones, read once the log carried the cause, were the JVM failing to resolve `api.github.com` for a moment after a container was created** (`UnresolvedAddressException`); each call now retries once. See `docs/hub-sync.md`. **What changed**: the GitHub and hub clients now log the whole cause (`FailureDescription`: class, message and up to four links of the chain, cut at 200 characters), so the next failure says why. Tested by `FailureDescriptionTest` (6). A 403 now says "rate limited until ..." from GitHub's own headers (`GitHubRateLimit`, 3 tests). An optional GitHub token (5,000 an hour) is built and waits for one from Miguel (`GITHUB_TOKEN`).
+
+**Piece 5, slice 3 of 4 (charts on the page).** `/watchtower` shows the 12 charts from `GET /api/watchtower/metrics`
+(`WatchtowerChart`, `lib/chart.ts`), with one range row above them (1 hour, 6 hours, 24 hours, as links:
+`/watchtower?range=1h`; anything else in the address falls back to 6 hours before it reaches the backend).
+- **Backend change**: `MAX_SERIES` 12 to 8, because the page has eight colours that stay apart for colour-blind
+  readers and the dataviz rule is to fold or facet rather than invent a ninth. The 8 kept are the largest peaks (the
+  slowest routes, the busiest sources), sorted before the cut; each chart now carries `totalSeries` and `truncated`, and the
+  page prints "Showing 8 of 25 series, the ones with the largest peaks." A colour belongs to a series name, so a series
+  that moves up or down the ranking keeps its colour.
+- **What a chart has**: a 2px line per series; a legend for two or more series; end dots with a surface ring; direct
+  end labels only when there are four series or fewer and they are 14px apart; a crosshair and one tooltip listing every
+  series (pointer, or the arrow keys when the chart has focus); a table of latest and peak under each chart. A chart
+  with no points says "No data in this range." and draws no axes.
+- **Lines break at gaps**: Prometheus leaves out a time it has no value for, and a line across the hole would show values
+  that were never measured. A run of points more than two steps from the next ends there; a lone point is a dot. I saw
+  the bridged lines in the first render, so this is a bug the first look found, and it has tests.
+- **Colours**: `--series-1` to `--series-8` in `globals.css` for light, dark by system and dark by the toggle. The dataviz
+  validator passed both sets against the page's surfaces (light: worst adjacent colour-blind distance 9.1, normal vision
+  19.6; dark: 8.4 and 19.3). Light mode warns that slots 3, 4 and 5 are below 3:1 contrast against white, which the skill
+  answers with visible labels and a table view; both exist.
+- **Checked**: backend, 3 tests written first (sort, `totalSeries` and `truncated`, the cap); three deliberate breaks
+  (no sort, `truncated` never set, `totalSeries` counting only the kept) each failed the matching test; 428 backend tests
+  pass on a clean build. Frontend, 17 more Vitest tests (the helpers and `fetchMetrics`); five deliberate breaks (range
+  ignored, any range accepted, tie going to the later point, runs never split, a ten-step gap) each failed the matching
+  test; `npm test` 55 pass, lint clean, build lists the route.
+- **Checked live** (rebuilt containers, minted cookies): signed out 404; another account 404; the owner 200 with 20 `svg`s
+  for 6 hours, 1 hour and 24 hours, the pressed range right each time, and `range=9999d` falling back to 6 hours; the
+  backend JSON showed `backend-p95-latency` with 8 of 25 series and `truncated` true, and every other chart with all
+  its series. I also looked at the page in Chrome (a saved copy of the owner's page, dark theme).
+- **Hover and keys, checked in Chrome** (25 Oct 2026, after the owner signed in to the browser): the tooltip, the crosshair
+  and the arrow keys work, in the light theme; the owner had also tried the hover. The dark theme was looked at in a saved
+  copy only. The phone width was looked at later (see below). (My first attempt, putting a session token into the browser myself,
+  was refused by the permission check; signing in by hand was the way round it.)
+- **Seen, not changed**: with a series that ends early, its end label sits at the right edge while its dot is further
+  left. The legend and the tooltip name it, so I left it.
+
+**Piece 5, slice 4 of 4 (logs on the page).** `/watchtower` ends with a Logs section from `GET /api/watchtower/logs`
+(`lib/logs.ts`): a level select (the backend's six levels), a box for a request id or trace id, a Filter button and a Clear
+link, over a table of the newest 100 lines (time to the second in UTC, service, level chip, message, request, trace).
+- **One range for the whole page**: the range row above the charts also sets the logs' range, so the numbers agree. The
+  form is a plain `GET` with the range in a hidden field; the level and the id live in the address (`?level=ERROR&id=...`)
+  and the range links keep them. A request id in a row is a link that filters to that request.
+- **What reaches the backend**: `parseLogFilters` drops a level that is not in the list and an id that is not 1 to 64 of
+  letters, digits, dot, underscore or hyphen, so the backend is not asked what it would refuse. When an id is dropped the
+  page says so. An empty box is no filter. `fetchLogs` leaves out unset filters.
+- **Trace links** are shown only if the backend sends one and it is an `http` or `https` address (`safeHref`); they open in
+  a new tab with `noopener noreferrer`. Message text is rendered as text by React, never as HTML.
+- **Checked**: 15 Vitest tests written first for the logs helpers (red before green), `pageHref` and `endLabel` each seen
+  red first; four deliberate breaks (a bad id accepted, `javascript:` links allowed, a blank filter sent, the single-series
+  label rule removed) each failed the matching test; `npm test` 69 pass, lint clean, build lists the route.
+- **Checked live**: signed out 404, another account 404; the owner got 100 lines with no filter, 3 `ERROR` lines with
+  `level=ERROR`, only `INFO` lines with `level=INFO`, exactly the 4 lines of one request with its id (the box holding the
+  id, a Clear link), the "id was not used" note for an id with a quote and a pipe, and a bad level ignored. In Chrome
+  (signed in): clicking a request id filtered to that one line; the level select and `level=WARNING` worked.
+- **Two flaws the first look found, fixed**: the level select clipped its text (the shared `.field` style has 12px of
+  padding), and a chart with one series printed its title as the end label, clipped at the edge (now just the value).
+  The empty chart cards also stretched to match their neighbours; the grid now aligns them to the top.
+- **Checked later, 25 Oct 2026**: a trace link. With tracing switched on for the check (a one-off `TRACING_ENABLED=true`, then
+  back to off), 60 of the newest 100 log lines carried a trace id and a Jaeger link; clicking one in Chrome opened that trace
+  in Jaeger (the backend's own spans and its database queries). **And the phone width, with a flaw found and fixed**: at 390 px
+  the charts scaled their whole 720 px canvas into a 320 px card, so axis labels came out about 5 px tall. Each chart now keeps
+  a minimum width of 640 px (labels 9.8 px) and the card scrolls sideways, as the two tables always did; the page itself has
+  no horizontal overflow. Method: the window resize does not change the viewport (the limit `docs/frontend.md` records), so
+  I embedded the page in a 390 px frame in the same tab and measured the rendered label size.
+- **Fixed, 25 Oct 2026: "Unsupported upgrade request." in the intelligence service's log.** Cause found by experiment: a plain request logs nothing, a request with `Upgrade: h2c` logs one warning, and each load of the owner page added one. Java's HTTP client offers an HTTP/2 upgrade on plain `http` calls by default, and the page's probes go to the services over plain `http`; uvicorn does not support `h2c` and says so at WARNING each time. The five clients of the owner page (the probes, the charts, the logs, the sync table and the intelligence docs) now speak HTTP/1.1. Tested by `WatchtowerProbesSendNoUpgradeTest` (a stand-in server fails the test if any request carries an upgrade header); checked live: 12 owner-page calls added no warning. The older warnings are still in Loki for its seven days. The sync clients for WakaTime, ActivityWatch, GitHub and RescueTime build their own clients and were not changed: they call external or local addresses, not the services behind this page.
+
+**Piece 6, done: documentation and the end of Prompt 3's checklist.**
+- **The API-docs link** was left out of this piece, because Prompt 3 says the page shows "the API docs from Prompt 4" and Prompt 4 did not exist yet. Prompt 4 is now built (springdoc on the backend, the intelligence service's spec through the backend, both in one read-only viewer, owner only), and the page has an "API documentation" section linking to it. Where it lives and how it is checked: `docs/backend.md`, "API documentation", and `docs/frontend.md`.
+- **Prompt 3's acceptance checks, one by one:**
+  1. *Tests first* for the request-id filter, each custom metric and the owner check: done in parts 1, 3 and 5 (owner sees the page; another account and a signed-out visitor get 404).
+  2. *One action, with the trace id in a metric, a log line and a trace*: shown with a `/patterns` request, which crosses both services (`verify-traces.sh` and `verify-exemplars.sh`, 25 Oct 2026). **It was not "log a day" itself**; I used a request I knew crosses both services, because logging a day need not call the intelligence service.
+  3. *Stop the intelligence service and watch its alert*: **done live on 25 Oct 2026**. Stopped at t=0: no alert; **pending at 43 s; firing at 104 s; Alertmanager listed it by 114 s.** Started again at 115 s: Prometheus cleared it at about 150 s and Alertmanager no longer listed it by 170 s. The alert rules had only been unit-tested with `promtool` before this. Pending takes 43 s and not 15 s because the first failed scrape lands somewhere in the 15 s cycle and the rule then waits for its one minute (`for: 1m`).
+  4. *`docs/observability.md` is new and written in the same change; `PROJECT.md` and `CLAUDE.md` route to it*: done (the `CLAUDE.md` routing table has the row).
+
+## What the stack costs
+
+Measured on this machine on 25 Oct 2026, the whole stack up with the `observability` profile and tracing on, idle apart from my own testing. Docker reports memory in use, not what a process could grow to.
+
+| Container | Memory | Cap | CPU |
+|---|---|---|---|
+| Grafana | 342 MB | 512 MB | 1.8% |
+| Loki | 123 MB | 512 MB | 1.1% |
+| Prometheus | 115 MB | 512 MB | 0.6% |
+| Alloy | 58 MB | 256 MB | 0.7% |
+| Jaeger | 35 MB | 512 MB | 0.1% |
+| Alertmanager | 22 MB | 128 MB | 0.3% |
+| Docker socket proxy | 7 MB | 64 MB | 0% |
+| **Observability total** | **about 700 MB** | | |
+| Backend, frontend, intelligence service, Postgres | about 490 MB | none | under 0.4% each |
+
+- **Memory: the whole stack is about 1.2 GB, of which about 700 MB is the observability profile.** Without the profile the application alone is about 490 MB. **Grafana is the heavy one and sits at two thirds of its 512 MB cap**, so it is the first container to hit its limit if a dashboard grows.
+- **Disk: images about 1.4 GB** (observability images about 900 MB: Grafana 445, Alloy 207, Prometheus 98, Jaeger 51, Loki 43, Alertmanager 37, socket proxy 21; the application and Postgres images about 470 MB). **Volumes about 320 MB, of which Grafana is 303 MB and 290 MB of that is its plugins**; Prometheus is 18 MB; Loki is under 1 MB so far, because its write-ahead log has not been turned into chunks yet; Alertmanager and Alloy are empty. Jaeger keeps traces in memory only, so they cost no disk and do not survive a restart.
+- **Growth is bounded by settings, not yet measured over days**: Prometheus keeps 7 days and is capped at 512 MB of memory; Loki keeps 7 days (`retention_period: 168h`). One data point: Prometheus's volume went from 18.3 MB to 28.6 MB in about 5.7 hours on 25 Oct 2026 (my own testing adds series and traffic, so this overstates a quiet day). Extrapolated in a straight line that is a few hundred MB at seven days, which is a guess and not a measurement. **Baseline for the real check, 25 Oct 2026 16:52 UTC**: Prometheus 28.55 MB, Loki 0.41 MB, Grafana 302.6 MB. Measure again after seven days.
+- **Without the profile**: `docker compose up` starts only the application; `docker compose --profile observability up` adds the rest. See "Turning it off".
+
+## What it records about people
+
+- Logs: method, path, status, duration, request id, and the application's own messages. No query
+  string, no body, no header, no email, no note text, no money amount. The path can contain a numeric
+  row id (for example `/api/tasks/57`), which is not personal on its own.
+- Metrics: JVM and HTTP counters and timings, tagged by route template, never by user.
+- The owner claim and owner role log lines name tables and counts, never an address.
+- The operations page's data (`/api/watchtower`) is owner-only. So far it holds service names and statuses, the
+  metrics the stack already records (with the same labels), and recent log lines. Those lines are the scrubbed
+  ones already in Loki, reduced to time, service, level, message, request id and trace id.
+- The operations page adds nothing new to what is recorded. Its sync table reads per-source counters and times (`source` and `outcome` labels, never a user), the switch and newest-data time from the watering holes data, and its charts use the labels listed under piece 2. Its logs are the scrubbed Loki lines above. The page keeps nothing of its own: no database table, no cookie beyond the normal session, no copy of a log line.
+- The intelligence service follows the same rules; it receives note text only on `POST /reading-notes/assess`, whose body is never logged.
+- Later parts must keep to this list; each part's report states what it added.
+
+## Turning it off
+
+- The observability containers: `docker compose --profile observability down` (add `-v` to delete their
+  stored data). Nothing in the application depends on them; the services keep serving their metrics ports.
+
+- Metrics port: set `MANAGEMENT_PORT` to a different port, or `MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health`
+  to drop the Prometheus endpoint.
+- JSON logs: set `LOGGING_STRUCTURED_FORMAT_CONSOLE=` (empty) to return to plain text lines.
+- The request id and the completion line have no switch; removing `RequestIdFilter` removes both.
+- The page: leave `OWNER_EMAIL` empty and nobody is the owner, so every `/api/watchtower/*` call and the page itself answer 404. Remove a `WATCHTOWER_*` address and that part of the page says it is not configured (services read `NOT_CONFIGURED`, charts and logs say so) instead of failing. Deleting `frontend/app/watchtower` and the `/api/watchtower/**` matcher in `SecurityConfig` removes the page; nothing else depends on it.
+- What the whole stack costs is in "What the stack costs", below.
+
+## Decisions log
+
+| Date | Decision | Reason |
+|------|----------|--------|
+| 2026-10-21 | Spring Boot's built-in structured logging (`logstash` format) instead of `logstash-logback-encoder` | The latest encoder (9.0) needs Jackson 3, and Spring Boot 3.5 uses Jackson 2; Boot 3.4 and later emit the same Logstash JSON with the MDC included and no extra dependency. Differs from the staged prompt, which named the library |
+| 2026-10-21 | Metrics on a separate management port (8081), not published to the host, instead of exposing `/actuator/**` on the API port and relying on routing | The staged prompt requires it never share the port the browser talks to. Following the reference's lesson: an endpoint that is never served on the public port cannot be reached through an auth mistake there |
+| 2026-10-21 | Jaeger v2 (`jaegertracing/jaeger:2.22.0`), not the reference's v1 all-in-one | v2 images are published now (the reference had to use 1.x because 2.x tags were missing) and v1 is end-of-life. Differs from the reference |
+| 2026-10-21 | Tracing is opt-in with `TRACING_ENABLED`, not always on | The agent adds about 120 MB to the backend and exports to a collector that only exists under the profile; a plain `docker compose up` stays light and quiet |
+| 2026-10-21 | The OpenTelemetry Java agent is pinned and checksum-verified in the Dockerfile | It runs inside the backend's JVM with full access; a downloaded jar must be exactly the one published |
+| 2026-10-21 | Grafana Alloy instead of Promtail for log shipping | Promtail is deprecated and its last release was May 2026; Alloy (v1.21.0, October 2026) is Grafana's maintained replacement. Differs from the reference and the staged prompt, which named Promtail |
+| 2026-10-21 | The log shipper reads Docker through a read-only socket proxy, not the raw socket | Anything holding `/var/run/docker.sock` can control the host; the proxy allows only reading containers and networks |
+| 2026-10-21 | Only `backend` and `intelligence-service` logs are shipped; Postgres and the frontend are not | Postgres error lines can contain row values (emails); the frontend's server logs are not covered by the no-personal-data rule. An allow-list can only grow on purpose |
+| 2026-10-21 | Alert rules are unit-tested with `promtool test rules` before they were written | An alert that has never been shown to fire (and to stay quiet when it should) is a guess. The tests cover firing, the `for` delay, recovery and the deliberate exceptions |
+| 2026-10-21 | `SyncSourceFailing` skips ActivityWatch and alerts hub at 9, not 3 | ActivityWatch has no server in the Docker stack and fails every poll by design; hub counts three listing calls per run, so 3 is one failed run, not three |
+| 2026-10-21 | Prometheus and Alertmanager UIs bound to 127.0.0.1, behind a compose profile | Operations data is for the owner on this machine; a plain `docker compose up` stays light |
+| 2026-10-25 | Grafana's admin password is checked by the container's entrypoint, not by `${VAR:?}` in the compose file | `:?` is evaluated for every service, so it made every `docker compose` command fail without the variable. An empty value would otherwise fall back to Grafana's default `admin/admin` login |
+| 2026-10-25 | No Jaeger datasource in Grafana; the log-to-trace link is a plain URL to the Jaeger UI | Found by running `verify-grafana.sh`: the datasource's health check gets `404` because Jaeger 2.22 dropped the v1 listing and search endpoints that Grafana's plugin calls (`/api/v3/services` answers 200, `/api/services` answers 404; fetching one trace by id still works on v1). Keeps Jaeger 2.22 (decided earlier) instead of pinning an older v2 |
+| 2026-10-25 | The owner-only page reads Prometheus and Loki through the backend, instead of embedding Grafana | Resolves the open question. One place (the backend) holds the owner check and the 404 rule, with Java tests; the frontend only renders. Embedding Grafana would need its own login, a second access rule, and framing headers. Grafana stays for exploring. Pieces 2 and 3 build it; you can overrule before then |
+| 2026-10-25 | The logs endpoint builds LogQL from a fixed service list plus a checked level and a checked id, matched as plain text | The request id box is the one place free text reaches Loki. A character set with no quote, brace, backslash, space or pipe cannot change the query, and `|=` is a substring match, not a regex. Rejecting is safer than escaping |
+| 2026-10-25 | The page's queries are a fixed list in Java, mirrored from the Grafana dashboard, with a test that they match | A free-form query would let a caller run anything against Prometheus. Two copies of one expression drift, so `WatchtowerQueriesMatchDashboardTest` compares them. Cost: a query change is made in two files |
+| 2026-10-25 | `/api/watchtower` is on the optional-token chain and listed as open on purpose in the route sweep | Prompt 3 says non-owners get a plain 404, not a login prompt. On the token-required chain a signed-out visitor gets 401, which shows the page exists. The sweep lists it with that reason so the exception is visible |
+| 2026-10-25 | `opentelemetry-api` added to the backend, version managed by Spring Boot's BOM (1.49.0) | Exemplars need the current trace id inside the JVM. Spring Boot's own source for it needs Micrometer Tracing; this service is traced by the OpenTelemetry Java agent, which backs the OpenTelemetry API. The API alone is inert without the agent. Approved by Miguel |
+| 2026-10-25 | Dashboard and datasources are provisioned from files and read-only in the UI | The dashboard is code: reviewed, versioned and restorable, and a click in the UI cannot change what the repo says |
+| 2026-10-21 | Only `health` and `prometheus` exposed | Everything else Actuator offers (env, beans, heap dump, loggers) can leak configuration or data |
+| 2026-10-21 | Incoming `X-Request-Id` accepted only if short and plain | An unchecked header written into logs can forge log lines |
+| 2026-10-25 | A chart on the page carries at most 8 series, the largest peaks first, and the answer says when it cut | The page has eight colours that stay apart for colour-blind readers; the dataviz rule is to fold or facet rather than invent a ninth. The 12-series cap of piece 2 cut routes in no useful order |
+| 2026-10-25 | The sync table joins database fields with Prometheus run state in the backend, with no new metric | A last-failure gauge would change the metrics, the alerts and the dashboard for a small gain. The gap is documented instead: nothing records when a source last failed or ran |
+| 2026-10-21 | Intelligence service metrics with `prometheus_client` directly, not `prometheus-fastapi-instrumentator` | The instrumentator's support for Starlette 1.x (this service runs 1.6) is unverified; a counter and a histogram in a small ASGI middleware are about 30 lines, fully tested, and add no compatibility risk. Differs from the staged prompt's wording only in the library; the endpoint and port are as asked |
+| 2026-10-21 | Intelligence service metrics on port 9000 (own server), not a `/metrics` route on the API app | The staged prompt requires metrics never share the port other services call; a route on the API app would |
+| 2026-10-21 | Log records can carry only `method`, `path`, `status`, `durationMs` into the JSON line | An allow-list is safer than a block-list for keeping note text and amounts out of logs |
+| 2026-10-21 | Request completion line logs method and path only | Query strings and bodies can carry note text or amounts, which must never reach logs |
+
+## Open questions
+
+- **Loki stalls about once an hour** (see the investigation under piece 1): likely a machine-wide stall of the Docker environment, not Loki; what starves it outside my own builds is not found. The page retries once; a longer stall still shows.
+- **GitHub and hub fetches fail often** (see piece 4): the recent ones are GitHub's hourly quota for an unauthenticated address, and the earlier `ConnectException` ones were a momentary DNS failure in the JVM after a container was created; both are in `docs/hub-sync.md`. A token (`GITHUB_TOKEN`) is built and needs one from Miguel to take effect.
+- **Seven-day growth** of the Prometheus and Loki volumes: baseline taken 25 Oct 2026 16:52 UTC (see "What the stack costs"); measure again from 1 Nov.
+- **Prompt 3's acceptance check 2** was shown with a `/patterns` request, not literally "log a day": the backend makes no functional call to the intelligence service (it only probes its health and reads its docs; the intelligence service calls the backend), so the only traces that cross both services start at the intelligence service or at the frontend page that calls it. Loading the Today page is the closest user action.
+
+- Alert delivery: like the reference, no pager or email integration is planned for a personal tool;
+  alerts will be visible in Alertmanager's own page. Say if you want one.

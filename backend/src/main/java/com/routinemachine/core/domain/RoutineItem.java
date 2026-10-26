@@ -52,9 +52,8 @@ public class RoutineItem {
     @JoinColumn(name = "goal_id")
     private Goal goal;
 
-    // Nullable, Phase 8 groundwork: NULL means legacy/unowned, the same single-user shape
-    // every existing row and every background sync service already assumes. See
-    // docs/backend.md's decisions log.
+    // Nullable: NULL is an unowned (pre-account) row, until OwnerClaimService hands it to the owner. See docs/backend.md's
+    // per-user scoping notes.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;

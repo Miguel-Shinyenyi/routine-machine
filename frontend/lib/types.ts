@@ -205,6 +205,7 @@ export interface CurrentUser {
   email: string;
   displayName: string | null;
   hillsideOptIn: boolean;
+  demo: boolean;
 }
 
 // Phase 9: the credit-based hillside.
@@ -229,6 +230,27 @@ export interface HillsideV2 {
 
 export type EvidenceStatus = "ACCEPTED" | "REJECTED" | "PENDING" | "SELF_REPORTED";
 
+// Phase 10: profile data. Never fetched from or sent to anything cohort-/admin-facing — see
+// docs/backend.md's decisions log.
+export interface Profile {
+  interests: string[] | null;
+  thinkers: string[] | null;
+  learningPreferences: string[] | null;
+  currency: string | null;
+  dayEndHour: number;
+  timeZone: string;
+  analogiesEnabled: boolean;
+  failureModePromptDay: string;
+}
+
+export interface AnalogyResponse {
+  topic: string;
+  interest: string;
+  analogy: string;
+  definition: string;
+  label: string;
+}
+
 export interface EvidenceEvent {
   id: number;
   userId: number;
@@ -243,4 +265,145 @@ export interface EvidenceEvent {
   scoringRuleVersion: number;
   reason: string;
   questioned: boolean;
+}
+
+// Phase 11: the granary. Never reaches the hillside or any admin view — see
+// docs/backend.md's decisions log.
+export interface GranaryMonthSummary {
+  storedThisMonth: number;
+  targetThisMonth: number;
+  daysStored: number;
+  elapsedDays: number;
+  totalStoredEver: number;
+  jar: boolean[];
+  savingTargetAmount: number | null;
+  currency: string | null;
+}
+
+export type PauseOutcome = "DECLINED" | "PROCEEDED";
+
+export interface PauseDecision {
+  id: number;
+  what: string;
+  amount: string | null;
+  why: string | null;
+  heardFrom: string | null;
+  outcome: PauseOutcome | null;
+  decidedAt: string | null;
+  followUp24hAt: string;
+  followUp30dAt: string;
+  reflectionThirtyDay: string | null;
+  dueForTwentyFourHourFollowUp: boolean;
+  dueForThirtyDayFollowUp: boolean;
+}
+
+export type MpesaCategory =
+  | "FOOD"
+  | "TRANSPORT"
+  | "FAMILY_SUPPORT"
+  | "DATA_AND_AIRTIME"
+  | "LEARNING"
+  | "BETTING"
+  | "OVERDRAFT_FEES"
+  | "OTHER";
+
+export interface MpesaImportResponse {
+  statementMonth: string;
+  transactionsParsed: number;
+  categoryTotals: Partial<Record<MpesaCategory, number>>;
+}
+
+export interface CohortMeasure {
+  count: number;
+  denominator: number;
+}
+
+export interface CohortDashboardSummary {
+  activatedWithinSevenDays: CohortMeasure;
+  checkedInThisWeek: CohortMeasure;
+  returnedAfterAMissedDay: CohortMeasure;
+  feltSupportive: CohortMeasure;
+  saidNeutral: number;
+  saidPressuring: number;
+}
+
+export interface CohortGroupMeasure {
+  studyGroup: string;
+  memberCount: number;
+  hidden: boolean;
+  checkedInThisWeek: CohortMeasure | null;
+  returnedAfterAMissedDay: CohortMeasure | null;
+}
+
+export interface CohortWeeklyCheckIn {
+  week: number;
+  checkedIn: number | null;
+  isCurrentWeek: boolean;
+  isFuture: boolean;
+}
+
+export interface CohortWeeklyCheckInChart {
+  activatedDenominator: number;
+  weeks: CohortWeeklyCheckIn[];
+}
+
+export type CohortSurveyAnswer = "SUPPORTIVE" | "NEUTRAL" | "PRESSURING";
+
+// The owner-only operations page (docs/observability.md, part 5). Status is UP, DOWN or NOT_CONFIGURED.
+export interface WatchtowerService {
+  name: string;
+  status: string;
+}
+
+// One row of the owner's sync table. Result is off, push only, unknown, failing, ok or never succeeded. A source
+// that has not run has null failures in a row and no last success, which is not the same as zero failures.
+export interface WatchtowerSyncSource {
+  source: string;
+  enabled: boolean;
+  lastActivityAt: string | null;
+  result: string;
+  consecutiveFailures: number | null;
+  lastSuccessAt: string | null;
+  successes24h: number;
+  failures24h: number;
+}
+
+export interface WatchtowerSync {
+  available: boolean;
+  sources: WatchtowerSyncSource[];
+}
+
+// The owner's charts. A chart carries at most 8 series, the ones with the largest peaks; totalSeries is how many
+// there were and truncated says some were left out. A point is [seconds since 1970, value].
+export interface WatchtowerChart {
+  id: string;
+  title: string;
+  unit: string;
+  series: { label: string; points: [number, number][] }[];
+  totalSeries: number;
+  truncated: boolean;
+}
+
+export interface WatchtowerMetrics {
+  available: boolean;
+  range: string;
+  charts: WatchtowerChart[];
+}
+
+// The owner's logs: the newest 100 lines of the backend and the intelligence service, reduced to these fields.
+// traceUrl is set only when the line carries a trace id and the backend knows where traces are shown.
+export interface WatchtowerLogEntry {
+  time: string;
+  service: string;
+  level: string | null;
+  message: string;
+  requestId: string | null;
+  traceId: string | null;
+  traceUrl: string | null;
+}
+
+export interface WatchtowerLogs {
+  available: boolean;
+  range: string;
+  entries: WatchtowerLogEntry[];
 }

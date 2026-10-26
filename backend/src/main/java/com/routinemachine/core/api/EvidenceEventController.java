@@ -1,5 +1,10 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.EvidenceEvent;
 import com.routinemachine.core.domain.Goal;
 import com.routinemachine.core.domain.User;
@@ -7,7 +12,9 @@ import com.routinemachine.core.repository.EvidenceEventRepository;
 import com.routinemachine.core.repository.GoalRepository;
 import com.routinemachine.core.repository.UserRepository;
 import com.routinemachine.core.service.EvidenceCreditService;
+import com.routinemachine.core.service.Ownership;
 import jakarta.validation.Valid;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -34,22 +41,28 @@ public class EvidenceEventController {
     private final UserRepository userRepository;
     private final GoalRepository goalRepository;
     private final EvidenceCreditService evidenceCreditService;
+    private final MeterRegistry meterRegistry;
 
     public EvidenceEventController(
             EvidenceEventRepository evidenceEventRepository, UserRepository userRepository,
-            GoalRepository goalRepository, EvidenceCreditService evidenceCreditService) {
+            GoalRepository goalRepository, EvidenceCreditService evidenceCreditService, MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
         this.evidenceEventRepository = evidenceEventRepository;
         this.userRepository = userRepository;
         this.goalRepository = goalRepository;
         this.evidenceCreditService = evidenceCreditService;
     }
 
+    @Operation(summary = "Record a piece of evidence and decide its credit")
+    @ApiResponse(responseCode = "400", description = "There is no goal with that id, or it belongs to someone else. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public EvidenceEventResponse ingest(@Valid @RequestBody EvidenceEventRequest request) {
-        User user = userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
+    public EvidenceEventResponse ingest(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody EvidenceEventRequest request) {
+        Long userId = TokenUser.idOf(jwt);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
         Goal goal = goalRepository.findById(request.goalId())
+                .filter(found -> Ownership.sameOwner(found.getUser(), user))
                 .orElseThrow(() -> new IllegalArgumentException("No goal with id " + request.goalId()));
 
         EvidenceEvent event = evidenceCreditService.ingest(
@@ -61,22 +74,32 @@ public class EvidenceEventController {
     // The ledger table (hillside.html's "How your credits were counted"): every evidence event
     // for this user in the window, whatever it was decided — accepted, rejected, pending, or
     // self-reported.
+    @Operation(summary = "List the credit ledger: every evidence event and how it was decided")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
     @GetMapping
     public List<EvidenceEventResponse> ledger(
-            @RequestParam Long userId, @RequestParam LocalDate seasonStart, @RequestParam LocalDate seasonEnd) {
-        return evidenceEventRepository.findLedgerForUser(userId, seasonStart, seasonEnd).stream()
+            @AuthenticationPrincipal Jwt jwt, @RequestParam LocalDate seasonStart, @RequestParam LocalDate seasonEnd) {
+        return evidenceEventRepository.findLedgerForUser(TokenUser.idOf(jwt), seasonStart, seasonEnd).stream()
                 .map(EvidenceEventResponse::from)
                 .toList();
     }
 
     // "Question a credit": records the request, nothing more — see
     // docs/product-direction.md's Hillside v2 transparency bullet.
+    @Operation(summary = "Question a credit")
+    @ApiResponse(responseCode = "400", description = "A required field, parameter or path value is missing or cannot be read.")
+    @ApiResponse(responseCode = "404", description = "There is no evidence event with that id, or it belongs to someone else.")
     @PatchMapping("/{id}/question")
-    public EvidenceEventResponse question(@PathVariable Long id) {
+    public EvidenceEventResponse question(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
         EvidenceEvent event = evidenceEventRepository.findWithGoalById(id)
+                .filter(found -> Ownership.ownedBy(found.getUser(), TokenUser.idOf(jwt)))
                 .orElseThrow(() -> new NoSuchElementException("No evidence event with id " + id));
         Goal goal = event.getGoal();
+        boolean firstTime = event.getQuestionedAt() == null;
         event.question(Instant.now());
+        if (firstTime) {
+            meterRegistry.counter("credits.questioned").increment();
+        }
         return EvidenceEventResponse.from(evidenceEventRepository.save(event), goal);
     }
 }

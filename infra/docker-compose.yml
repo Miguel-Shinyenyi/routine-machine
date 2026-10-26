@@ -6,7 +6,8 @@ services:
       POSTGRES_USER: routine_machine
       POSTGRES_PASSWORD: routine_machine
     ports:
-      - "5432:5432"
+      # The host side is configurable for machines where 5432 is taken (a native Postgres, say).
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - routine_machine_postgres_data:/var/lib/postgresql/data
 
@@ -28,8 +29,38 @@ services:
       # Phase 8 groundwork only, nothing in the app requires login yet. A default here (not
       # in application.yml itself) keeps `docker compose up` working out of the box; this
       # placeholder is not safe for any real deployment with real accounts. See docs/backend.md.
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-only-insecure-default-change-before-real-use-0123456789}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env (see .env.example)}
       AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN}
+      # Staged Prompt 6: the opt-in demo profile. Off unless set to true (docs/backend.md, "Demo profile").
+      DEMO_ENABLED: ${DEMO_PROFILE_ENABLED:-false}
+      OWNER_EMAIL: ${OWNER_EMAIL:-}
+      # Optional: lifts GitHub's limit for the hub and GitHub syncs from 60 to 5,000 requests an hour (docs/hub-sync.md).
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # Owner-only operations page (docs/observability.md): the addresses it probes for "is it up". A service that
+      # is not running (the observability ones, without the profile) shows as DOWN.
+      WATCHTOWER_INTELLIGENCE_URL: http://intelligence-service:8000/health
+      # The intelligence service's API document, on its internal docs port (never published to the host); the backend
+      # hands it to the owner (docs/intelligence-service.md).
+      WATCHTOWER_INTELLIGENCE_DOCS_URL: http://intelligence-service:9001/openapi.json
+      WATCHTOWER_PROMETHEUS_URL: http://prometheus:9090/-/ready
+      # Where the page reads its charts from (a fixed list of queries; see docs/observability.md).
+      WATCHTOWER_PROMETHEUS_BASE_URL: http://prometheus:9090
+      # Where the page reads its logs from, and the address a BROWSER opens Jaeger at for the trace links.
+      WATCHTOWER_LOKI_BASE_URL: http://loki:3100
+      WATCHTOWER_JAEGER_UI_URL: http://localhost:16686
+      WATCHTOWER_ALERTMANAGER_URL: http://alertmanager:9093/-/ready
+      WATCHTOWER_LOKI_URL: http://loki:3100/ready
+      WATCHTOWER_JAEGER_URL: http://jaeger:16686/
+      WATCHTOWER_GRAFANA_URL: http://grafana:3000/api/health
+      # Tracing (docs/observability.md): off unless TRACING_ENABLED=true. Traces only; metrics and logs have
+      # their own pipelines, so those exporters are off.
+      TRACING_ENABLED: ${TRACING_ENABLED:-false}
+      OTEL_SERVICE_NAME: routine-machine-backend
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     ports:
       - "8080:8080"
     depends_on:
@@ -41,6 +72,18 @@ services:
     environment:
       BACKEND_BASE_URL: http://backend:8080
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # Optional prices (USD per million tokens) for the assessment cost metric; empty means 0.
+      ANTHROPIC_INPUT_USD_PER_MTOK: ${ANTHROPIC_INPUT_USD_PER_MTOK:-}
+      ANTHROPIC_OUTPUT_USD_PER_MTOK: ${ANTHROPIC_OUTPUT_USD_PER_MTOK:-}
+      # Tracing (docs/observability.md): off unless TRACING_ENABLED=true. Traces only; metrics and logs have
+      # their own pipelines, so those exporters are off.
+      TRACING_ENABLED: ${TRACING_ENABLED:-false}
+      OTEL_SERVICE_NAME: routine-machine-intelligence
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
     ports:
       - "8000:8000"
     depends_on:
@@ -52,15 +95,139 @@ services:
     environment:
       BACKEND_URL: http://backend:8080
       INTELLIGENCE_SERVICE_URL: http://intelligence-service:8000
-      # Same shared secret the backend verifies GET /api/users/me's bearer token against (see
-      # lib/auth/session.ts) — must stay identical to the backend service's own AUTH_JWT_SECRET
-      # below, hence the same default rather than a second, independently-generated one.
-      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-only-insecure-default-change-before-real-use-0123456789}
+      # Product analytics (staged Prompt 5, docs/frontend.md "Analytics"). Both empty means analytics is off and no banner shows.
+      # Staged Prompt 6: the opt-in demo profile (docs/frontend.md). Off unless DEMO_PROFILE_ENABLED is true; AUTH_INTERNAL_TOKEN is how
+      # the frontend's server proves to the backend that it may open the demo account.
+      DEMO_PROFILE_ENABLED: ${DEMO_PROFILE_ENABLED:-false}
+      AUTH_INTERNAL_TOKEN: ${AUTH_INTERNAL_TOKEN:-}
+      POSTHOG_KEY: ${POSTHOG_KEY:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-}
+      # Who a visitor should contact about their data, shown on the public privacy page (/privacy). Optional.
+      PRIVACY_CONTACT: ${PRIVACY_CONTACT:-}
+      # Same shared secret the backend verifies its bearer tokens against (see lib/auth/session.ts)
+      # — must stay identical to the backend service's own AUTH_JWT_SECRET, so both read the one
+      # value from infra/.env.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env (see .env.example)}
     ports:
       - "3000:3000"
     depends_on:
       - backend
       - intelligence-service
 
+  # --- Observability (docs/observability.md). Not started by a plain `docker compose up`; start with
+  # `docker compose --profile observability up -d`. Both UIs are bound to this machine only (127.0.0.1).
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.13.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      # Keeps the trace id the services attach to latency observations (exemplars, docs/observability.md).
+      - --enable-feature=exemplar-storage
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - observability_prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    mem_limit: 512m
+    depends_on:
+      - alertmanager
+
+  alertmanager:
+    profiles: ["observability"]
+    image: prom/alertmanager:v0.33.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - observability_alertmanager_data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    mem_limit: 128m
+
+  loki:
+    profiles: ["observability"]
+    image: grafana/loki:3.7.9
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./observability/loki.yml:/etc/loki/loki.yml:ro
+      - observability_loki_data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    mem_limit: 512m
+
+  # Read-only view of Docker for the log shipper: containers and networks only, no writes. The raw
+  # /var/run/docker.sock is mounted here and nowhere else.
+  socket-proxy:
+    profiles: ["observability"]
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    mem_limit: 64m
+
+  alloy:
+    profiles: ["observability"]
+    image: grafana/alloy:v1.21.0
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy/data
+      - --disable-reporting
+    volumes:
+      - ./observability/alloy.alloy:/etc/alloy/config.alloy:ro
+      - observability_alloy_data:/var/lib/alloy/data
+    mem_limit: 256m
+    depends_on:
+      - loki
+      - socket-proxy
+
+  jaeger:
+    profiles: ["observability"]
+    image: jaegertracing/jaeger:2.22.0
+    ports:
+      - "127.0.0.1:16686:16686"
+    mem_limit: 512m
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:13.2.4
+    # Required only when this service starts. A `:?` on the variable would fail every compose command, profile or
+    # not, and an empty value would silently fall back to Grafana's default admin/admin login.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - '[ -n "$$GF_SECURITY_ADMIN_PASSWORD" ] || { echo "set GRAFANA_ADMIN_PASSWORD in infra/.env (see .env.example)" >&2; exit 1; }; exec /run.sh'
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - observability_grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    mem_limit: 512m
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
+
 volumes:
   routine_machine_postgres_data:
+  observability_prometheus_data:
+  observability_alertmanager_data:
+  observability_loki_data:
+  observability_alloy_data:
+  observability_grafana_data:

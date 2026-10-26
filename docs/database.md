@@ -169,10 +169,94 @@ Phase 9 also built via `V19__evidence_to_credit_pipeline.sql`, three new tables:
   concurrent inserts produce one row" — see `backend.md`'s decisions log and
   `EvidenceCreditService`.
 
+Phase 10 built via `V21__profile.sql`: `users` gains `interests`/`thinkers`/
+`learning_preferences` (each a JSON array in a TEXT column via `StringListConverter`, same
+pattern `reading_notes.ideas_connected`/`quoted_phrases` already use), `currency`
+(`varchar(8)`), `day_end_hour` (`integer`, not null, default `0`, DB check constraint `BETWEEN
+0 AND 23`), and `analogies_enabled` (boolean, not null, default `true`). `day_end_hour` feeds
+`EvidenceCreditService`'s local-date rule (see `backend.md`); the rest is read and written
+only through `GET`/`PUT /api/users/me/profile`, never by anything hillside- or cohort-facing.
+
+Phase 11 built via `V22__granary.sql`: `users` gains `saving_target_amount` (integer,
+nullable — null until the user sets one on the granary page). Two new tables:
+
+- `savings(id, user_id references users, amount, local_date, created_at)`, unique on
+  `(user_id, local_date)` — one saving per user per day, tapped, never more than once a day
+  regardless of how many times the button is pressed.
+- `pause_decisions(id, user_id references users, what, amount, why, heard_from, outcome
+  nullable, decided_at nullable, follow_up_24h_at, follow_up_30d_at, reflection_30d nullable,
+  created_at)`, a check constraint restricts `outcome` to `DECLINED`/`PROCEEDED`. `outcome`
+  stays null until the user actually decides; `reflection_30d` is a separate, later field,
+  filled independently of `outcome` at the 30-day look-back.
+
+Neither table is referenced by anything hillside- or cohort-facing — see `backend.md`'s
+decisions log and the privacy test that proves it.
+
+Phase 11 also built via `V23__mpesa_category_totals.sql`: `mpesa_category_totals(id, user_id
+references users, statement_month, category, amount, created_at)`, unique on
+`(user_id, statement_month, category)`. Only category totals are kept — no transaction-level
+detail at all, and the uploaded statement PDF is never written to disk, let alone to a table.
+Re-importing the same month's statement upserts (replaces) that month's totals rather than
+adding a second set of rows. Also not referenced by anything hillside- or cohort-facing.
+
+Phase 12 part 1 built via `V24__organisations_and_cohorts.sql`:
+- `organisations(id, name, created_at)`.
+- `organisation_admins(id, organisation_id references organisations, user_id references
+  users, created_at)`, unique on `(organisation_id, user_id)`. Who administers an
+  organisation, and therefore every cohort under it — see `backend.md` for why this is
+  organisation-scoped, not cohort-scoped.
+- `cohorts(id, organisation_id references organisations, name, starts_on, weeks,
+  created_at)`.
+- `cohort_memberships(id, cohort_id references cohorts, user_id references users,
+  joined_at)`, unique on `(cohort_id, user_id)`. A learner's seat in one cohort.
+
+Phase 12 part 2 built via `V25__cohort_invites_and_seats.sql` (flagged to the user and
+confirmed before building — see `backend.md`'s decisions log):
+- `organisations.seat_limit` added, nullable integer, null meaning unlimited.
+- `cohort_invites(id, cohort_id references cohorts, email, created_at)`, unique on
+  `(cohort_id, email)`. A reserved seat for an email with no account yet — fulfilled (turned
+  into a `cohort_memberships` row, then deleted) the moment that email registers. There's no
+  outbound email infrastructure in this app, so this table represents a reservation, not a
+  record that mail was sent.
+
+Phase 12 part 3 built via `V26__cohort_survey_responses.sql` (flagged to the user and
+confirmed before building — see `backend.md`'s decisions log):
+- `cohort_survey_responses(id, cohort_id references cohorts, user_id references users,
+  answer, created_at)`, unique on `(cohort_id, user_id)`. One learner's answer to the pilot's
+  "did this feel supportive, neutral, or pressuring?" question — resubmitting replaces it.
+
+Phase 12 part 4 built via `V27__cohort_study_groups.sql`:
+- `cohort_memberships.study_group` and `cohort_invites.study_group` added, both nullable
+  `VARCHAR(255)`. Set via the CSV's optional second column (`email,group`); a member with no
+  group just doesn't appear in the "by study group" breakdown.
+
+None of these six tables (plus the two new columns) are read by `HillsideV2Service`/
+`GranaryService` or vice versa — the three modules are simply uncoupled so far, nothing yet
+requires the marker-string privacy test Phase 10/11 needed. `CohortDashboardService` does
+read `Goal` and `DailyLog` directly (what counts as "checked in," by the user's own explicit
+choice — see `backend.md`), but those two tables aren't hillside- or granary-private, so this
+doesn't cross the boundary either. That test becomes necessary once a later Phase 12 part
+surfaces anything from `savings`/`pause_decisions`/`mpesa_category_totals`/`daily_credits` on
+a cohort response.
+
+Per-user scoping, part 1, built via `V28__personal_data_ownership.sql` (ownership data only, no
+query uses the new columns yet): a nullable `user_id` (references `users`) and an index on
+`schedule_templates`, `tasks`, `books` and `current_reading_log`. `goals`, `routine_items` and
+`daily_logs` already had one (V15, V16). `learning_topics` is scoped through its goal and
+`reading_notes` through its book, so neither gets a column. `measurements` and
+`hub_sync_processed_files` deliberately get none: they hold what the owner's own integrations
+pull in (WakaTime, ActivityWatch, GitHub, RescueTime, the UMWAYI hub), which belongs to the
+deployment's owner, not to each user. Columns stay nullable: every row that existed before
+accounts has `user_id IS NULL` until `OwnerClaimService` gives it to the owner (see `backend.md`).
+
 ## Decisions log
 
 | Date | Decision | Reason |
 |------|----------|--------|
+| 2026-10-21 | The four new `user_id` columns (V28) are nullable, not `NOT NULL` | Existing rows have no owner until `OwnerClaimService` runs, and the create endpoints do not set one yet (later parts). Making them `NOT NULL` now would fail the migration on real data and break every create path. Tightening to `NOT NULL` is a later migration, once nothing writes a NULL |
+| 2026-10-19 | `savings` is unique on `(user_id, local_date)`, no concurrency-safe upsert like `daily_credits` | Unlike a credit, a saving is only ever written by one action (the user's own tap, from a session only they control) — there's no multi-source race the way evidence events have (sync jobs, manual taps, different sources, all landing the same day). A plain find-then-insert is enough; `GranaryService.storeSaving` is idempotent by checking first |
+| 2026-10-19 | `pause_decisions.amount` is a plain string (`VARCHAR(100)`), not a structured integer | The design reference shows free text ("KSh 5,000 / week", "KSh 500 / week") that doesn't reduce to one currency-amount pair; the granary's own real financial fields (`savings.amount`, `users.saving_target_amount`) are integers precisely because those are single, well-defined numbers — a pause's "how much" is closer to a label the user writes than a number this app computes with |
+| 2026-10-18 | `day_end_hour` is `INTEGER`, not `SMALLINT`, even though it only ever holds 0-23 | Hibernate maps a Java `int` field to `INTEGER` by default and validates the schema matches at startup; `SMALLINT` (the first version of this migration) failed that check immediately (`Schema-validation: wrong column type encountered`). Caught by `./mvnw test` before this ever reached a report — a real case of a plausible-looking micro-optimisation (`SMALLINT` saves 2 bytes a row nobody will ever notice) breaking the actual running system |
 | 2026-10-17 | `users.hillside_opt_in` defaults `false`, not `true` | The hillside previously treated every user with a non-private daily log as a participant with no consent step at all; defaulting the new flag to off is the only choice consistent with calling this a real opt-in, not a relabeled version of the same behaviour |
 | 2026-10-17 | `goals.user_id` is nullable, `NULL` keeps meaning the three shared seeded goals | Same reasoning as `routine_items`/`daily_logs`'s `user_id`: adding a creation API shouldn't change what every existing reader of `GET /api/goals` already sees |
 | 2026-10-17 | `goals`'s unique constraint moves from `name` alone to `(user_id, name)` | Once goals can be created per user, two different users (or a user and the seed data) needing the same goal name (e.g. "learn X") is normal, not a collision; uniqueness should scope to the owner, not the whole table |
@@ -203,3 +287,22 @@ Phase 9 also built via `V19__evidence_to_credit_pipeline.sql`, three new tables:
 - Phase 8: `routine_items`, `daily_logs`, and now `goals` have an optional `user_id`; how
   existing dev data backfills to a seed user is still undecided — see `backend.md`'s open
   questions for the full list.
+
+## V29: user role
+
+`users.role` (`VARCHAR(20) NOT NULL DEFAULT 'USER'`). Values `USER` and `OWNER`. Forward-only; existing
+accounts become `USER`. The owner is set at startup from `OWNER_EMAIL` (see `docs/backend.md`), never in
+SQL.
+
+## V30: demo flag
+
+`users.demo BOOLEAN NOT NULL DEFAULT FALSE` (staged Prompt 6, `V30__user_demo_flag.sql`). True only for the one sample account `DemoProfileService` makes (`demo@routine-machine.invalid`). Every real account is false. Undo: drop the column and delete that one user and its rows.
+
+## V31: weekly failure mode
+
+`weekly_failure_modes` (staged Prompt 7, `V31__weekly_failure_mode.sql`): `id`, `user_id` (references `users`), `week_start` (the Monday, a `DATE`), `failure_mode` (`VARCHAR(20)`, one of the eight names), `answered_at`. **`UNIQUE (user_id, week_start)`**: one answer per person per week, so answering again replaces it. Personal data: nothing reads it but its owner. Undo: `DROP TABLE weekly_failure_modes`.
+
+## V32: failure-mode prompt day
+
+`users.failure_mode_prompt_day VARCHAR(10) NOT NULL DEFAULT 'MONDAY'` (staged Prompt 7, `V32__failure_mode_prompt_day.sql`): the weekday the weekly failure-mode question starts showing on Today, a `java.time.DayOfWeek` name, set by the person on their Profile. Undo: drop the column.
+

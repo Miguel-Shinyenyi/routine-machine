@@ -11,10 +11,13 @@ export default function RegisterPage() {
         <p className="mt-2 text-[15px] text-muted">A password, nothing else. At least 8 characters.</p>
       </div>
       <div className="card p-5">
-        <AuthForm action={registerAction} submitLabel="Create account" passwordAutoComplete="new-password" />
+        <AuthForm action={registerAction} submitLabel="Create account" passwordAutoComplete="new-password" sendTimeZone />
       </div>
       <p className="text-center text-[14px] text-muted">
         Already have an account? <Link href="/login">Sign in</Link>
+      </p>
+      <p className="text-center text-[12px] text-muted">
+        <Link href="/privacy">Privacy</Link>
       </p>
     </div>
   );

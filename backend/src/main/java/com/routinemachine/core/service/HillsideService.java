@@ -14,10 +14,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// Phase 8: the hillside's aggregation, computed fresh on every call from daily_logs/routine_items
-// directly, not a stored leaderboard. Deliberately simplified groundwork — see
-// docs/backend.md's decisions log for what this does and doesn't do yet (no real opt-in
-// concept, no auth-derived "current user," asUserId is a demo-mode parameter).
+// Phase 8: the hillside's aggregation (version 1, days shown up), computed fresh on every call from daily_logs and
+// routine_items, not a stored leaderboard. Only people who opted in are counted (the repository query decides that).
+// asUserId is the signed-in person's id, which the controller takes from the token, or null for a visitor with none.
+// See docs/backend.md's decisions log for what this does and doesn't do.
 @Service
 public class HillsideService {
 

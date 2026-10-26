@@ -1,11 +1,17 @@
 package com.routinemachine.core.api;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.routinemachine.core.security.TokenUser;
 import com.routinemachine.core.domain.Goal;
 import com.routinemachine.core.domain.RoutineItem;
 import com.routinemachine.core.domain.User;
 import com.routinemachine.core.repository.GoalRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import com.routinemachine.core.repository.UserRepository;
+import com.routinemachine.core.service.Ownership;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,25 +41,27 @@ public class RoutineItemController {
         this.userRepository = userRepository;
     }
 
-    // userId is optional and additive (Phase 8 groundwork, see docs/backend.md): omitted,
-    // this returns every legacy, unowned item exactly as before this phase. Passed, it scopes
-    // to that one user's own items instead, for testing the new per-user data alongside the
-    // untouched single-user behaviour everything else still relies on.
+    // The signed-in person's own routine items. Who that is comes from the token, never from a parameter
+    // (docs/backend.md, access control).
+    @Operation(summary = "List routine items")
     @GetMapping
-    public List<RoutineItemResponse> list(@RequestParam Optional<Long> userId) {
-        List<RoutineItem> items = userId
-                .map(routineItemRepository::findAllWithGoalByUserId)
-                .orElseGet(routineItemRepository::findAllWithGoal);
+    public List<RoutineItemResponse> list(@AuthenticationPrincipal Jwt jwt) {
+        List<RoutineItem> items = routineItemRepository.findAllWithGoalByUserId(TokenUser.idOf(jwt));
         return items.stream().map(RoutineItemResponse::from).toList();
     }
 
+    @Operation(summary = "Create a routine item")
+    @ApiResponse(responseCode = "400", description = "There is no goal with that id, or it belongs to someone else. A required field, parameter or path value is missing or cannot be read.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public RoutineItemResponse create(@Valid @RequestBody RoutineItemRequest request) {
+    public RoutineItemResponse create(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody RoutineItemRequest request) {
+        Long userId = TokenUser.idOf(jwt);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("No user with id " + userId));
+        // Someone else's goal answers exactly like one that does not exist.
         Goal goal = request.goalId() == null ? null : goalRepository.findById(request.goalId())
+                .filter(found -> Ownership.sameOwner(found.getUser(), user))
                 .orElseThrow(() -> new IllegalArgumentException("No goal with id " + request.goalId()));
-        User user = request.userId() == null ? null : userRepository.findById(request.userId())
-                .orElseThrow(() -> new IllegalArgumentException("No user with id " + request.userId()));
 
         RoutineItem item = new RoutineItem(
                 request.name(),

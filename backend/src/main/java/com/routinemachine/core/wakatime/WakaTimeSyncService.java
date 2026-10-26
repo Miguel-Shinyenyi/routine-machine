@@ -8,6 +8,7 @@ import com.routinemachine.core.domain.RoutineItemSource;
 import com.routinemachine.core.repository.DailyLogRepository;
 import com.routinemachine.core.repository.RoutineItemRepository;
 import com.routinemachine.core.service.MeasurementService;
+import com.routinemachine.core.service.OwnerAccount;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -34,6 +35,7 @@ public class WakaTimeSyncService {
     private final RoutineItemRepository routineItemRepository;
     private final DailyLogRepository dailyLogRepository;
     private final MeasurementService measurementService;
+    private final OwnerAccount ownerAccount;
     private final boolean enabled;
 
     @Autowired
@@ -42,11 +44,13 @@ public class WakaTimeSyncService {
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
             MeasurementService measurementService,
+            OwnerAccount ownerAccount,
             @Value("${wakatime-sync.enabled:true}") boolean enabled) {
         this.wakaTimeClient = wakaTimeClient;
         this.routineItemRepository = routineItemRepository;
         this.dailyLogRepository = dailyLogRepository;
         this.measurementService = measurementService;
+        this.ownerAccount = ownerAccount;
         this.enabled = enabled;
     }
 
@@ -56,8 +60,9 @@ public class WakaTimeSyncService {
             WakaTimeClient wakaTimeClient,
             RoutineItemRepository routineItemRepository,
             DailyLogRepository dailyLogRepository,
-            MeasurementService measurementService) {
-        this(wakaTimeClient, routineItemRepository, dailyLogRepository, measurementService, true);
+            MeasurementService measurementService,
+            OwnerAccount ownerAccount) {
+        this(wakaTimeClient, routineItemRepository, dailyLogRepository, measurementService, ownerAccount, true);
     }
 
     @Scheduled(fixedDelayString = "${wakatime-sync.poll-interval-ms:900000}")
@@ -71,7 +76,7 @@ public class WakaTimeSyncService {
     public void syncOnce() {
         LocalDate today = LocalDate.now();
         List<WakaTimeDailyTotal> totals = wakaTimeClient.fetchDailyTotals(today.minusDays(SYNC_WINDOW_DAYS), today);
-        List<RoutineItem> wakaTimeRoutineItems = routineItemRepository.findBySource(RoutineItemSource.WAKATIME);
+        List<RoutineItem> wakaTimeRoutineItems = ownerAccount.integrationTargets(routineItemRepository.findBySource(RoutineItemSource.WAKATIME));
 
         for (WakaTimeDailyTotal total : totals) {
             if (total.totalSeconds() <= 0) {
@@ -83,8 +88,11 @@ public class WakaTimeSyncService {
 
             for (RoutineItem routineItem : wakaTimeRoutineItems) {
                 if (!dailyLogRepository.existsByRoutineItemIdAndLogDate(routineItem.getId(), total.date())) {
-                    dailyLogRepository.save(DailyLog.forRoutineItem(
-                            total.date(), routineItem, DailyLogSource.WAKATIME_SYNC, minutes.intValueExact()));
+                    DailyLog syncedLog = DailyLog.forRoutineItem(
+                            total.date(), routineItem, DailyLogSource.WAKATIME_SYNC, minutes.intValueExact());
+                    // The day belongs to whoever owns the item, never to nobody.
+                    syncedLog.assignUser(routineItem.getUser());
+                    dailyLogRepository.save(syncedLog);
                 }
             }
         }

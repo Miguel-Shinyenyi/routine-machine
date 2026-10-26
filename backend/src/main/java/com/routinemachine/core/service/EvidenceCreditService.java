@@ -10,11 +10,15 @@ import com.routinemachine.core.repository.DailyCreditRepository;
 import com.routinemachine.core.repository.EvidenceEventRepository;
 import com.routinemachine.core.repository.ScoringRuleRepository;
 import org.springframework.dao.DataIntegrityViolationException;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Optional;
 
 // Phase 9: the evidence-to-credit pipeline from docs/product-direction.md (ingest, validate,
@@ -29,12 +33,23 @@ public class EvidenceCreditService {
     private final DailyCreditRepository dailyCreditRepository;
     private final ScoringRuleRepository scoringRuleRepository;
 
+    private final MeterRegistry meterRegistry;
+
+    // Without a registry (most tests build the service by hand), counts go to a throwaway one.
     public EvidenceCreditService(
             EvidenceEventRepository evidenceEventRepository, DailyCreditRepository dailyCreditRepository,
             ScoringRuleRepository scoringRuleRepository) {
+        this(evidenceEventRepository, dailyCreditRepository, scoringRuleRepository, new SimpleMeterRegistry());
+    }
+
+    @Autowired
+    public EvidenceCreditService(
+            EvidenceEventRepository evidenceEventRepository, DailyCreditRepository dailyCreditRepository,
+            ScoringRuleRepository scoringRuleRepository, MeterRegistry meterRegistry) {
         this.evidenceEventRepository = evidenceEventRepository;
         this.dailyCreditRepository = dailyCreditRepository;
         this.scoringRuleRepository = scoringRuleRepository;
+        this.meterRegistry = meterRegistry;
     }
 
     public EvidenceEvent ingest(
@@ -47,8 +62,13 @@ public class EvidenceCreditService {
 
         // The day is decided in the user's configured time zone, not UTC — see
         // docs/product-direction.md's "Time" section. Stored once, here, so a later zone
-        // change never silently rewrites which day a past credit landed on.
-        LocalDate localDate = occurredAt.atZone(ZoneId.of(user.getTimeZone())).toLocalDate();
+        // change never silently rewrites which day a past credit landed on. dayEndHour (Phase
+        // 10's Profile field, default 0) shifts anything before that hour onto the previous
+        // calendar day, so late study still counts for "today" rather than tomorrow.
+        ZonedDateTime zoned = occurredAt.atZone(ZoneId.of(user.getTimeZone()));
+        LocalDate localDate = zoned.getHour() < user.getDayEndHour()
+                ? zoned.toLocalDate().minusDays(1)
+                : zoned.toLocalDate();
 
         Optional<ScoringRule> rule = scoringRuleRepository.findFirstByGoalIdOrderByVersionDesc(goal.getId());
         Qualification qualification = qualify(source, minutes, rule);
@@ -67,6 +87,11 @@ public class EvidenceCreditService {
                     .findByUserIdAndSourceAndSourceEventId(user.getId(), source, sourceEventId)
                     .orElseThrow(() -> e);
         }
+
+        // Counted once per new piece of evidence, by what was decided and by which published rule
+        // version decided it. Never by user or goal.
+        meterRegistry.counter("credits.events",
+                "status", qualification.status().name(), "rule_version", String.valueOf(qualification.ruleVersion())).increment();
 
         if (saved.earnsCredit()) {
             dailyCreditRepository.awardCreditIfAbsent(user.getId(), goal.getId(), localDate, saved.getId());
