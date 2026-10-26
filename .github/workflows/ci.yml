@@ -1,10 +1,10 @@
 name: CI
 
-# Every pull request, and every push to master (this repo's main branch).
+# Every pull request, and every push to main.
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [main]
 
 permissions:
   contents: read
