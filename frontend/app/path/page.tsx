@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { backendFetch } from "@/lib/api";
 import { requireSessionUserId } from "@/lib/auth/session";
-import { todayIsoDate } from "@/lib/schedule";
+import { getUserToday } from "@/lib/auth/userToday";
 import { addDays, mondayOf, weekDates } from "@/lib/weekDates";
 import type { ScheduleTemplate, Task } from "@/lib/types";
 
@@ -49,8 +49,8 @@ export default async function PathPage(props: PageProps<"/path">) {
   await requireSessionUserId();
   const searchParams = await props.searchParams;
   const rawMonday = searchParams.monday;
-  const monday = typeof rawMonday === "string" ? mondayOf(rawMonday) : mondayOf(todayIsoDate());
-  const today = todayIsoDate();
+  const today = await getUserToday();
+  const monday = typeof rawMonday === "string" ? mondayOf(rawMonday) : mondayOf(today);
   const dates = weekDates(monday);
 
   const [templates, ...tasksByDay] = await Promise.all([

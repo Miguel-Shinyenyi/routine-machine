@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { materializeDay } from "@/lib/materialize";
-import { todayIsoDate } from "@/lib/schedule";
+import { getUserToday } from "@/lib/auth/userToday";
 import { formatEyebrowDate } from "@/lib/formatDate";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
 import { getSessionToken, requireSessionUserId } from "@/lib/auth/session";
@@ -39,7 +39,7 @@ export default async function TodayPage(props: PageProps<"/today">) {
   const searchParams = await props.searchParams;
   await requireSessionUserId();
   const rawDate = searchParams.date;
-  const date = typeof rawDate === "string" ? rawDate : todayIsoDate();
+  const date = typeof rawDate === "string" ? rawDate : await getUserToday();
 
   const sessionToken = await getSessionToken();
   const profile = sessionToken

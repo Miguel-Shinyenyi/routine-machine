@@ -23,6 +23,8 @@ export function dayOfWeekName(isoDate: string): string {
   return DAY_NAMES[utcDate.getUTCDay()];
 }
 
+// The local date of whatever runs it: in the browser that is the person's own, on the server it is UTC. Server pages for a signed-in person use
+// getUserToday (lib/auth/userToday.ts) instead. The hillside keeps this one on purpose, so every viewer shares one season boundary.
 export function todayIsoDate(): string {
   const now = new Date();
   const year = now.getFullYear();

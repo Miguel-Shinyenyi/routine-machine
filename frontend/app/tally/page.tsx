@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ApiError, backendFetch, intelligenceFetch } from "@/lib/api";
 import { requireSessionUserId } from "@/lib/auth/session";
-import { todayIsoDate } from "@/lib/schedule";
+import { getUserToday } from "@/lib/auth/userToday";
 import { steepDayInsight, learningInsight } from "@/lib/tallyInsights";
 import type { Book, Goal, Patterns, Tally } from "@/lib/types";
 import { GoalHoursChart } from "@/components/charts/GoalHoursChart";
@@ -27,6 +27,7 @@ async function fetchCurrentBook(): Promise<Book | null> {
 
 export default async function TallyPage(props: PageProps<"/tally">) {
   await requireSessionUserId();
+  const today = await getUserToday();
   const searchParams = await props.searchParams;
   // "4 weeks" is the default (matches /tally's own default windowDays=28); "Since the start"
   // asks for a window wide enough to include every day ever logged, same trick Path's own
@@ -110,7 +111,7 @@ export default async function TallyPage(props: PageProps<"/tally">) {
           {notchGroups.map((group, gi) => (
             <div key={gi} className="flex items-end gap-[5px]">
               {group.map((day) => {
-                const isToday = day.date === todayIsoDate();
+                const isToday = day.date === today;
                 return (
                   <span
                     key={day.date}

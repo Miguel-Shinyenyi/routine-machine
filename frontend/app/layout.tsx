@@ -4,7 +4,7 @@ import { Shell } from "@/components/Shell";
 import { analyticsConfigured } from "@/lib/analytics/consent";
 import { readPendingEvents } from "@/lib/analytics/queue";
 import { authenticatedBackendFetch, backendFetch, intelligenceFetch } from "@/lib/api";
-import { todayIsoDate } from "@/lib/schedule";
+import { getUserToday } from "@/lib/auth/userToday";
 import { getSessionToken, getSessionUserId } from "@/lib/auth/session";
 import type { RoutineItem, Tally, Task, WateringHoleStatus } from "@/lib/types";
 import "./globals.css";
@@ -43,11 +43,12 @@ async function fetchShellContext(): Promise<{
 }> {
   const sessionToken = await getSessionToken();
   const userId = await getSessionUserId();
+  const today = userId !== null ? await getUserToday() : "";
   // Signed out (login, register): no personal data at all, so no personal calls either. A
   // signed-out visitor used to see the founder's own counts in this sidebar.
   const [tasks, tally, routineItems, wateringHoles, me] = await Promise.all([
     userId !== null
-      ? backendFetch<Task[]>(`/api/tasks?date=${todayIsoDate()}`).catch(() => null)
+      ? backendFetch<Task[]>(`/api/tasks?date=${today}`).catch(() => null)
       : Promise.resolve(null),
     userId !== null
       ? intelligenceFetch<Tally>("/tally").catch(() => null)

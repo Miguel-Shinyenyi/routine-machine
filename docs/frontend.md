@@ -456,6 +456,16 @@ Prompt 6 acceptance check 3: the Prompt 1 walk-through repeated, with screenshot
 - **Checked** (26 Oct 2026, Chrome, throwaway account): the card showed with all nine choices (`docs/screenshots/today-weekly-failure-mode.jpg`); clicking Progression saved it and the card shrank to "This week's failure mode: Progression"; it survived a reload; "Change it" opened the list, and "None this week" replaced the answer (one row in `weekly_failure_modes`, `NONE`). I then deleted the test row. **Not checked**: phone width, the light theme, keyboard use, a screen reader on the `<details>` control.
 - **Checked, the day setting** (26 Oct 2026, Monday, throwaway account): with the default the card showed; after choosing Thursday on Profile and saving, the choice survived a reload and **Today (Monday) had no card**; `?date=2026-10-28` (Wednesday) had none; `?date=2026-10-29` (Thursday) had it. I then reset the account to Monday (by the database, because a browser step failed with a transient error). **Not checked**: that an already answered week still shows its answer on an early day (unit-tested only).
 
+## "Today" is the person's day (Backlog P, part 1)
+
+- **The problem.** The frontend server runs on UTC, so `todayIsoDate()` (`lib/schedule.ts`) gave the server's date. For someone in Nairobi (UTC+3), from midnight to 3 a.m. the Today, Path and Tally pages and the sidebar's count showed the previous day.
+- **The fix.** `todayInZone(zone, now)` in `lib/userToday.ts` returns the date in an IANA zone with `Intl`, so daylight saving and the date line are the browser engine's job, not ours; a missing or unreal zone gives UTC. `getUserToday()` in `lib/auth/userToday.ts` reads the signed-in person's saved zone from their profile and returns that date, once per request (React `cache`); signed out, or if the profile cannot be read, it is the UTC date and the page still renders.
+- **Where it is used**: Today's default date, the Path's week and its "today" mark, the Tally's "today" notch, and the sidebar's "N of M tended" count (`app/layout.tsx`).
+- **Left alone on purpose**: the hillside's season start still uses the server date (`app/hillside/page.tsx`), so everyone shares one weekly board and a person in another zone does not see an empty board for a few hours on a Monday; and `NewAdHocTaskForm` runs in the browser, where `todayIsoDate()` is already the person's own date.
+- **Not fixed yet** (Backlog P): the intelligence service's tally window and patterns use the server's date (`intelligence-service/main.py:213, 257`), so the Tally's days still end at the UTC date and its "today" notch can lag by a few hours for the same person; reading notes log the day on the server's date (`ReadingNoteService.java:78`).
+- **Tests**: 8 in `lib/userToday.test.ts`. A deliberate break (ignore the zone) failed 3.
+- **Checked** (26 Oct 2026, 05:36 UTC, throwaway account): on `America/Los_Angeles`, Today showed Sunday 25 October and the Path 19 to 25 October; on `Africa/Nairobi`, Monday 26 October. **Not checked**: the Tally's notch and the sidebar count by eye, phone width.
+
 ## Analytics (staged Prompt 5, parts 1 to 3 of 6)
 
 Product analytics with PostHog, to learn how people move through the app **without collecting what the app promises to keep
