@@ -4,7 +4,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY entrypoint.sh ./
-COPY main.py observability.py api_docs.py suggestion.py patterns.py tally.py assess_note.py analogy.py ./
+COPY main.py observability.py api_docs.py suggestion.py patterns.py tally.py assess_note.py analogy.py user_today.py ./
 USER app
 # Request metrics are served on their own port (never published to the host by docker-compose), and
 # uvicorn's access log is off because it prints query strings; observability.py writes the one request

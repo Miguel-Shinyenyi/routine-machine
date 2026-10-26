@@ -1,7 +1,6 @@
 import os
 import time
 from contextlib import asynccontextmanager
-from datetime import date
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException
@@ -20,6 +19,7 @@ from assess_note import AssessmentParseError, build_user_message, parse_assessme
 from patterns import compute_patterns
 from suggestion import NoTopicsAvailableError, choose_suggestion
 from tally import compute_tally
+from user_today import user_today
 
 BACKEND_BASE_URL = os.environ.get("BACKEND_BASE_URL", "http://localhost:8080")
 ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
@@ -209,8 +209,9 @@ def patterns(authorization: str | None = Header(default=None)):
     with httpx.Client(base_url=BACKEND_BASE_URL, timeout=5.0, headers=_backend_headers(authorization)) as client:
         routine_items = client.get("/api/routine-items").raise_for_status().json()
         logs = client.get("/api/daily-logs").raise_for_status().json()
+        today = user_today(client, authorization)
 
-    result = compute_patterns(routine_items, logs, today=date.today())
+    result = compute_patterns(routine_items, logs, today=today)
 
     return PatternsResponse(
         completionRates=[
@@ -252,9 +253,10 @@ def tally(
         routine_items = client.get("/api/routine-items").raise_for_status().json()
         learning_topics = client.get("/api/learning-topics").raise_for_status().json()
         logs = client.get("/api/daily-logs").raise_for_status().json()
+        today = user_today(client, authorization)
 
     result = compute_tally(
-        routine_items, learning_topics, logs, today=date.today(), window_days=windowDays,
+        routine_items, learning_topics, logs, today=today, window_days=windowDays,
         since_start=sinceStart)
 
     return TallyResponse(
