@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { queueAnalyticsEvent } from "./analytics/queue";
 import { authenticatedBackendFetch, ApiError, backendFetch, backendFetchMultipart, intelligenceFetch } from "./api";
 import { getSessionToken, getSessionUserId, requireSessionUserId } from "./auth/session";
+import { isFailureMode } from "./failureModes";
 import type { MpesaImportResponse, ReadingNoteAssessment } from "./types";
 
 function optionalNumber(value: FormDataEntryValue | null): number | null {
@@ -57,6 +58,20 @@ export async function createAdHocTask(formData: FormData): Promise<void> {
 
   revalidatePath("/today");
   revalidatePath("/flock");
+}
+
+// The weekly failure-mode answer (staged Prompt 7). Only the nine listed values are sent; anything else is ignored. No analytics note: this
+// answer is personal and is not one of the named events.
+export async function answerFailureMode(formData: FormData): Promise<void> {
+  await requireSessionUserId();
+  const failureMode = formData.get("failureMode");
+  if (!isFailureMode(failureMode)) return;
+  await backendFetch("/api/failure-modes/current", {
+    method: "PUT",
+    body: JSON.stringify({ failureMode }),
+  });
+
+  revalidatePath("/today");
 }
 
 export async function createGoal(formData: FormData): Promise<void> {

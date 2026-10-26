@@ -9,6 +9,8 @@ import type { AnalogyResponse, Goal, Patterns, PauseDecision, Profile, RoutineIt
 import { firstStep } from "@/lib/firstStep";
 import { chooseReminder, missedRecently } from "@/lib/reminders";
 import { loadReminders } from "@/lib/remindersFile";
+import { WeeklyFailureModeCard } from "@/components/WeeklyFailureModeCard";
+import type { FailureModeCurrent } from "@/lib/failureModes";
 import { TaskCard } from "@/components/TaskCard";
 
 // Inline placeholder, same role as docs/design-reference/README.md's "Not in the reference":
@@ -44,7 +46,7 @@ export default async function TodayPage(props: PageProps<"/today">) {
     ? await authenticatedBackendFetch<Profile>("/api/users/me/profile", sessionToken).catch(() => null)
     : null;
 
-  const [tasks, routineItems, goals, scheduleTemplates, suggestion, tally, patterns, duePauses] = await Promise.all([
+  const [tasks, routineItems, goals, scheduleTemplates, suggestion, tally, patterns, duePauses, failureMode] = await Promise.all([
     materializeDay(date),
     backendFetch<RoutineItem[]>("/api/routine-items"),
     backendFetch<Goal[]>("/api/goals"),
@@ -53,6 +55,7 @@ export default async function TodayPage(props: PageProps<"/today">) {
     intelligenceFetch<Tally>("/tally").catch(() => null),
     intelligenceFetch<Patterns>("/patterns").catch(() => null),
     backendFetch<PauseDecision[]>("/api/granary/pauses/due").catch(() => []),
+    backendFetch<FailureModeCurrent>("/api/failure-modes/current").catch(() => null),
   ]);
 
   // Phase 10: explained through the first interest the user picked on their Profile page,
@@ -141,6 +144,8 @@ export default async function TodayPage(props: PageProps<"/today">) {
           </div>
         </div>
       )}
+
+      <WeeklyFailureModeCard current={failureMode} />
 
       {duePauses.length > 0 && (
         <div className="mb-6 flex flex-col gap-3">

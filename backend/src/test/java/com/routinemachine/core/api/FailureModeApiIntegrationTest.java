@@ -97,11 +97,11 @@ class FailureModeApiIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void allEightModesAreAccepted() throws Exception {
+    void allEightModesAndNoneThisWeekAreAccepted() throws Exception {
         User user = newUser("fm-all@example.com");
         String token = "Bearer " + signedToken(user.getId());
         for (String mode : new String[] {"FORMING", "DISLODGING", "ASSUMPTION", "LOCATION", "ACHIEVEMENT", "PROGRESSION",
-                "INTERRUPTION", "MISLEAD"}) {
+                "INTERRUPTION", "MISLEAD", "NONE"}) {
             mockMvc.perform(put("/api/failure-modes/current").header("Authorization", token)
                             .contentType(MediaType.APPLICATION_JSON).content("{\"failureMode\": \"" + mode + "\"}"))
                     .andExpect(status().isOk())

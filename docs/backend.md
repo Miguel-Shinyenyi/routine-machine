@@ -1210,14 +1210,14 @@ An opt-in sample account for demonstrations. **Off by default.** `DEMO_PROFILE_E
 
 ## Weekly failure mode (staged Prompt 7, part 4, backend)
 
-The weekly prompt "Which failure mode did you meet this week?" (`docs/understanding-first.md`, the eight modes). The frontend card is not built yet.
+The weekly prompt "Which failure mode did you meet this week?" (`docs/understanding-first.md`, the eight modes). The frontend card is on Today (`docs/frontend.md`).
 
 - **Routes** (token required, `/api/failure-modes/**` is in `SecurityConfig.TOKEN_REQUIRED_PATTERNS`, so `EveryRouteNeedsATokenTest` covers it):
   - `GET /api/failure-modes/current` returns `{weekStart, answered, failureMode}` for this week.
   - `PUT /api/failure-modes/current` with `{"failureMode": "PROGRESSION"}` saves the answer, or changes it if this week already has one. A missing or unknown mode is a 400 and nothing is saved.
-- **The eight values** (`FailureMode`): `FORMING`, `DISLODGING`, `ASSUMPTION`, `LOCATION`, `ACHIEVEMENT`, `PROGRESSION`, `INTERRUPTION`, `MISLEAD`.
+- **The nine values** (`FailureMode`): the eight modes, `FORMING`, `DISLODGING`, `ASSUMPTION`, `LOCATION`, `ACHIEVEMENT`, `PROGRESSION`, `INTERRUPTION`, `MISLEAD`, and `NONE` ("none this week", added at Miguel's request as a choice of last resort).
 - **The week** starts on Monday in the person's own time zone (`User.timeZone`), the same Monday the Path uses (`WeeklyFailureModeService.weekStart`). Who is asking comes from the token only.
 - **Storage**: its own table (`docs/database.md`, V31), user-owned, one row per person per week. The staged prompt said "stored with the existing logs"; the existing `daily_logs` rows are tied to a routine item or a learning topic, so an answer about a week does not fit there. I stored it beside them in the same database, owned and scoped the same way. If it must live in `daily_logs` itself, say so.
-- **Tests** (10: 7 API, 3 unit): the week rule across a Monday, every weekday, a Sunday and a year boundary; no answer yet; save and read back; answering again keeps one row; all eight accepted; a made-up, null, empty or missing mode refused with nothing saved; one person's answer never seen by another; no token refused. Two deliberate breaks (always insert; the week is the day) failed 2 and 2 tests.
+- **Tests** (10: 7 API, 3 unit): the week rule across a Monday, every weekday, a Sunday and a year boundary; no answer yet; save and read back; answering again keeps one row; all eight and `NONE` accepted; a made-up, null, empty or missing mode refused with nothing saved; one person's answer never seen by another; no token refused. Two deliberate breaks (always insert; the week is the day) failed 2 and 2 tests.
 - **Not built**: a history list, and any reporting on the answers.
 
