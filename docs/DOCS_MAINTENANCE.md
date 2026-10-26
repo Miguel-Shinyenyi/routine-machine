@@ -22,7 +22,7 @@ how it was built. Old approaches get deleted from the doc, not commented out.
 - New or changed database table, column, or index: update `database.md`
 - New suggestion rule, pattern-detection logic, or model: update `intelligence-service.md`
 - New test category or coverage decision: update `testing.md`
-- Any phase starting or finishing: update the Status log table in `PROJECT.md`
+- Any phase starting or finishing: add a row to the Status log table in `docs/status-log.md`
 
 ## Format for each component doc
 

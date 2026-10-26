@@ -8,7 +8,7 @@ A daily-routine tracker for people who stall when a plan looks too big: it leads
 
 ## What works today, what is in progress, what is planned
 
-**Works** (built, tested, in the status log in `PROJECT.md`):
+**Works** (built, tested, in the status log in `docs/status-log.md`):
 
 - Daily logging of routines and learning, with a fixed weekly schedule (Today, Path, Flock, Tally).
 - Pattern statistics: completion rates, streaks, skip-heavy days, and a first learning-versus-routines correlation.
