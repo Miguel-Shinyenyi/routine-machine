@@ -43,7 +43,7 @@ public class SecurityConfig {
             "/api/users/**", "/api/granary/**", "/api/goals/**", "/api/routine-items/**",
             "/api/learning-topics/**", "/api/daily-logs/**", "/api/tasks/**", "/api/schedule-templates/**", "/api/books/**", "/api/reading-notes/**",
             "/api/current-reading/**", "/api/watering-holes/**", "/api/evidence-events/**",
-            "/api/organisations/**"};
+            "/api/organisations/**", "/api/failure-modes/**"};
     public static final String[] OPTIONAL_TOKEN_PATTERNS = {"/api/hillside/**", "/api/watchtower/**"};
 
 

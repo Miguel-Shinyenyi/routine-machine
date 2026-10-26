@@ -298,3 +298,7 @@ SQL.
 
 `users.demo BOOLEAN NOT NULL DEFAULT FALSE` (staged Prompt 6, `V30__user_demo_flag.sql`). True only for the one sample account `DemoProfileService` makes (`demo@routine-machine.invalid`). Every real account is false. Undo: drop the column and delete that one user and its rows.
 
+## V31: weekly failure mode
+
+`weekly_failure_modes` (staged Prompt 7, `V31__weekly_failure_mode.sql`): `id`, `user_id` (references `users`), `week_start` (the Monday, a `DATE`), `failure_mode` (`VARCHAR(20)`, one of the eight names), `answered_at`. **`UNIQUE (user_id, week_start)`**: one answer per person per week, so answering again replaces it. Personal data: nothing reads it but its owner. Undo: `DROP TABLE weekly_failure_modes`.
+

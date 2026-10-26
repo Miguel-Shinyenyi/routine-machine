@@ -1208,3 +1208,16 @@ An opt-in sample account for demonstrations. **Off by default.** `DEMO_PROFILE_E
 - **Tests** (7, `DemoLoginDisabledApiIntegrationTest`, `DemoLoginEnabledApiIntegrationTest`): 404 when off even with a valid token; 401 without or with a wrong token; the account is flagged and on a `.invalid` address; the seeded rows exist and belong to it; a second open adds no rows and no second account; password guesses fail; another person's `/api/goals` is empty and their `demo` is false. Two deliberate breaks (always-on switch, no duplicate guard) each failed the matching test.
 - **Not built yet:** the frontend button, a visible "sample data" label, and the sign-in action. Until they exist the endpoint is not reachable from the app.
 
+## Weekly failure mode (staged Prompt 7, part 4, backend)
+
+The weekly prompt "Which failure mode did you meet this week?" (`docs/understanding-first.md`, the eight modes). The frontend card is not built yet.
+
+- **Routes** (token required, `/api/failure-modes/**` is in `SecurityConfig.TOKEN_REQUIRED_PATTERNS`, so `EveryRouteNeedsATokenTest` covers it):
+  - `GET /api/failure-modes/current` returns `{weekStart, answered, failureMode}` for this week.
+  - `PUT /api/failure-modes/current` with `{"failureMode": "PROGRESSION"}` saves the answer, or changes it if this week already has one. A missing or unknown mode is a 400 and nothing is saved.
+- **The eight values** (`FailureMode`): `FORMING`, `DISLODGING`, `ASSUMPTION`, `LOCATION`, `ACHIEVEMENT`, `PROGRESSION`, `INTERRUPTION`, `MISLEAD`.
+- **The week** starts on Monday in the person's own time zone (`User.timeZone`), the same Monday the Path uses (`WeeklyFailureModeService.weekStart`). Who is asking comes from the token only.
+- **Storage**: its own table (`docs/database.md`, V31), user-owned, one row per person per week. The staged prompt said "stored with the existing logs"; the existing `daily_logs` rows are tied to a routine item or a learning topic, so an answer about a week does not fit there. I stored it beside them in the same database, owned and scoped the same way. If it must live in `daily_logs` itself, say so.
+- **Tests** (10: 7 API, 3 unit): the week rule across a Monday, every weekday, a Sunday and a year boundary; no answer yet; save and read back; answering again keeps one row; all eight accepted; a made-up, null, empty or missing mode refused with nothing saved; one person's answer never seen by another; no token refused. Two deliberate breaks (always insert; the week is the day) failed 2 and 2 tests.
+- **Not built**: a history list, and any reporting on the answers.
+
