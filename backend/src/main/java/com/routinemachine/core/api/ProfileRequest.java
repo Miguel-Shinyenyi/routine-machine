@@ -1,5 +1,6 @@
 package com.routinemachine.core.api;
 
+import java.time.DayOfWeek;
 import java.util.List;
 
 // All fields optional: an update only changes what's actually sent, same partial-update
@@ -11,5 +12,6 @@ public record ProfileRequest(
         String currency,
         Integer dayEndHour,
         String timeZone,
-        Boolean analogiesEnabled) {
+        Boolean analogiesEnabled,
+        DayOfWeek failureModePromptDay) {
 }

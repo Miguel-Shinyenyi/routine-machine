@@ -6,10 +6,11 @@ vi.mock("./analytics/queue", () => ({ queueAnalyticsEvent: (...args: unknown[]) 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 const backendFetch = vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({}));
+const authenticatedBackendFetch = vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({}));
 vi.mock("./api", () => ({
   ApiError: class ApiError extends Error {},
   backendFetch: (...args: unknown[]) => backendFetch(...args),
-  authenticatedBackendFetch: vi.fn(),
+  authenticatedBackendFetch: (...args: unknown[]) => authenticatedBackendFetch(...args),
   backendFetchMultipart: vi.fn(),
   intelligenceFetch: vi.fn(),
 }));
@@ -19,7 +20,7 @@ vi.mock("./auth/session", () => ({
   requireSessionUserId: async () => 34,
 }));
 
-import { answerFailureMode } from "./actions";
+import { answerFailureMode, updateProfile } from "./actions";
 
 function form(values: Record<string, string>): FormData {
   const data = new FormData();
@@ -30,6 +31,7 @@ function form(values: Record<string, string>): FormData {
 beforeEach(() => {
   queue.mockClear();
   backendFetch.mockReset().mockResolvedValue({});
+  authenticatedBackendFetch.mockReset().mockResolvedValue({});
 });
 
 describe("answerFailureMode", () => {
@@ -56,5 +58,24 @@ describe("answerFailureMode", () => {
   it("lets a backend refusal through, so a failed save is not reported as saved", async () => {
     backendFetch.mockRejectedValueOnce(new Error("refused"));
     await expect(answerFailureMode(form({ failureMode: "FORMING" }))).rejects.toThrow();
+  });
+});
+
+describe("updateProfile and the day the weekly question starts", () => {
+  function sentBody(): Record<string, unknown> {
+    const init = authenticatedBackendFetch.mock.calls[0][2] as { body: string };
+    return JSON.parse(init.body);
+  }
+
+  it("sends the chosen day", async () => {
+    await updateProfile(form({ failureModePromptDay: "THURSDAY" }));
+    expect(sentBody().failureModePromptDay).toBe("THURSDAY");
+  });
+  it("sends no day when the value is not a day of the week, so the saved choice stays", async () => {
+    await updateProfile(form({ failureModePromptDay: "FUNDAY" }));
+    expect(sentBody().failureModePromptDay).toBeNull();
+    authenticatedBackendFetch.mockClear();
+    await updateProfile(form({}));
+    expect(sentBody().failureModePromptDay).toBeNull();
   });
 });

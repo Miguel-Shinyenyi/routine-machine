@@ -1221,3 +1221,5 @@ The weekly prompt "Which failure mode did you meet this week?" (`docs/understand
 - **Tests** (10: 7 API, 3 unit): the week rule across a Monday, every weekday, a Sunday and a year boundary; no answer yet; save and read back; answering again keeps one row; all eight and `NONE` accepted; a made-up, null, empty or missing mode refused with nothing saved; one person's answer never seen by another; no token refused. Two deliberate breaks (always insert; the week is the day) failed 2 and 2 tests.
 - **Not built**: a history list, and any reporting on the answers.
 
+**The day the weekly question starts** (staged Prompt 7, part 6): `users.failure_mode_prompt_day` (migration V32, a `DayOfWeek` name, `MONDAY` until the person chooses). It is part of the Profile: `GET` and `PUT /api/users/me/profile` carry `failureModePromptDay`; a PUT that omits it leaves it alone, and a value that is not a day name (including lower case) is a 400 that changes nothing (`User.changeFailureModePromptDay`). Two tests in `UserControllerApiIntegrationTest`. The backend only stores it; the frontend decides when to show the question (`docs/frontend.md`).
+

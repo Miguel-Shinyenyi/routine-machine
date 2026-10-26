@@ -145,7 +145,7 @@ export default async function TodayPage(props: PageProps<"/today">) {
         </div>
       )}
 
-      <WeeklyFailureModeCard current={failureMode} />
+      <WeeklyFailureModeCard current={failureMode} promptDay={profile?.failureModePromptDay} isoDate={date} />
 
       {duePauses.length > 0 && (
         <div className="mb-6 flex flex-col gap-3">

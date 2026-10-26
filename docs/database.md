@@ -302,3 +302,7 @@ SQL.
 
 `weekly_failure_modes` (staged Prompt 7, `V31__weekly_failure_mode.sql`): `id`, `user_id` (references `users`), `week_start` (the Monday, a `DATE`), `failure_mode` (`VARCHAR(20)`, one of the eight names), `answered_at`. **`UNIQUE (user_id, week_start)`**: one answer per person per week, so answering again replaces it. Personal data: nothing reads it but its owner. Undo: `DROP TABLE weekly_failure_modes`.
 
+## V32: failure-mode prompt day
+
+`users.failure_mode_prompt_day VARCHAR(10) NOT NULL DEFAULT 'MONDAY'` (staged Prompt 7, `V32__failure_mode_prompt_day.sql`): the weekday the weekly failure-mode question starts showing on Today, a `java.time.DayOfWeek` name, set by the person on their Profile. Undo: drop the column.
+

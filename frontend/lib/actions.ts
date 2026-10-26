@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { queueAnalyticsEvent } from "./analytics/queue";
 import { authenticatedBackendFetch, ApiError, backendFetch, backendFetchMultipart, intelligenceFetch } from "./api";
 import { getSessionToken, getSessionUserId, requireSessionUserId } from "./auth/session";
-import { isFailureMode } from "./failureModes";
+import { isFailureMode, isPromptDay } from "./failureModes";
 import type { MpesaImportResponse, ReadingNoteAssessment } from "./types";
 
 function optionalNumber(value: FormDataEntryValue | null): number | null {
@@ -234,6 +234,8 @@ export async function updateProfile(formData: FormData): Promise<void> {
   const timeZone = formData.get("timeZone");
   const dayEndHour = formData.get("dayEndHour");
   const analogiesEnabled = formData.get("analogiesEnabled") === "on";
+  // The weekday the weekly question starts on. Anything that is not a day name is not sent, so the saved choice stays.
+  const failureModePromptDay = formData.get("failureModePromptDay");
 
   await authenticatedBackendFetch("/api/users/me/profile", token, {
     method: "PUT",
@@ -245,6 +247,7 @@ export async function updateProfile(formData: FormData): Promise<void> {
       timeZone: typeof timeZone === "string" && timeZone.trim() !== "" ? timeZone.trim() : null,
       dayEndHour: typeof dayEndHour === "string" && dayEndHour !== "" ? Number(dayEndHour) : null,
       analogiesEnabled,
+      failureModePromptDay: isPromptDay(failureModePromptDay) ? failureModePromptDay : null,
     }),
   });
 

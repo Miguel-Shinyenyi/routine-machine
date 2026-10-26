@@ -2,6 +2,7 @@ package com.routinemachine.core.api;
 
 import com.routinemachine.core.domain.User;
 
+import java.time.DayOfWeek;
 import java.util.List;
 
 // Only ever returned to the user themselves, behind the same JWT-protected /api/users/**
@@ -14,7 +15,8 @@ public record ProfileResponse(
         String currency,
         int dayEndHour,
         String timeZone,
-        boolean analogiesEnabled) {
+        boolean analogiesEnabled,
+        DayOfWeek failureModePromptDay) {
 
     public static ProfileResponse from(User user) {
         return new ProfileResponse(
@@ -24,6 +26,7 @@ public record ProfileResponse(
                 user.getCurrency(),
                 user.getDayEndHour(),
                 user.getTimeZone(),
-                user.isAnalogiesEnabled());
+                user.isAnalogiesEnabled(),
+                user.getFailureModePromptDay());
     }
 }

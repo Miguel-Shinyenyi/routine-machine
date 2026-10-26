@@ -240,6 +240,7 @@ export interface Profile {
   dayEndHour: number;
   timeZone: string;
   analogiesEnabled: boolean;
+  failureModePromptDay: string;
 }
 
 export interface AnalogyResponse {

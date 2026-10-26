@@ -13,6 +13,7 @@ import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
 import java.time.DateTimeException;
+import java.time.DayOfWeek;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -52,6 +53,11 @@ public class User {
     // be compared against others, even if they already have non-private routine items.
     @Column(name = "hillside_opt_in", nullable = false)
     private boolean hillsideOptIn = false;
+
+    // The weekday the weekly failure-mode question starts showing on Today (staged Prompt 7), chosen on the Profile page.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "failure_mode_prompt_day", nullable = false)
+    private DayOfWeek failureModePromptDay = DayOfWeek.MONDAY;
 
     // True only for the sample account opened by DemoProfileService. Never true for a real person.
     @Column(name = "demo", nullable = false)
@@ -114,6 +120,14 @@ public class User {
         this.passwordHash = passwordHash;
         this.githubId = githubId;
         this.displayName = displayName;
+    }
+
+    public DayOfWeek getFailureModePromptDay() {
+        return failureModePromptDay;
+    }
+
+    public void changeFailureModePromptDay(DayOfWeek day) {
+        this.failureModePromptDay = Objects.requireNonNull(day, "day must not be null");
     }
 
     public boolean isDemo() {

@@ -66,6 +66,9 @@ public class UserController {
         user.updateProfile(
                 request.interests(), request.thinkers(), request.learningPreferences(), request.currency(),
                 request.dayEndHour(), request.timeZone(), request.analogiesEnabled());
+        if (request.failureModePromptDay() != null) {
+            user.changeFailureModePromptDay(request.failureModePromptDay());
+        }
         return ProfileResponse.from(userRepository.save(user));
     }
 

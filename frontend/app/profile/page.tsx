@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { authenticatedBackendFetch } from "@/lib/api";
 import { updateProfile } from "@/lib/actions";
+import { PROMPT_DAYS } from "@/lib/failureModes";
 import { logoutAction } from "@/lib/auth/actions";
 import { getSessionToken } from "@/lib/auth/session";
 import type { CurrentUser, Profile } from "@/lib/types";
@@ -70,6 +71,23 @@ export default async function ProfilePage() {
               className="field w-[220px] text-right"
               placeholder="Africa/Nairobi"
             />
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t hairline py-2.5">
+            <label htmlFor="failureModePromptDay" className="text-[14px]">
+              Ask me &ldquo;which failure mode did you meet this week?&rdquo; from
+            </label>
+            <select
+              id="failureModePromptDay"
+              name="failureModePromptDay"
+              defaultValue={profile.failureModePromptDay}
+              className="field w-[160px]"
+            >
+              {PROMPT_DAYS.map((day) => (
+                <option key={day.value} value={day.value}>
+                  {day.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex items-center justify-between gap-3 border-t hairline py-2.5">
             <label htmlFor="dayEndHour" className="text-[14px]">

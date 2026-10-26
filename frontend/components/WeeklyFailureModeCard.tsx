@@ -21,8 +21,16 @@ function Choices() {
 }
 
 // The weekly question (staged Prompt 7): asked until this week has an answer, then shows it with a way to change it.
-export function WeeklyFailureModeCard({ current }: { current: FailureModeCurrent | null }) {
-  const card = weeklyCard(current);
+export function WeeklyFailureModeCard({
+  current,
+  promptDay,
+  isoDate,
+}: {
+  current: FailureModeCurrent | null;
+  promptDay: string | undefined;
+  isoDate: string;
+}) {
+  const card = weeklyCard(current, { promptDay, isoDate });
   if (card.kind === "hidden") return null;
 
   if (card.kind === "answered") {

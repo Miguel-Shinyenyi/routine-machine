@@ -109,7 +109,8 @@ class UserControllerApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.dayEndHour", is(0)))
                 .andExpect(jsonPath("$.timeZone", is("UTC")))
-                .andExpect(jsonPath("$.analogiesEnabled", is(true)));
+                .andExpect(jsonPath("$.analogiesEnabled", is(true)))
+                .andExpect(jsonPath("$.failureModePromptDay", is("MONDAY")));
     }
 
     @Test
@@ -164,6 +165,41 @@ class UserControllerApiIntegrationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + signedToken(user.getId().toString())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.timeZone", is("UTC")));
+    }
+
+    @Test
+    void theDayTheWeeklyFailureModeQuestionStartsOnIsChosenAndKept() throws Exception {
+        User user = userRepository.save(new User("profile-prompt-day@example.com", "irrelevant-hash", null, null));
+        String token = "Bearer " + signedToken(user.getId().toString());
+
+        mockMvc.perform(put("/api/users/me/profile").header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"failureModePromptDay\": \"THURSDAY\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureModePromptDay", is("THURSDAY")));
+
+        // A later update that does not mention it leaves it alone.
+        mockMvc.perform(put("/api/users/me/profile").header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"dayEndHour\": 2}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failureModePromptDay", is("THURSDAY")))
+                .andExpect(jsonPath("$.dayEndHour", is(2)));
+
+        mockMvc.perform(get("/api/users/me/profile").header("Authorization", token))
+                .andExpect(jsonPath("$.failureModePromptDay", is("THURSDAY")));
+    }
+
+    @Test
+    void aDayThatIsNotADayOfTheWeekIsRejectedAndTheChoiceStays() throws Exception {
+        User user = userRepository.save(new User("profile-bad-prompt-day@example.com", "irrelevant-hash", null, null));
+        String token = "Bearer " + signedToken(user.getId().toString());
+
+        for (String bad : new String[] {"FUNDAY", "monday", ""}) {
+            mockMvc.perform(put("/api/users/me/profile").header("Authorization", token)
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"failureModePromptDay\": \"" + bad + "\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+        mockMvc.perform(get("/api/users/me/profile").header("Authorization", token))
+                .andExpect(jsonPath("$.failureModePromptDay", is("MONDAY")));
     }
 
     @Test
