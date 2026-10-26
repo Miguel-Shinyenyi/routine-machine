@@ -7,7 +7,7 @@ import { getSessionToken, requireSessionUserId } from "@/lib/auth/session";
 import { decidePause, reflectPause } from "@/lib/actions";
 import type { AnalogyResponse, Goal, Patterns, PauseDecision, Profile, RoutineItem, ScheduleTemplate, Suggestion, Tally } from "@/lib/types";
 import { firstStep } from "@/lib/firstStep";
-import { reminderFor } from "@/lib/reminders";
+import { chooseReminder, missedRecently } from "@/lib/reminders";
 import { loadReminders } from "@/lib/remindersFile";
 import { TaskCard } from "@/components/TaskCard";
 
@@ -86,7 +86,12 @@ export default async function TodayPage(props: PageProps<"/today">) {
 
   const maxGoalHours = Math.max(1, ...Array.from(latestHoursByGoal.values()));
   const lastWandered = patterns?.skipHeavyDays.at(-1);
-  const reminder = reminderFor(await loadReminders(), date);
+  const reminders = await loadReminders();
+  const reminder = chooseReminder({
+    ...reminders,
+    isoDate: date,
+    missed: tally ? missedRecently(tally.daysShownUp, date) : false,
+  });
   const nextStep = firstStep({ routineItemCount: routineItems.length, scheduleTemplateCount: scheduleTemplates.length });
 
   return (

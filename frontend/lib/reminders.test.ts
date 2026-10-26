@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseReminders, reminderFor } from "./reminders";
+import { chooseReminder, missedRecently, parseReminderFile, parseReminders, reminderFor } from "./reminders";
 
 describe("parseReminders", () => {
   it("takes one reminder per line, trimmed", () => {
@@ -59,6 +59,87 @@ describe("the shipped content file", () => {
       expect(text.length, text).toBeGreaterThan(10);
       expect(text.length, text).toBeLessThanOrEqual(200);
       expect(text, text).not.toContain("—");
+    }
+  });
+});
+
+describe("parseReminderFile", () => {
+  it("splits the daily reminders from the ones for after missed days", () => {
+    const parsed = parseReminderFile("Daily one.\nDaily two.\n[after missed days]\nStronger one.\n");
+    expect(parsed).toEqual({ daily: ["Daily one.", "Daily two."], stronger: ["Stronger one."] });
+  });
+  it("keeps the heading itself out of both lists, whatever its case or spacing", () => {
+    const parsed = parseReminderFile("A.\n  [After Missed Days]  \nB.\n");
+    expect(parsed).toEqual({ daily: ["A."], stronger: ["B."] });
+  });
+  it("has no stronger reminders when the file has no such section, and parseReminders is the daily list only", () => {
+    expect(parseReminderFile("Only daily.\n").stronger).toEqual([]);
+    expect(parseReminders("A.\n[after missed days]\nB.\n")).toEqual(["A."]);
+  });
+});
+
+describe("missedRecently", () => {
+  const day = (date: string, shownUp: boolean) => ({ date, shownUp });
+  const week = [
+    day("2026-10-20", true), day("2026-10-21", true), day("2026-10-22", false), day("2026-10-23", false), day("2026-10-24", false),
+    day("2026-10-25", false),
+  ];
+
+  it("is true when the person has shown up before and not in any of the last three days", () => {
+    expect(missedRecently(week, "2026-10-26")).toBe(true);
+  });
+  it("is false if any of the last three days counted", () => {
+    expect(missedRecently([...week.slice(0, 5), day("2026-10-25", true)], "2026-10-26")).toBe(false);
+    expect(missedRecently([...week.slice(0, 3), day("2026-10-23", true), day("2026-10-24", false), day("2026-10-25", false)], "2026-10-26")).toBe(false);
+  });
+  it("is false for someone who has never shown up, so a new account is never told it has missed days", () => {
+    expect(missedRecently(week.map((d) => day(d.date, false)), "2026-10-26")).toBe(false);
+  });
+  it("is false when the last three days are not all in the record", () => {
+    expect(missedRecently([day("2026-10-20", true), day("2026-10-25", false)], "2026-10-26")).toBe(false);
+  });
+  it("looks only at days before the date shown, not on or after it", () => {
+    expect(missedRecently([...week, day("2026-10-26", true)], "2026-10-26")).toBe(true);
+  });
+  it("gives false for a date that is not a date", () => {
+    expect(missedRecently(week, "nope")).toBe(false);
+  });
+});
+
+describe("chooseReminder", () => {
+  const daily = ["d1", "d2"];
+  const stronger = ["s1", "s2"];
+
+  it("gives the daily reminder when no days were missed", () => {
+    expect(chooseReminder({ daily, stronger, isoDate: "2026-10-26", missed: false })).toBe(reminderFor(daily, "2026-10-26"));
+  });
+  it("gives a stronger one, rotated by date, when days were missed", () => {
+    expect(stronger).toContain(chooseReminder({ daily, stronger, isoDate: "2026-10-26", missed: true }));
+    expect(chooseReminder({ daily, stronger, isoDate: "2026-10-26", missed: true })).not.toBe(
+      chooseReminder({ daily, stronger, isoDate: "2026-10-27", missed: true }),
+    );
+  });
+  it("falls back to the daily reminder when there are no stronger ones", () => {
+    expect(chooseReminder({ daily, stronger: [], isoDate: "2026-10-26", missed: true })).toBe(reminderFor(daily, "2026-10-26"));
+  });
+  it("gives a stronger one even when the daily list is empty", () => {
+    expect(chooseReminder({ daily: [], stronger, isoDate: "2026-10-26", missed: true })).not.toBeNull();
+    expect(chooseReminder({ daily: [], stronger: [], isoDate: "2026-10-26", missed: true })).toBeNull();
+  });
+});
+
+describe("the shipped file's stronger section", () => {
+  const { daily, stronger } = parseReminderFile(readFileSync("content/reminders.txt", "utf8"));
+
+  it("leaves the ten daily reminders alone and adds a few for after missed days", () => {
+    expect(daily).toHaveLength(10);
+    expect(stronger.length).toBeGreaterThanOrEqual(2);
+  });
+  it("never pressures: no shame or guilt words, no em dash, and each one is short", () => {
+    for (const text of stronger) {
+      expect(text, text).not.toMatch(/\b(lazy|failure|failed|behind|catch up now|should have|guilt|ashamed)\b/i);
+      expect(text, text).not.toContain("\u2014");
+      expect(text.length, text).toBeLessThanOrEqual(200);
     }
   });
 });

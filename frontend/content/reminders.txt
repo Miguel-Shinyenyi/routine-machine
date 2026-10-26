@@ -1,5 +1,6 @@
 # The daily reminder on Today. One per line. The app shows one a day, in order, and starts again after the last.
-# Blank lines and lines that start with # are ignored. Edit, add or remove lines freely; then rebuild the frontend
+# Blank lines and lines that start with # are ignored. The lines under [after missed days] are shown instead when the person has
+# shown up before but not on any of the last three days; the same rotation applies. Keep them kind: a missed day takes nothing away. Edit, add or remove lines freely; then rebuild the frontend
 # image (docker compose build frontend) so the change reaches the running app. No code change is needed.
 The little work you do each day is what matters.
 Hype misleads. Protect your energy.
@@ -11,3 +12,8 @@ Stop. Does the output match what you meant?
 There is so much to do that you want to do nothing. Pick the smallest next piece and finish it.
 Understand things as they are, not as you want them to be.
 Every action has consequences. Know how to undo it before you do it.
+
+[after missed days]
+There is so much to do that you want to do nothing. Pick the smallest next piece and finish it.
+A missed day takes nothing away. Do one small thing today.
+You do not have to catch up. Start with the smallest piece.
