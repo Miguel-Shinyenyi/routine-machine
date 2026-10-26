@@ -1,0 +1,20 @@
+# Architecture: the concerns record
+
+This is Routine Machine's concerns record, the table `docs/engineering-concerns.md` asks every project to keep: one row per concept, numbered 1 to 111, each answered **Applies**, **Not applicable** or **Deferred**, with a reason in one sentence and, for "Applies", the evidence (a test, a doc or a config). A claim without evidence stays "Deferred". Considered does not mean built.
+
+**How it is being written.** Staged Prompt 7 asked for it. It is written in batches, one group of the hub document at a time, so each batch can be reviewed before the next. Every file path and line below was read in this repository on the date shown. Where I only looked for something and did not find it (for example a rate limiter), the reason says "I found none" and is not a claim that none exists anywhere.
+
+**Status: 8 of 111 rows written.** Written: Traffic and edges. Still to write, in the hub document's order: Delivery and operations; Service calls and failure; Messaging and workflows; Real-time connections; Data access and storage; Concurrency; Scale and performance; Observability and reliability targets; Security; Change, recovery and cost; Networking and protocols; Versioning, build and infrastructure; Incidents.
+
+## Traffic and edges
+
+| # | Concept | Answer | Reason and evidence | Date |
+|---|---------|--------|---------------------|------|
+| 1 | Rate limiting | Deferred | Nothing limits how often one caller may use the API: I found no limiter in the backend, the frontend or the intelligence service (`/api/auth/login` included). It matters before anyone but Miguel and test accounts can reach a public deployment. The only rate-limit code is for calls the app makes to GitHub (`GitHubRateLimit`, `docs/hub-sync.md`). | 2026-10-26 |
+| 2 | Caching | Applies | One cache exists on purpose: analogies are kept per (topic, interest) so the same pairing is not paid for twice (`intelligence-service/main.py:154-157`, `336-378`; test `test_main.py:274`). Everything else is fetched fresh: every frontend call sets `cache: "no-store"` (`frontend/lib/api.ts:41`) and the hillside is computed per request (`docs/backend.md`, decisions log, 2026-10-17). | 2026-10-26 |
+| 3 | Load balancing | Not applicable | Each service runs as one container (`infra/docker-compose.yml` has no replicas), so there is no choice of instance to make. It matters if a service is ever run twice (see 45 and 46). | 2026-10-26 |
+| 4 | Reverse proxies | Deferred | No reverse proxy is in the compose file, and production hosting is not decided (`PROJECT.md`, Backlog G, the "Later" list). The only proxying in the code is the owner's API-documentation route, which uses an allow-list of backend addresses (`frontend/lib/docsProxy.ts`, tested). It matters at the first real deployment, when TLS and request headers need a place to be decided. | 2026-10-26 |
+| 5 | API gateways | Not applicable | There is one backend, and it checks the signed token itself on every route (`SecurityConfig` and `EveryRouteNeedsATokenTest`); the frontend's server is its caller and routing is by URL path. No quotas exist (see 1). It matters if more than one public service appears. | 2026-10-26 |
+| 48 | CDN | Deferred | No static assets are served at a scale or distance where it matters, and public hosting is not decided. It matters when the app is hosted for people far from the host. | 2026-10-26 |
+| 49 | Edge caching | Deferred | Goes with 48. Pages are personal (signed-in data), so only static assets could ever be cached at an edge, and never a page. | 2026-10-26 |
+| 50 | Cache invalidation | Applies | The one cache (see 2) has no invalidation except a service restart, and that is safe: an analogy is reproducible from its inputs alone, so a stale or lost entry costs one model call (`intelligence-service/main.py:154-157` says so). It grows with the number of different (topic, interest) pairs and is never trimmed, which is the memory question in 41. | 2026-10-26 |
