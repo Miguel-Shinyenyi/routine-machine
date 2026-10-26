@@ -4,7 +4,24 @@ This is Routine Machine's concerns record, the table `docs/engineering-concerns.
 
 **How it is being written.** Staged Prompt 7 asked for it. It is written in batches, one group of the hub document at a time, so each batch can be reviewed before the next. Every file path and line below was read in this repository on the date shown. Where I only looked for something and did not find it (for example a rate limiter), the reason says "I found none" and is not a claim that none exists anywhere.
 
-**Status: 101 of 111 rows written.** Written: every group except the last. Still to write, in the hub document's order: Versioning, build and infrastructure; Incidents.
+**Status: all 111 rows are written** (26 Oct 2026). The totals are in the next section.
+
+## Totals, and where the gaps went
+
+**111 rows: 43 Applies, 29 Not applicable, 39 Deferred** (counted from the tables below by a script that also checked every number from 1 to 111 appears once). Every "Applies" cites a file, test or doc that was opened on the date shown. A "Deferred" names the event that makes it matter.
+
+The gaps this record found are not all equally urgent. They are grouped into Backlog rows in `PROJECT.md`, one per theme, so the record becomes a to-do list and not a second place to forget things:
+
+| Theme | Backlog row | Concern numbers |
+|---|---|---|
+| No database backup, and no restore ever tried | **O** | 83, 84 |
+| "Today" comes from the server's clock, not the person's zone | **P** | 96 |
+| Today can hang on a model call | **N** | 11, 94 |
+| Security basics before public hosting (rate limit, TLS, token revocation and rotation, secrets) | **Q** | 1, 67, 70, 71, 73 to 75 |
+| Call safety (frontend timeout, circuit breaker, a failing backend) | **R** | 10, 11, 95 |
+| Running and deploying safely (health checks, graceful shutdown, alert channel, sync lock, rollback drill) | **S** | 21, 38, 46, 51, 54 to 58, 62 |
+| Knowing the limits (load test, targets, JVM and pool metrics, query plans) | **T** | 26 to 28, 41, 42, 47, 63 to 65, 92, 93 |
+| Guards and tests still missing (lost updates, idempotency key, CSRF and XSS tests, ingest signing, freshness text, update tool) | **U** | 14, 35, 36, 77, 79, 101, 107, 108 |
 
 ## Traffic and edges
 
@@ -166,4 +183,24 @@ This is Routine Machine's concerns record, the table `docs/engineering-concerns.
 | 99 | HTTP/2 and HTTP/3 | Applies | The backend's calls to other services force HTTP/1.1, because Java's default offers an HTTP/2 upgrade on plain `http` that uvicorn logs as a warning each time (`WatchtowerLogsService.java`, comment; test `WatchtowerProbesSendNoUpgradeTest`; 5 uses of `HTTP_1_1` in the backend). There is no proxy in front yet (see 4), so nothing else is decided. | 2026-10-26 |
 | 100 | gRPC | Not applicable | Two services with small JSON payloads do not need a binary contract. Both publish an OpenAPI description to the owner (`docs/backend.md`, "API documentation"), which gives the typed contract without it. | 2026-10-26 |
 | 101 | Webhooks | Applies | One inbound push endpoint, `POST /api/measurements`, accepts health data only with a bearer token and refuses everything when none is configured (`MeasurementIngestController.java:37, 57`); its writes are upserts on a unique rule, so a retry is safe (`V6__measurements.sql:10`, see 14). **It is not signed and has no replay protection: the token is the only check.** No outgoing webhooks exist. | 2026-10-26 |
+
+## Versioning, build and infrastructure
+
+| # | Concept | Answer | Reason and evidence | Date |
+|---|---------|--------|---------------------|------|
+| 102 | API versioning | Deferred | Routes carry no version (`/api/goals`, not `/api/v1/goals`), and the only client is the frontend, which is built and deployed with the backend. One caller outside that exists, the health-data push (`POST /api/measurements`), and a change to it would break the sender. It matters the day a second client (a phone app, an integration) is built. | 2026-10-26 |
+| 103 | Semantic versioning | Not applicable | Nothing is released: there are no git tags, and the versions are placeholders (`0.1.0-SNAPSHOT` in `backend/pom.xml`, `0.1.0` in `frontend/package.json`). It matters if the code is ever published as a library or released in numbered versions. | 2026-10-26 |
+| 104 | Infrastructure as code | Applies | The environment is files in the repository: `infra/docker-compose.yml`, the observability configuration in `infra/observability/`, the Dockerfiles and the migrations. A fresh clone rebuilt and ran everything from them (`PROJECT.md`, status log, 2026-10-25, "part 7: the fresh-clone run"). **Not in files**: the contents of `infra/.env` and the data in the database volume. | 2026-10-26 |
+| 105 | Terraform | Not applicable | Not used; there is no cloud infrastructure to describe yet (see 8). | 2026-10-26 |
+| 106 | Helm charts | Not applicable | Not used, because Kubernetes is not (see 8). | 2026-10-26 |
+| 107 | Build caching | Applies | CI caches Maven, pip and npm keyed on the dependency files (`.github/workflows/ci.yml:22, 35-36, 50-51`), and each Dockerfile copies its dependency file before the source so the dependency layer is reused (`backend/Dockerfile` copies `pom.xml` first, `intelligence-service/Dockerfile` copies `requirements.txt` first, `frontend/Dockerfile` the package files first). **A clean build time has not been recorded.** | 2026-10-26 |
+| 108 | Dependency hell | Applies | **Pinned, with one gap.** All 9 Python requirements are pinned with `==`; the backend pins Spring Boot (`3.5.16`) and its other libraries; the frontend pins its runtime libraries exactly (for example `next`, `posthog-js`) and installs from the lockfile with `npm ci`, though 10 tooling entries use `^` ranges the lockfile then fixes. `npm audit` reported 0 vulnerabilities on 25 Oct 2026 (Backlog J, closed). **No tool proposes updates** (no Dependabot or Renovate configuration), so staleness is found only by hand. | 2026-10-26 |
+
+## Incidents
+
+| # | Concept | Answer | Reason and evidence | Date |
+|---|---------|--------|---------------------|------|
+| 109 | Production incidents | Deferred | There is no production, so no incident has been declared and no process exists to declare one. The nearest thing is the investigations recorded in the Backlog (the Loki readiness blips, the GitHub failures), done by the one maintainer. It matters at the first deployment with real people. | 2026-10-26 |
+| 110 | On-call | Deferred | One person maintains the project, no alert reaches anyone (see 62), and `SECURITY.md` says plainly that there is no fixed response time. It matters when other people depend on the app. | 2026-10-26 |
+| 111 | Postmortems | Applies | Faults are written down with their cause and fix, without blame, in the status log, whose own instruction is to "record fixes and gaps found, not just what was completed" (`PROJECT.md`, "Status log"): for example the Mac-only test found by CI's first run (2026-10-26) and the wrong "before" commit I used for the screenshots (2026-10-25 and after). Follow-up actions go into the Backlog. **There is no separate postmortem template**, and no incident has needed one. | 2026-10-26 |
 

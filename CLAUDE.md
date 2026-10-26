@@ -18,6 +18,7 @@ Claude Code reads this file at the start of every task. Practices that apply to 
 | Metrics, logs, traces, alerts, the owner-only operations page | `docs/observability.md` |
 | API documentation (the owner-only viewer for both APIs) | `docs/backend.md` ("API documentation"), `docs/intelligence-service.md`, `docs/frontend.md` |
 | Tests | `docs/testing.md` |
+| The concerns record (the 111 concepts), or an audit | `docs/architecture.md`, then `docs/engineering-concerns.md` |
 
 ## Rules that already apply
 
